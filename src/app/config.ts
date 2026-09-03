@@ -11,7 +11,8 @@ export const worldConfig = {
 export const shellLayout = {
   assetBrowserHeight: 190,
   narrowBreakpoint: 980,
-  narrowAssetBrowserHeight: 150
+  narrowAssetBrowserHeight: 150,
+  leftPanelWidth: 280
 };
 
 export const assetTileSize = { width: 148, height: 100, gap: 10 };

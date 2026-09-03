@@ -11,7 +11,7 @@ import {
   type HistoryState
 } from "../editor-core/commands";
 import type { PlacementResolution } from "../editor-core/grid";
-import { createId, type Scene, type SceneObject, type Vector3Data } from "../editor-core/scene";
+import { createId, type Scene, type SceneObject, type SurfaceAppearanceType, type Vector3Data } from "../editor-core/scene";
 import { validateSceneForSave } from "../editor-core/validation";
 import {
   createSceneRequest,
@@ -30,6 +30,10 @@ import type { EditorTool } from "./types";
 
 export type EditorTopic =
   | "scene"
+  | "sceneMeta"
+  | "sceneBackground"
+  | "sceneGround"
+  | "sceneGrid"
   | "scenesList"
   | "assets"
   | "assetRefresh"
@@ -37,6 +41,7 @@ export type EditorTopic =
   | "tool"
   | "placement"
   | "objectsVisible"
+  | "objectVisibility"
   | "search"
   | "category"
   | "notice";
@@ -63,6 +68,8 @@ export class EditorState {
   notice = "Ready";
 
   private readonly listeners = new Map<EditorTopic, Set<Listener>>();
+  /** Session-only, per-scene: objects hidden from the viewport for editing convenience, not persisted. */
+  private readonly hiddenObjectIdSet = new Set<string>();
 
   on(topic: EditorTopic, listener: Listener): () => void {
     let set = this.listeners.get(topic);
@@ -90,6 +97,10 @@ export class EditorState {
 
   get activeAsset(): AssetCatalogEntry | null {
     return this.assets.find((asset) => asset.id === this.placementAssetId) ?? null;
+  }
+
+  get hiddenObjectIds(): ReadonlySet<string> {
+    return this.hiddenObjectIdSet;
   }
 
   get categories(): string[] {
@@ -151,6 +162,7 @@ export class EditorState {
     const nextScene = await createSceneRequest(name);
     this.history = createHistory(nextScene);
     this.selectedObjectId = null;
+    this.hiddenObjectIdSet.clear();
     this.emit("scene", "selection");
     await this.refreshScenes();
     this.setNotice(`Created ${nextScene.name}`);
@@ -160,6 +172,7 @@ export class EditorState {
     const nextScene = await openSceneRequest(id);
     this.history = createHistory(nextScene);
     this.selectedObjectId = null;
+    this.hiddenObjectIdSet.clear();
     this.emit("scene", "selection");
     this.setNotice(`Opened ${nextScene.name}`);
   }
@@ -192,6 +205,7 @@ export class EditorState {
     const copy = await duplicateSceneRequest(this.scene.id);
     this.history = createHistory(copy);
     this.selectedObjectId = null;
+    this.hiddenObjectIdSet.clear();
     this.emit("scene", "selection");
     await this.refreshScenes();
     this.setNotice(`Duplicated ${copy.name}`);
@@ -203,6 +217,7 @@ export class EditorState {
     await deleteSceneRequest(this.scene.id);
     this.history = null;
     this.selectedObjectId = null;
+    this.hiddenObjectIdSet.clear();
     this.emit("scene", "selection");
     await this.refreshScenes();
     this.setNotice("Deleted scene");
@@ -253,11 +268,115 @@ export class EditorState {
   }
 
   deleteSelectedObject() {
-    if (!this.history || !this.selectedObjectId) return;
-    this.history = executeCommand(this.history, deleteObjectCommand(this.selectedObjectId));
-    this.selectedObjectId = null;
+    if (!this.selectedObjectId) return;
+    this.deleteObject(this.selectedObjectId);
+  }
+
+  deleteObject(objectId: string) {
+    if (!this.history) return;
+    this.history = executeCommand(this.history, deleteObjectCommand(objectId));
+    this.hiddenObjectIdSet.delete(objectId);
+    if (this.selectedObjectId === objectId) this.selectedObjectId = null;
     this.emit("scene", "selection");
     this.setNotice("Object deleted");
+  }
+
+  isObjectHidden(objectId: string): boolean {
+    return this.hiddenObjectIdSet.has(objectId);
+  }
+
+  toggleObjectVisibility(objectId: string) {
+    if (this.hiddenObjectIdSet.has(objectId)) this.hiddenObjectIdSet.delete(objectId);
+    else this.hiddenObjectIdSet.add(objectId);
+    this.emit("objectVisibility");
+  }
+
+  setSceneName(name: string) {
+    if (!this.history || this.history.scene.name === name) return;
+    this.history = { ...this.history, scene: { ...this.history.scene, name } };
+    this.emit("sceneMeta");
+  }
+
+  setSceneDescription(description: string) {
+    if (!this.history || this.history.scene.description === description) return;
+    this.history = { ...this.history, scene: { ...this.history.scene, description } };
+    this.emit("sceneMeta");
+  }
+
+  setGridCellSize(cellSize: number) {
+    if (!this.history || !Number.isFinite(cellSize) || cellSize <= 0) return;
+    if (this.history.scene.grid.cellSize === cellSize) return;
+    this.history = {
+      ...this.history,
+      scene: { ...this.history.scene, grid: { ...this.history.scene.grid, cellSize } }
+    };
+    this.emit("sceneGrid");
+  }
+
+  /** The ground plane's overall extent (kept square: width and depth move together). */
+  setSceneSize(size: number) {
+    if (!this.history || !Number.isFinite(size) || size <= 0) return;
+    const grid = this.history.scene.grid;
+    if (grid.width === size && grid.depth === size) return;
+    this.history = {
+      ...this.history,
+      scene: { ...this.history.scene, grid: { ...grid, width: size, depth: size } }
+    };
+    this.emit("sceneGrid");
+  }
+
+  setBackgroundType(type: SurfaceAppearanceType) {
+    if (!this.history || this.history.scene.background.type === type) return;
+    this.history = {
+      ...this.history,
+      scene: { ...this.history.scene, background: { ...this.history.scene.background, type } }
+    };
+    this.emit("sceneBackground");
+  }
+
+  setBackgroundColor(color: string) {
+    if (!this.history || this.history.scene.background.color === color) return;
+    this.history = {
+      ...this.history,
+      scene: { ...this.history.scene, background: { ...this.history.scene.background, color } }
+    };
+    this.emit("sceneBackground");
+  }
+
+  setBackgroundTexture(textureUrl: string) {
+    if (!this.history) return;
+    this.history = {
+      ...this.history,
+      scene: { ...this.history.scene, background: { ...this.history.scene.background, textureUrl } }
+    };
+    this.emit("sceneBackground");
+  }
+
+  setGroundType(type: SurfaceAppearanceType) {
+    if (!this.history || this.history.scene.ground.type === type) return;
+    this.history = {
+      ...this.history,
+      scene: { ...this.history.scene, ground: { ...this.history.scene.ground, type } }
+    };
+    this.emit("sceneGround");
+  }
+
+  setGroundColor(color: string) {
+    if (!this.history || this.history.scene.ground.color === color) return;
+    this.history = {
+      ...this.history,
+      scene: { ...this.history.scene, ground: { ...this.history.scene.ground, color } }
+    };
+    this.emit("sceneGround");
+  }
+
+  setGroundTexture(textureUrl: string) {
+    if (!this.history) return;
+    this.history = {
+      ...this.history,
+      scene: { ...this.history.scene, ground: { ...this.history.scene.ground, textureUrl } }
+    };
+    this.emit("sceneGround");
   }
 
   choosePlacement(assetId: string) {

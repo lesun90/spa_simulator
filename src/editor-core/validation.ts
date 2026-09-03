@@ -1,5 +1,5 @@
 import type { AssetCatalogEntry } from "./assets";
-import type { Scene, SceneObject } from "./scene";
+import { isSurfaceAppearance, type Scene, type SceneObject } from "./scene";
 
 export interface ValidationResult {
   valid: boolean;
@@ -16,8 +16,17 @@ export function validateSceneJson(value: unknown): ValidationResult {
 
   if (!scene.id || typeof scene.id !== "string") diagnostics.push("Scene ID is required.");
   if (!scene.name || typeof scene.name !== "string") diagnostics.push("Scene name is required.");
+  if (scene.description !== undefined && typeof scene.description !== "string") {
+    diagnostics.push("Scene description must be a string.");
+  }
   if (!scene.grid || !isPositiveNumber(scene.grid.cellSize) || !isPositiveNumber(scene.grid.width) || !isPositiveNumber(scene.grid.depth)) {
     diagnostics.push("Scene grid must define positive cellSize, width, and depth.");
+  }
+  if (scene.background !== undefined && !isSurfaceAppearance(scene.background)) {
+    diagnostics.push("Scene background must define a valid type and color.");
+  }
+  if (scene.ground !== undefined && !isSurfaceAppearance(scene.ground)) {
+    diagnostics.push("Scene ground must define a valid type and color.");
   }
   if (!Array.isArray(scene.objects)) {
     diagnostics.push("Scene objects must be an array.");

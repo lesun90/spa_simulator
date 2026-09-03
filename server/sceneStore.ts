@@ -1,6 +1,6 @@
 import { mkdir, readdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { createScene, type Scene } from "../src/editor-core/scene";
+import { createScene, normalizeScene, type Scene } from "../src/editor-core/scene";
 import { validateSceneJson } from "../src/editor-core/validation";
 
 export interface SceneSummary {
@@ -41,12 +41,12 @@ export function createSceneStore(root: string) {
     },
     async open(id: string): Promise<Scene> {
       await ensureRoot();
-      const scene = JSON.parse(await readFile(scenePath(id), "utf8")) as Scene;
-      const result = validateSceneJson(scene);
+      const raw = JSON.parse(await readFile(scenePath(id), "utf8")) as Scene;
+      const result = validateSceneJson(raw);
       if (!result.valid) {
         throw new Error(result.diagnostics.join(" "));
       }
-      return scene;
+      return normalizeScene(raw);
     },
     async save(scene: Scene): Promise<Scene> {
       await ensureRoot();
@@ -54,6 +54,7 @@ export function createSceneStore(root: string) {
       if (!result.valid) {
         throw new Error(result.diagnostics.join(" "));
       }
+      scene = normalizeScene(scene);
       const finalPath = scenePath(scene.id);
       const tempPath = `${finalPath}.tmp`;
       await writeFile(tempPath, `${JSON.stringify(scene, null, 2)}\n`, "utf8");
@@ -72,6 +73,7 @@ export function createSceneStore(root: string) {
         ...scene,
         id: createScene(scene.name).id,
         name: `${scene.name} Copy`,
+        background: { ...scene.background },
         objects: scene.objects.map((object) => ({ ...object, position: { ...object.position } }))
       };
       await this.save(copy);

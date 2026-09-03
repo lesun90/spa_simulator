@@ -6,6 +6,7 @@ import type { EditorState } from "../../state/EditorState";
 import { computeShellLayout, type Rect, type ShellRects } from "./kit/layout";
 import { Button } from "./kit/Button";
 import { AssetBrowserPanel } from "./panels/AssetBrowserPanel";
+import { LeftPanel, LEFT_PANEL_TAB_BAR_HEIGHT } from "./panels/LeftPanel";
 import { ThumbnailRenderer } from "./thumbnails/ThumbnailRenderer";
 
 /**
@@ -20,6 +21,9 @@ export class HudFeature {
   private readonly assetBrowser: AssetBrowserPanel;
   private readonly assetBrowserToggleButton: Button;
   private assetBrowserHidden = false;
+  private readonly leftPanel: LeftPanel;
+  private readonly leftPanelToggleButton: Button;
+  private leftPanelHidden = false;
   private currentSize: ViewportSize;
 
   constructor(
@@ -44,16 +48,27 @@ export class HudFeature {
       onClick: () => this.setAssetBrowserHidden(!this.assetBrowserHidden)
     });
 
+    this.leftPanel = new LeftPanel(layout.leftPanel, interaction, state);
+    this.leftPanelToggleButton = new Button(leftPanelToggleRect(layout, this.leftPanelHidden), interaction, {
+      icon: "chevronLeft",
+      justify: "center",
+      onClick: () => this.setLeftPanelHidden(!this.leftPanelHidden)
+    });
+
     this.scene.add(
       this.assetBrowser.root,
-      this.assetBrowserToggleButton.root
+      this.assetBrowserToggleButton.root,
+      this.leftPanel.root,
+      this.leftPanelToggleButton.root
     );
     this.applyAssetBrowserVisibility(layout);
+    this.applyLeftPanelVisibility(layout);
   }
 
   update(dt: number) {
     this.thumbnails.update(dt);
     this.assetBrowser.update(dt);
+    this.leftPanel.update(dt);
   }
 
   resize(size: ViewportSize) {
@@ -69,13 +84,18 @@ export class HudFeature {
   }
 
   private computeLayout(size: ViewportSize) {
-    return computeShellLayout(size.width, size.height, { assetBrowserHidden: this.assetBrowserHidden });
+    return computeShellLayout(size.width, size.height, {
+      assetBrowserHidden: this.assetBrowserHidden,
+      leftPanelHidden: this.leftPanelHidden
+    });
   }
 
   private applyLayout(layout: ShellRects) {
     this.assetBrowser.setRect(layout.assetBrowser);
     this.assetBrowserToggleButton.setRect(assetToggleRect(layout, this.assetBrowserHidden));
     this.applyAssetBrowserVisibility(layout);
+    this.leftPanel.setRect(layout.leftPanel);
+    this.applyLeftPanelVisibility(layout);
   }
 
   private setAssetBrowserHidden(hidden: boolean) {
@@ -94,9 +114,27 @@ export class HudFeature {
     this.assetBrowserToggleButton.setRect(assetToggleRect(layout, this.assetBrowserHidden));
   }
 
+  private setLeftPanelHidden(hidden: boolean) {
+    if (this.leftPanelHidden === hidden) return;
+    this.leftPanelHidden = hidden;
+    this.applyLayout(this.computeLayout(this.currentSize));
+  }
+
+  private applyLeftPanelVisibility(layout: ShellRects) {
+    const visible = !this.leftPanelHidden;
+    this.leftPanel.setVisible(visible);
+    this.leftPanelToggleButton.setContent({
+      icon: visible ? "chevronLeft" : "chevronRight",
+      label: visible ? undefined : "Panel"
+    });
+    this.leftPanelToggleButton.setRect(leftPanelToggleRect(layout, this.leftPanelHidden));
+  }
+
   dispose() {
     this.assetBrowser.dispose();
     this.assetBrowserToggleButton.dispose();
+    this.leftPanel.dispose();
+    this.leftPanelToggleButton.dispose();
     this.thumbnails.dispose();
   }
 }
@@ -118,5 +156,22 @@ function assetToggleRect(layout: ShellRects, hidden: boolean): Rect {
     y: layout.assetBrowser.y + 5,
     width,
     height
+  };
+}
+
+function leftPanelToggleRect(layout: ShellRects, hidden: boolean): Rect {
+  const margin = 10;
+  if (hidden) {
+    const width = 84;
+    const height = 34;
+    return { x: margin, y: margin, width, height };
+  }
+  // Icon-only square, vertically centered in LeftPanel's tab row so it sits beside the tabs, not over them.
+  const size = 30;
+  return {
+    x: layout.leftPanel.x + layout.leftPanel.width - size - margin,
+    y: layout.leftPanel.y + (LEFT_PANEL_TAB_BAR_HEIGHT - size) / 2,
+    width: size,
+    height: size
   };
 }

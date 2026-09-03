@@ -1,5 +1,6 @@
 import { describe, expect, test } from "vitest";
 import { validateSceneForSave } from "../src/editor-core/validation";
+import type { Scene } from "../src/editor-core/scene";
 import { validateSceneSaveRequest } from "../server/viteApiPlugin";
 
 describe("scene validation", () => {
@@ -8,7 +9,10 @@ describe("scene validation", () => {
       {
         id: "scene_1",
         name: "Temporary Asset",
+        description: "",
         grid: { cellSize: 1, width: 10, depth: 10 },
+        background: { type: "color", color: "#eef2f7", textureUrl: null },
+        ground: { type: "color", color: "#eef2f7", textureUrl: null },
         objects: [
           {
             id: "obj_1",
@@ -28,10 +32,13 @@ describe("scene validation", () => {
 });
 
 test("server save validation rejects mismatched route ids and temporary assets", () => {
-  const scene = {
+  const scene: Scene = {
     id: "scene_body",
     name: "Bad Save",
+    description: "",
     grid: { cellSize: 1, width: 10, depth: 10 },
+    background: { type: "color", color: "#eef2f7", textureUrl: null },
+    ground: { type: "color", color: "#eef2f7", textureUrl: null },
     objects: [
       {
         id: "obj_1",

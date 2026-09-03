@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { theme } from "../../app/theme";
 
-const GHOST_OPACITY = 0.4;
+export const GHOST_OPACITY = 0.4;
 
 /**
  * The translucent silhouette that previews where the asset armed for placement will land.

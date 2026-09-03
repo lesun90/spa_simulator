@@ -4,6 +4,7 @@ import type { AssetManager } from "../../engine/AssetManager";
 import type { InteractionSystem } from "../../engine/InteractionSystem";
 import type { AssetCatalogEntry } from "../../editor-core/assets";
 import type { Scene as EditorScene } from "../../editor-core/scene";
+import { GHOST_OPACITY } from "./PlacementGhost";
 import { worldSceneConfig } from "./world.config";
 
 export interface SceneObjectsCallbacks {
@@ -20,6 +21,12 @@ export class SceneObjectsFeature {
 
   private readonly meshesById = new Map<string, THREE.Object3D>();
   private readonly unregisterByRoot = new Map<THREE.Object3D, () => void>();
+  private readonly originalMaterialsById = new Map<string, Map<THREE.Mesh, THREE.Material | THREE.Material[]>>();
+  private readonly ghostMaterial = new THREE.MeshStandardMaterial({
+    color: theme.placementGhost.hex,
+    transparent: true,
+    opacity: GHOST_OPACITY
+  });
   private selectionHelper: THREE.Box3Helper | null = null;
   private syncVersion = 0;
 
@@ -33,7 +40,12 @@ export class SceneObjectsFeature {
     this.root.visible = visible;
   }
 
-  async sync(scene: EditorScene, assets: AssetCatalogEntry[], selectedObjectId: string | null) {
+  async sync(
+    scene: EditorScene,
+    assets: AssetCatalogEntry[],
+    selectedObjectId: string | null,
+    hiddenObjectIds: ReadonlySet<string>
+  ) {
     const version = ++this.syncVersion;
     const catalog = new Map(assets.map((asset) => [asset.id, asset]));
 
@@ -55,13 +67,36 @@ export class SceneObjectsFeature {
       instance.scale.setScalar(object.scale);
       this.root.add(instance);
       this.meshesById.set(object.id, instance);
+      this.originalMaterialsById.set(object.id, captureMaterials(instance));
       const unregister = this.interaction.register(instance, {
         onClick: () => this.callbacks.onObjectClick(object.id)
       });
       this.unregisterByRoot.set(instance, unregister);
     }
 
+    this.applyHiddenState(hiddenObjectIds);
     this.setSelected(selectedObjectId);
+  }
+
+  /**
+   * Applies the editor-only "hidden for viewing" toggle — never removes objects from the scene data.
+   * A hidden object stays in place as a translucent ghost silhouette (matching the placement ghost's
+   * look) rather than disappearing, so its position stays visible while viewing is decluttered.
+   */
+  applyHiddenState(hiddenObjectIds: ReadonlySet<string>) {
+    for (const [objectId, instance] of this.meshesById) {
+      const hidden = hiddenObjectIds.has(objectId);
+      const originalMaterials = this.originalMaterialsById.get(objectId);
+      instance.traverse((child) => {
+        if (!(child instanceof THREE.Mesh)) return;
+        if (hidden) {
+          child.material = this.ghostMaterial;
+          return;
+        }
+        const original = originalMaterials?.get(child);
+        if (original) child.material = original;
+      });
+    }
   }
 
   /** Marks an object selected with a bounding-box outline — the real mesh materials are left untouched. */
@@ -90,12 +125,14 @@ export class SceneObjectsFeature {
     for (const unregister of this.unregisterByRoot.values()) unregister();
     this.unregisterByRoot.clear();
     this.meshesById.clear();
+    this.originalMaterialsById.clear();
     this.clearSelectionHelper();
     this.root.clear();
   }
 
   dispose() {
     this.clearInstances();
+    this.ghostMaterial.dispose();
   }
 }
 
@@ -104,4 +141,12 @@ function createFallbackMesh() {
     new THREE.BoxGeometry(0.8, 0.8, 0.8),
     new THREE.MeshStandardMaterial({ color: worldSceneConfig.fallbackObjectColor, roughness: 0.6 })
   );
+}
+
+function captureMaterials(instance: THREE.Object3D): Map<THREE.Mesh, THREE.Material | THREE.Material[]> {
+  const materials = new Map<THREE.Mesh, THREE.Material | THREE.Material[]>();
+  instance.traverse((child) => {
+    if (child instanceof THREE.Mesh) materials.set(child, child.material);
+  });
+  return materials;
 }
