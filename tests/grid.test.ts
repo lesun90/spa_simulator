@@ -1,0 +1,18 @@
+import { describe, expect, test } from "vitest";
+import { resolveGroundPosition, snapToCellCenter } from "../src/editor-core/grid";
+
+describe("grid placement", () => {
+  test("snaps a ground position to the nearest square cell center", () => {
+    expect(
+      snapToCellCenter({ x: 12.1, y: 8, z: 9.1 }, { cellSize: 1, width: 100, depth: 100 })
+    ).toEqual({ x: 12.5, y: 0, z: 9.5 });
+  });
+
+  test("free placement preserves the ground-plane x and z with y fixed to zero", () => {
+    expect(resolveGroundPosition({ x: -2.25, y: 4, z: 3.75 }, "free", { cellSize: 1, width: 20, depth: 20 })).toEqual({
+      x: -2.25,
+      y: 0,
+      z: 3.75
+    });
+  });
+});

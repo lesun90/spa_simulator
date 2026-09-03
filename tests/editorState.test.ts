@@ -1,0 +1,143 @@
+import { beforeEach, expect, test, vi } from "vitest";
+import { createScene } from "../src/editor-core/scene";
+import { EditorState } from "../src/state/EditorState";
+import {
+  createSceneRequest,
+  listAssets,
+  listScenes,
+  openSceneRequest,
+  type SceneSummary
+} from "../src/api/client";
+import type { AssetCatalogEntry } from "../src/editor-core/assets";
+
+vi.mock("../src/api/client", () => ({
+  createSceneRequest: vi.fn(),
+  deleteSceneRequest: vi.fn(),
+  duplicateSceneRequest: vi.fn(),
+  importSharedAssetRequest: vi.fn(),
+  listAssets: vi.fn(),
+  listScenes: vi.fn(),
+  openSceneRequest: vi.fn(),
+  renameSceneRequest: vi.fn(),
+  saveSceneRequest: vi.fn()
+}));
+
+const mockedListScenes = vi.mocked(listScenes);
+const mockedListAssets = vi.mocked(listAssets);
+const mockedCreateSceneRequest = vi.mocked(createSceneRequest);
+const mockedOpenSceneRequest = vi.mocked(openSceneRequest);
+
+beforeEach(() => {
+  vi.clearAllMocks();
+});
+
+test("refreshScenes creates and opens a default scene on first run", async () => {
+  const scene = createScene("Downtown");
+  const summary: SceneSummary = {
+    id: scene.id,
+    name: scene.name,
+    objectCount: 0,
+    updatedAt: "2026-09-02T00:00:00.000Z"
+  };
+  mockedListScenes.mockResolvedValueOnce([]).mockResolvedValueOnce([summary]);
+  mockedCreateSceneRequest.mockResolvedValue(scene);
+  mockedOpenSceneRequest.mockResolvedValue(scene);
+
+  const state = new EditorState();
+  await state.refreshScenes();
+
+  expect(mockedCreateSceneRequest).toHaveBeenCalledWith("Downtown");
+  expect(state.scene).toEqual(scene);
+  expect(state.scenes).toEqual([summary]);
+});
+
+test("asset search matches label, id, and tags inside the selected category", () => {
+  const state = new EditorState();
+  state.assets = [
+    asset({ id: "props.cone", label: "Traffic Cone", category: "props", tags: ["road", "safety"] }),
+    asset({ id: "vegetation.oak", label: "Oak Tree", category: "vegetation", tags: ["tree", "shade"] }),
+    asset({ id: "props.barrier", label: "Road Barrier", category: "props", tags: ["traffic"] })
+  ];
+
+  state.setCategory("props");
+  state.setSearch("road");
+
+  expect(state.filteredAssets.map((entry) => entry.id)).toEqual(["props.cone", "props.barrier"]);
+
+  state.setSearch("oak");
+
+  expect(state.filteredAssets).toEqual([]);
+});
+
+test("asset category changes emit a category-specific event and reject unknown categories", () => {
+  const state = new EditorState();
+  state.assets = [
+    asset({ id: "props.cone", category: "props" }),
+    asset({ id: "vegetation.oak", category: "vegetation" })
+  ];
+  const onCategory = vi.fn();
+  const onSearch = vi.fn();
+  state.on("category", onCategory);
+  state.on("search", onSearch);
+
+  state.setCategory("vegetation");
+  state.setCategory("missing");
+
+  expect(state.category).toBe("vegetation");
+  expect(onCategory).toHaveBeenCalledTimes(1);
+  expect(onSearch).not.toHaveBeenCalled();
+});
+
+test("refreshAssets exposes loading state and keeps prior assets when loading fails", async () => {
+  const state = new EditorState();
+  const existing = [asset({ id: "props.cone", category: "props" })];
+  const next = [asset({ id: "vegetation.oak", category: "vegetation" })];
+  state.assets = existing;
+  mockedListAssets.mockRejectedValueOnce(new Error("catalog unavailable")).mockResolvedValueOnce(next);
+  const onRefresh = vi.fn();
+  const onAssets = vi.fn();
+  const onNotice = vi.fn();
+  state.on("assetRefresh", onRefresh);
+  state.on("assets", onAssets);
+  state.on("notice", onNotice);
+
+  await state.refreshAssets();
+
+  expect(state.assets).toEqual(existing);
+  expect(state.assetsRefreshing).toBe(false);
+  expect(state.notice).toBe("catalog unavailable");
+  expect(onRefresh).toHaveBeenCalledTimes(2);
+  expect(onAssets).not.toHaveBeenCalled();
+  expect(onNotice).toHaveBeenCalledTimes(1);
+
+  await state.refreshAssets();
+
+  expect(state.assets).toEqual(next);
+  expect(state.notice).toBe("Assets refreshed");
+  expect(onAssets).toHaveBeenCalledTimes(1);
+});
+
+test("refreshAssets resets a stale selected category when the catalog no longer contains it", async () => {
+  const state = new EditorState();
+  state.assets = [asset({ id: "props.cone", category: "props" })];
+  state.setCategory("props");
+  mockedListAssets.mockResolvedValueOnce([asset({ id: "vegetation.oak", category: "vegetation" })]);
+  const onCategory = vi.fn();
+  state.on("category", onCategory);
+
+  await state.refreshAssets();
+
+  expect(state.category).toBe("all");
+  expect(onCategory).toHaveBeenCalledTimes(1);
+});
+
+function asset(patch: Partial<AssetCatalogEntry>): AssetCatalogEntry {
+  return {
+    id: patch.id ?? "props.cone",
+    label: patch.label ?? "Asset",
+    category: patch.category ?? "props",
+    tags: patch.tags,
+    source: patch.source ?? "shared",
+    implementation: patch.implementation ?? "placeholder"
+  };
+}

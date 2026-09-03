@@ -1,0 +1,24 @@
+{
+  "name": "steerlab",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "build:check": "tsc --noEmit && vite build --outDir /tmp/steerlab-dist --emptyOutDir",
+    "test": "vitest"
+  },
+  "dependencies": {
+    "three": "0.185.1"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.62.1",
+    "@types/node": "^26.4.1",
+    "@types/three": "0.185.4",
+    "jsdom": "^26.1.0",
+    "typescript": "^5.9.2",
+    "vite": "6.4.3",
+    "vitest": "^3.2.4"
+  }
+}
