@@ -27,5 +27,8 @@ export const theme = {
   white: token("#ffffff"),
   assetPlaceholderShared: token("#7d8aa2"),
   assetPlaceholderTemporary: token("#f2a93b"),
-  ghost: token("#2f6df6")
+  selectionHighlight: token("#2f6df6"),
+  placementGhost: token("#8a94a6"),
+  radius: { sm: 6, md: 10, lg: 16 },
+  shadowRgb: "15, 23, 42"
 } as const;

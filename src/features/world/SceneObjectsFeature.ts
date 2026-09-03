@@ -20,7 +20,7 @@ export class SceneObjectsFeature {
 
   private readonly meshesById = new Map<string, THREE.Object3D>();
   private readonly unregisterByRoot = new Map<THREE.Object3D, () => void>();
-  private readonly highlightedMaterials = new Map<THREE.Mesh, THREE.Material | THREE.Material[]>();
+  private selectionHelper: THREE.Box3Helper | null = null;
   private syncVersion = 0;
 
   constructor(
@@ -64,28 +64,33 @@ export class SceneObjectsFeature {
     this.setSelected(selectedObjectId);
   }
 
+  /** Marks an object selected with a bounding-box outline — the real mesh materials are left untouched. */
   setSelected(selectedObjectId: string | null) {
-    for (const [mesh, original] of this.highlightedMaterials) {
-      mesh.material = original;
-    }
-    this.highlightedMaterials.clear();
+    this.clearSelectionHelper();
 
     if (!selectedObjectId) return;
     const instance = this.meshesById.get(selectedObjectId);
     if (!instance) return;
-    instance.traverse((child) => {
-      if (child instanceof THREE.Mesh) {
-        this.highlightedMaterials.set(child, child.material);
-        child.material = new THREE.MeshStandardMaterial({ color: theme.ghost.hex, roughness: 0.55 });
-      }
-    });
+    instance.updateWorldMatrix(true, false);
+    const box = new THREE.Box3().setFromObject(instance);
+    const helper = new THREE.Box3Helper(box, theme.selectionHighlight.hex);
+    this.root.add(helper);
+    this.selectionHelper = helper;
+  }
+
+  private clearSelectionHelper() {
+    if (!this.selectionHelper) return;
+    this.root.remove(this.selectionHelper);
+    this.selectionHelper.geometry.dispose();
+    (this.selectionHelper.material as THREE.Material).dispose();
+    this.selectionHelper = null;
   }
 
   private clearInstances() {
     for (const unregister of this.unregisterByRoot.values()) unregister();
     this.unregisterByRoot.clear();
     this.meshesById.clear();
-    this.highlightedMaterials.clear();
+    this.clearSelectionHelper();
     this.root.clear();
   }
 

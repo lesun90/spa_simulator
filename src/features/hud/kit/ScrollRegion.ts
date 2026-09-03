@@ -10,7 +10,7 @@ export interface ScrollRegionOptions {
   axis: "vertical" | "horizontal";
 }
 
-const SCROLLBAR_THICKNESS = 4;
+const SCROLLBAR_THICKNESS = 6;
 
 /**
  * A clipped, scrollable viewport. Callers add children to `content` positioned at their natural

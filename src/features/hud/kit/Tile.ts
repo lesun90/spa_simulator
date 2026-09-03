@@ -24,6 +24,8 @@ export class Tile {
   private labelMesh: THREE.Mesh<THREE.PlaneGeometry, THREE.MeshBasicMaterial> | null = null;
   private tagMesh: THREE.Mesh<THREE.PlaneGeometry, THREE.MeshBasicMaterial> | null = null;
   private rect: Rect;
+  private isActive = false;
+  private isHovered = false;
   private readonly unregister: () => void;
 
   constructor(
@@ -32,7 +34,7 @@ export class Tile {
     private readonly options: TileOptions
   ) {
     this.rect = rect;
-    this.panel = new Panel(rect, { fill: theme.white.hex, border: theme.border.hex, borderWidth: 1 });
+    this.panel = new Panel(rect, { fill: theme.white.hex, border: theme.border.hex, borderWidth: 1, radius: theme.radius.sm });
     this.root.add(this.panel.root);
 
     this.hitArea = new THREE.Mesh(unitPlane, hudBasicMaterial({ visible: false }));
@@ -46,8 +48,14 @@ export class Tile {
 
     this.unregister = interaction.register(this.hitArea, {
       onClick: () => options.onClick(),
-      onHover: () => options.onHover?.(),
-      onLeave: () => options.onLeave?.()
+      onHover: () => {
+        this.setHovered(true);
+        options.onHover?.();
+      },
+      onLeave: () => {
+        this.setHovered(false);
+        options.onLeave?.();
+      }
     });
 
     this.layoutContent();
@@ -98,7 +106,31 @@ export class Tile {
   }
 
   setActive(active: boolean) {
-    this.panel.setBorder(active ? theme.accent.hex : theme.border.hex);
+    if (this.isActive === active) return;
+    this.isActive = active;
+    this.applyVisualState();
+  }
+
+  private setHovered(hovered: boolean) {
+    if (this.isHovered === hovered) return;
+    this.isHovered = hovered;
+    this.applyVisualState();
+  }
+
+  private applyVisualState() {
+    if (this.isActive) {
+      this.panel.setFill(theme.accentSelectedBg.hex);
+      this.panel.setBorder(theme.accent.hex);
+      this.panel.setShadow("none");
+    } else if (this.isHovered) {
+      this.panel.setFill(theme.panelSubtle.hex);
+      this.panel.setBorder(theme.textMutedAlt.hex);
+      this.panel.setShadow("md");
+    } else {
+      this.panel.setFill(theme.white.hex);
+      this.panel.setBorder(theme.border.hex);
+      this.panel.setShadow("none");
+    }
   }
 
   setRect(rect: Rect) {

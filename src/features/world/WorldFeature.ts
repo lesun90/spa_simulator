@@ -7,7 +7,7 @@ import type { ViewportSize } from "../../engine/Viewport";
 import { resolveGroundPosition } from "../../editor-core/grid";
 import type { EditorState } from "../../state/EditorState";
 import { createGround } from "./Ground";
-import { createPlacementGhost } from "./PlacementGhost";
+import { PlacementGhost } from "./PlacementGhost";
 import { SceneObjectsFeature } from "./SceneObjectsFeature";
 import { worldSceneConfig } from "./world.config";
 
@@ -22,10 +22,11 @@ export class WorldFeature {
 
   private readonly cameraRig: CameraRig;
   private readonly ground: THREE.Mesh;
-  private readonly ghost: THREE.Mesh;
+  private readonly ghost: PlacementGhost;
   private readonly objects: SceneObjectsFeature;
   private readonly unsubscribers: Array<() => void> = [];
   private unregisterGround: (() => void) | null = null;
+  private ghostAssetToken = 0;
 
   constructor(
     private readonly canvas: HTMLCanvasElement,
@@ -51,8 +52,8 @@ export class WorldFeature {
     this.ground = ground;
     this.scene.add(gridHelper, ground);
 
-    this.ghost = createPlacementGhost();
-    this.scene.add(this.ghost);
+    this.ghost = new PlacementGhost();
+    this.scene.add(this.ghost.root);
 
     this.objects = new SceneObjectsFeature(assetManager, interaction, {
       onObjectClick: (objectId) => state.selectObject(objectId)
@@ -69,9 +70,7 @@ export class WorldFeature {
       state.on("assets", () => this.resync()),
       state.on("selection", () => this.objects.setSelected(state.selectedObjectId)),
       state.on("objectsVisible", () => this.objects.setVisible(state.objectsVisible)),
-      state.on("placement", () => {
-        if (!state.placementAssetId) this.ghost.visible = false;
-      })
+      state.on("placement", () => this.syncGhostAsset())
     );
 
     this.resync();
@@ -86,13 +85,27 @@ export class WorldFeature {
     void this.objects.sync(this.state.scene, this.state.assets, this.state.selectedObjectId);
   }
 
+  private async syncGhostAsset() {
+    const assetId = this.state.placementAssetId;
+    const token = ++this.ghostAssetToken;
+    if (!assetId) {
+      this.ghost.visible = false;
+      this.ghost.setAsset(null);
+      return;
+    }
+    const asset = this.state.assets.find((entry) => entry.id === assetId);
+    const instance = asset ? await this.assetManager.instantiate(asset) : null;
+    if (token !== this.ghostAssetToken || this.state.placementAssetId !== assetId) return;
+    this.ghost.setAsset(instance);
+  }
+
   private updateGhost(point: THREE.Vector3 | null) {
     if (!point || !this.state.scene || !this.state.placementAssetId) {
       this.ghost.visible = false;
       return;
     }
     const resolved = resolveGroundPosition(point, this.state.placementResolution, this.state.scene.grid);
-    this.ghost.position.set(resolved.x, 0.45, resolved.z);
+    this.ghost.setPosition(resolved.x, resolved.z);
     this.ghost.visible = true;
   }
 
@@ -118,6 +131,7 @@ export class WorldFeature {
     for (const unsubscribe of this.unsubscribers) unsubscribe();
     this.unregisterGround?.();
     this.objects.dispose();
+    this.ghost.dispose();
     this.cameraRig.dispose();
   }
 }

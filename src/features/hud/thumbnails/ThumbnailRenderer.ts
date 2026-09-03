@@ -113,6 +113,10 @@ export class ThumbnailRenderer {
   private renderInto(target: THREE.WebGLRenderTarget, rig: PreviewRig) {
     const previousTarget = this.renderer.getRenderTarget();
     this.renderer.setRenderTarget(target);
+    // The app renderer runs with autoClear disabled (Renderer.ts composites world+HUD layers onto one
+    // canvas), so this offscreen target needs an explicit clear — otherwise a pooled live-preview slot
+    // shows whatever asset last rendered into it bleeding through behind the current one.
+    this.renderer.clear(true, true, true);
     this.renderer.render(rig.scene, rig.camera);
     this.renderer.setRenderTarget(previousTarget);
   }

@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import type { Rect } from "./layout";
 import { hudBasicMaterial } from "./materials";
+import { rasterizePanel, type PanelCornerRadius, type PanelShadowLevel } from "./panelTexture";
 import { hudZ } from "./zIndex";
 
 /** Every HUD rect is a unit quad scaled per-instance — one shared geometry, never disposed (module-lifetime resource). */
@@ -24,72 +25,88 @@ export interface PanelOptions {
   fillOpacity?: number;
   border?: number;
   borderWidth?: number;
+  /** Corner radius in px, uniform or per-corner. Defaults to the kit's standard radius; pass 0 to square it off. */
+  radius?: number | PanelCornerRadius;
+  /** Drop shadow baked into the panel texture, for floating chrome (the dock, popovers) or hover lift. */
+  shadow?: PanelShadowLevel;
   z?: number;
 }
 
-/** A flat rectangular background, with an optional 1px-style border drawn as four thin quads. */
+/** A rounded rectangular background (fill + optional border + optional drop shadow), the base look every HUD widget shares. */
 export class Panel {
   readonly root = new THREE.Group();
   private readonly background: THREE.Mesh<THREE.PlaneGeometry, THREE.MeshBasicMaterial>;
-  private readonly borderMeshes: THREE.Mesh[] = [];
   private rect: Rect;
-  private readonly options: PanelOptions;
+  private readonly z: number;
+  private fill: number;
+  private fillOpacity?: number;
+  private border?: number;
+  private readonly borderWidth: number;
+  private readonly radius?: number | PanelCornerRadius;
+  private shadow: PanelShadowLevel;
+  private padding = 0;
 
   constructor(rect: Rect, options: PanelOptions = {}) {
     this.rect = rect;
-    this.options = options;
-    const material = hudBasicMaterial({
-      color: options.fill ?? 0xffffff,
-      transparent: options.fillOpacity !== undefined,
-      opacity: options.fillOpacity ?? 1
-    });
-    this.background = new THREE.Mesh(unitPlane, material);
-    this.background.position.z = options.z ?? hudZ.panel;
+    this.z = options.z ?? hudZ.panel;
+    this.fill = options.fill ?? 0xffffff;
+    this.fillOpacity = options.fillOpacity;
+    this.border = options.border;
+    this.borderWidth = options.borderWidth ?? 1;
+    this.radius = options.radius;
+    this.shadow = options.shadow ?? "none";
+
+    this.background = new THREE.Mesh(unitPlane, hudBasicMaterial({ transparent: true }));
+    this.background.position.z = this.z;
     this.root.add(this.background);
-    if (options.border !== undefined) this.buildBorder();
-    this.setRect(rect);
+    this.redraw();
   }
 
-  private buildBorder() {
-    const material = hudBasicMaterial({ color: this.options.border });
-    for (let i = 0; i < 4; i++) {
-      const mesh = new THREE.Mesh(unitPlane, material);
-      mesh.position.z = (this.options.z ?? hudZ.panel) + 0.001;
-      this.root.add(mesh);
-      this.borderMeshes.push(mesh);
-    }
-    this.layoutBorder();
+  private redraw() {
+    const rasterized = rasterizePanel({
+      width: this.rect.width,
+      height: this.rect.height,
+      radius: this.radius,
+      fill: this.fill,
+      fillOpacity: this.fillOpacity,
+      border: this.border,
+      borderWidth: this.borderWidth,
+      shadow: this.shadow
+    });
+    this.background.material.map = rasterized.texture;
+    this.background.material.needsUpdate = true;
+    this.padding = rasterized.padding;
+    this.applyTransform();
   }
 
-  private layoutBorder() {
-    const { width, height } = this.rect;
-    const w = this.options.borderWidth ?? 1;
-    const [top, bottom, left, right] = this.borderMeshes;
-    top?.scale.set(width, w, 1);
-    top?.position.set(0, height / 2 - w / 2, top.position.z);
-    bottom?.scale.set(width, w, 1);
-    bottom?.position.set(0, -height / 2 + w / 2, bottom.position.z);
-    left?.scale.set(w, height, 1);
-    left?.position.set(-width / 2 + w / 2, 0, left.position.z);
-    right?.scale.set(w, height, 1);
-    right?.position.set(width / 2 - w / 2, 0, right.position.z);
+  private applyTransform() {
+    const pad = this.padding;
+    this.background.scale.set(Math.max(this.rect.width + pad * 2, 0.001), Math.max(this.rect.height + pad * 2, 0.001), 1);
+    this.root.position.set(this.rect.x + this.rect.width / 2, this.rect.y + this.rect.height / 2, 0);
   }
 
   setRect(rect: Rect) {
     this.rect = rect;
-    this.background.scale.set(Math.max(rect.width, 0.001), Math.max(rect.height, 0.001), 1);
-    this.root.position.set(rect.x + rect.width / 2, rect.y + rect.height / 2, 0);
-    if (this.borderMeshes.length) this.layoutBorder();
+    this.redraw();
   }
 
   setFill(color: number) {
-    this.background.material.color.setHex(color);
+    if (this.fill === color) return;
+    this.fill = color;
+    this.redraw();
   }
 
   setBorder(color: number) {
-    for (const mesh of this.borderMeshes) {
-      (mesh.material as THREE.MeshBasicMaterial).color.setHex(color);
-    }
+    if (this.border === color) return;
+    this.border = color;
+    this.redraw();
+  }
+
+  /** Swaps the elevation level (e.g. a subtle lift on hover) without touching fill/border. */
+  setShadow(level: PanelShadowLevel) {
+    if (this.shadow === level) return;
+    this.shadow = level;
+    this.redraw();
   }
 
   getRect(): Rect {
@@ -97,7 +114,10 @@ export class Panel {
   }
 
   dispose() {
+    // The texture is a module-level cache entry shared across panels with matching params — only the
+    // per-instance material (and its map reference) belongs to this Panel.
     this.background.material.dispose();
-    (this.borderMeshes[0]?.material as THREE.Material | undefined)?.dispose();
   }
 }
+
+export type { PanelCornerRadius, PanelShadowLevel };
