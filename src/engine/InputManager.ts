@@ -18,6 +18,7 @@ export class InputManager {
     canvas.addEventListener("pointerup", this.onPointerUp);
     canvas.addEventListener("pointercancel", this.onPointerUp);
     canvas.addEventListener("wheel", this.onWheel, { passive: false });
+    canvas.addEventListener("contextmenu", this.onContextMenu);
     canvas.addEventListener("dragover", this.onDragOver);
     canvas.addEventListener("drop", this.onDrop);
     window.addEventListener("keydown", this.onKeyDown);
@@ -49,6 +50,10 @@ export class InputManager {
     this.handlers.onWheel(x, y, event.deltaY, event);
   };
 
+  private onContextMenu = (event: MouseEvent) => {
+    event.preventDefault();
+  };
+
   private onDragOver = (event: DragEvent) => {
     event.preventDefault();
   };
@@ -71,6 +76,7 @@ export class InputManager {
     this.canvas.removeEventListener("pointerup", this.onPointerUp);
     this.canvas.removeEventListener("pointercancel", this.onPointerUp);
     this.canvas.removeEventListener("wheel", this.onWheel);
+    this.canvas.removeEventListener("contextmenu", this.onContextMenu);
     this.canvas.removeEventListener("dragover", this.onDragOver);
     this.canvas.removeEventListener("drop", this.onDrop);
     window.removeEventListener("keydown", this.onKeyDown);

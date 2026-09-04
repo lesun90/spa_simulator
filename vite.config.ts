@@ -14,6 +14,10 @@ export default defineConfig({
   build: {
     chunkSizeWarningLimit: 900,
     rollupOptions: {
+      input: {
+        main: "index.html",
+        assetViewer: "asset-viewer.html"
+      },
       output: {
         manualChunks: {
           three: ["three"]

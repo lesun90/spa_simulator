@@ -5,11 +5,12 @@ import type { InteractionSystem, RaycastLayer } from "../../engine/InteractionSy
 import { CameraRig } from "../../engine/CameraRig";
 import type { ViewportSize } from "../../engine/Viewport";
 import { resolveGroundPosition } from "../../editor-core/grid";
-import type { GridDefinition } from "../../editor-core/scene";
+import type { GridDefinition, SceneObject } from "../../editor-core/scene";
 import type { EditorState } from "../../state/EditorState";
 import { createGround, disposeGround, type GroundMesh } from "./Ground";
 import { PlacementGhost } from "./PlacementGhost";
 import { SceneObjectsFeature } from "./SceneObjectsFeature";
+import { shouldClearSelectionOnGroundClick } from "./worldInteraction";
 import { worldSceneConfig } from "./world.config";
 
 /** World units per repeat of a ground texture tile, so a picked image doesn't stretch across the whole plane. */
@@ -67,7 +68,15 @@ export class WorldFeature {
     this.scene.add(this.ghost.root);
 
     this.objects = new SceneObjectsFeature(assetManager, interaction, {
-      onObjectClick: (objectId) => state.selectObject(objectId)
+      getGroundPoint: (x, y) => this.interaction.raycastAgainst(x, y, this.ground, this.camera),
+      onObjectPointerDown: (objectId) => this.handleObjectPointerDown(objectId),
+      onObjectClick: (objectId) => state.selectObject(objectId),
+      onTransformCommit: (objectId, patch) => this.commitObjectTransform(objectId, patch),
+      onTransformStart: () => this.cameraRig.setEnabled(false),
+      onTransformEnd: () => this.cameraRig.setEnabled(true),
+      setCursor: (cursor) => {
+        this.canvas.style.cursor = cursor;
+      }
     });
     this.scene.add(this.objects.root);
 
@@ -105,8 +114,41 @@ export class WorldFeature {
   private registerGroundInteraction() {
     this.unregisterGround = this.interaction.register(this.ground, {
       onPointerMove: (event) => this.updateGhost(event.point ?? null),
-      onPointerUp: (event) => this.tryPlace(event.point ?? null)
+      onPointerUp: (event) => this.handleGroundPointerUp(event.point ?? null)
     });
+  }
+
+  private handleGroundPointerUp(point: THREE.Vector3 | null) {
+    if (
+      shouldClearSelectionOnGroundClick({
+        activeTool: this.state.activeTool,
+        placementAssetId: this.state.placementAssetId,
+        hasGroundPoint: Boolean(point)
+      })
+    ) {
+      this.state.selectObject(null);
+      return;
+    }
+
+    this.tryPlace(point);
+  }
+
+  private handleObjectPointerDown(objectId: string): boolean {
+    if (this.state.activeTool !== "select" || this.state.placementAssetId) {
+      this.state.selectObject(objectId);
+      return false;
+    }
+
+    this.state.selectObject(objectId);
+    return true;
+  }
+
+  private commitObjectTransform(
+    objectId: string,
+    patch: Partial<Pick<SceneObject, "position" | "rotationY" | "scale">>
+  ) {
+    if (this.state.selectedObjectId !== objectId) this.state.selectObject(objectId);
+    this.state.updateSelectedObject(patch);
   }
 
   private syncGrid() {

@@ -35,4 +35,18 @@ describe("asset catalog discovery", () => {
     expect(catalog).toHaveLength(2);
     expect(catalog.every((entry) => entry.diagnostics?.some((diagnostic) => diagnostic.includes("Duplicate asset ID")))).toBe(true);
   });
+
+  test("includes the low-poly sports car in the shared vehicle catalog", async () => {
+    const catalog = await discoverAssetCatalog(join(process.cwd(), "assets"));
+
+    expect(catalog).toContainEqual(
+      expect.objectContaining({
+        id: "vehicles.lowpoly-sports-car",
+        label: "Low-poly sports car",
+        category: "vehicles",
+        implementation: "module",
+        tags: ["car", "sports", "low-poly", "vehicle"]
+      })
+    );
+  });
 });

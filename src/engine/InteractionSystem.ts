@@ -6,6 +6,8 @@ export interface InteractionEvent {
   y: number;
   point?: THREE.Vector3;
   target: THREE.Object3D | null;
+  button: number;
+  buttons: number;
   shiftKey: boolean;
   originalEvent: Event;
 }
@@ -106,6 +108,8 @@ export class InteractionSystem {
       y,
       point: hit?.point,
       target: hit?.root ?? null,
+      button: "button" in event ? (event as MouseEvent).button : 0,
+      buttons: "buttons" in event ? (event as MouseEvent).buttons : 0,
       shiftKey: "shiftKey" in event ? Boolean((event as MouseEvent).shiftKey) : false,
       originalEvent: event
     };

@@ -3,12 +3,38 @@ import { theme } from "../../app/theme";
 import type { AssetManager } from "../../engine/AssetManager";
 import type { InteractionSystem } from "../../engine/InteractionSystem";
 import type { AssetCatalogEntry } from "../../editor-core/assets";
-import type { Scene as EditorScene } from "../../editor-core/scene";
+import type { Scene as EditorScene, SceneObject, Vector3Data } from "../../editor-core/scene";
 import { GHOST_OPACITY } from "./PlacementGhost";
+import {
+  type DirectObjectTransformMode,
+  hasTransformChanged,
+  moveOnGround,
+  rotateFromHorizontalDrag,
+  scaleFromGroundHandle,
+  transformModeForPointerButton
+} from "./objectTransform";
 import { worldSceneConfig } from "./world.config";
 
 export interface SceneObjectsCallbacks {
+  getGroundPoint(x: number, y: number): Vector3Data | null;
+  onObjectPointerDown(objectId: string): boolean;
   onObjectClick(objectId: string): void;
+  onTransformCommit(objectId: string, patch: Partial<Pick<SceneObject, "position" | "rotationY" | "scale">>): void;
+  onTransformStart(): void;
+  onTransformEnd(): void;
+  setCursor(cursor: string): void;
+}
+
+type TransformMode = DirectObjectTransformMode | "scale";
+
+interface ActiveTransform {
+  readonly objectId: string;
+  readonly mode: TransformMode;
+  readonly startObject: SceneObject;
+  readonly startScreenX: number;
+  readonly startPointer: Vector3Data;
+  readonly center: Vector3Data;
+  changed: boolean;
 }
 
 /**
@@ -22,12 +48,17 @@ export class SceneObjectsFeature {
   private readonly meshesById = new Map<string, THREE.Object3D>();
   private readonly unregisterByRoot = new Map<THREE.Object3D, () => void>();
   private readonly originalMaterialsById = new Map<string, Map<THREE.Mesh, THREE.Material | THREE.Material[]>>();
+  private readonly objectsById = new Map<string, SceneObject>();
   private readonly ghostMaterial = new THREE.MeshStandardMaterial({
     color: theme.placementGhost.hex,
     transparent: true,
     opacity: GHOST_OPACITY
   });
-  private selectionHelper: THREE.Box3Helper | null = null;
+  private selectionControls: ObjectTransformControls | null = null;
+  private hoverHelper: THREE.Box3Helper | null = null;
+  private hoverObjectId: string | null = null;
+  private selectedObjectId: string | null = null;
+  private activeTransform: ActiveTransform | null = null;
   private syncVersion = 0;
 
   constructor(
@@ -66,10 +97,16 @@ export class SceneObjectsFeature {
       instance.rotation.y = object.rotationY;
       instance.scale.setScalar(object.scale);
       this.root.add(instance);
+      this.objectsById.set(object.id, object);
       this.meshesById.set(object.id, instance);
       this.originalMaterialsById.set(object.id, captureMaterials(instance));
       const unregister = this.interaction.register(instance, {
-        onClick: () => this.callbacks.onObjectClick(object.id)
+        onPointerDown: (event) => this.startObjectMove(object.id, event),
+        onPointerMove: (event) => this.updateTransform(event),
+        onPointerUp: (event) => this.finishTransform(event),
+        onClick: () => this.callbacks.onObjectClick(object.id),
+        onHover: () => this.setHovered(object.id),
+        onLeave: () => this.clearHovered(object.id)
       });
       this.unregisterByRoot.set(instance, unregister);
     }
@@ -101,32 +138,158 @@ export class SceneObjectsFeature {
 
   /** Marks an object selected with a bounding-box outline — the real mesh materials are left untouched. */
   setSelected(selectedObjectId: string | null) {
-    this.clearSelectionHelper();
+    this.selectedObjectId = selectedObjectId;
+    this.clearSelectionControls();
 
     if (!selectedObjectId) return;
     const instance = this.meshesById.get(selectedObjectId);
     if (!instance) return;
     instance.updateWorldMatrix(true, false);
-    const box = new THREE.Box3().setFromObject(instance);
-    const helper = new THREE.Box3Helper(box, theme.selectionHighlight.hex);
-    this.root.add(helper);
-    this.selectionHelper = helper;
+    this.selectionControls = new ObjectTransformControls(new THREE.Box3().setFromObject(instance), this.interaction, {
+      onPointerDown: (mode, event) => this.startHandleTransform(mode, event),
+      onPointerMove: (event) => this.updateTransform(event),
+      onPointerUp: (event) => this.finishTransform(event),
+      onResizeHover: (cursor) => {
+        if (!this.activeTransform) this.callbacks.setCursor(cursor);
+      }
+    });
+    this.root.add(this.selectionControls.root);
   }
 
-  private clearSelectionHelper() {
-    if (!this.selectionHelper) return;
-    this.root.remove(this.selectionHelper);
-    this.selectionHelper.geometry.dispose();
-    (this.selectionHelper.material as THREE.Material).dispose();
-    this.selectionHelper = null;
+  private setHovered(objectId: string) {
+    if (this.activeTransform || this.hoverObjectId === objectId || objectId === this.selectedObjectId) return;
+    this.clearHoverHelper();
+    const instance = this.meshesById.get(objectId);
+    if (!instance) return;
+    instance.updateWorldMatrix(true, false);
+    const helper = new THREE.Box3Helper(new THREE.Box3().setFromObject(instance), theme.assetPlaceholderTemporary.hex);
+    this.root.add(helper);
+    this.hoverHelper = helper;
+    this.hoverObjectId = objectId;
+  }
+
+  private clearHovered(objectId: string) {
+    if (this.hoverObjectId === objectId) this.clearHoverHelper();
+  }
+
+  private clearHoverHelper() {
+    if (!this.hoverHelper) return;
+    this.root.remove(this.hoverHelper);
+    disposeObject(this.hoverHelper);
+    this.hoverHelper = null;
+    this.hoverObjectId = null;
+  }
+
+  private clearSelectionControls() {
+    if (!this.selectionControls) return;
+    this.root.remove(this.selectionControls.root);
+    this.selectionControls.dispose();
+    this.selectionControls = null;
+  }
+
+  private startObjectMove(objectId: string, event: { x: number; y: number; button: number }) {
+    if (!this.callbacks.onObjectPointerDown(objectId)) return;
+    const mode = transformModeForPointerButton(event.button);
+    if (!mode) return;
+    this.beginTransform(objectId, mode, event);
+  }
+
+  private startHandleTransform(mode: Exclude<TransformMode, "move">, event: { x: number; y: number }) {
+    if (!this.selectedObjectId) return;
+    this.beginTransform(this.selectedObjectId, mode, event);
+  }
+
+  private beginTransform(objectId: string, mode: TransformMode, event: { x: number; y: number }) {
+    const object = this.objectsById.get(objectId);
+    const point = this.callbacks.getGroundPoint(event.x, event.y);
+    const instance = this.meshesById.get(objectId);
+    if (!object || !point || !instance) return;
+
+    this.clearHoverHelper();
+    this.activeTransform = {
+      objectId,
+      mode,
+      startObject: cloneSceneObject(object),
+      startScreenX: event.x,
+      startPointer: point,
+      center: { x: instance.position.x, y: 0, z: instance.position.z },
+      changed: false
+    };
+    this.callbacks.onTransformStart();
+    this.callbacks.setCursor(mode === "scale" ? "ew-resize" : "grabbing");
+  }
+
+  private updateTransform(event: { x: number; y: number }) {
+    if (!this.activeTransform) return;
+
+    const { objectId, mode, startObject, startScreenX, startPointer, center } = this.activeTransform;
+    const instance = this.meshesById.get(objectId);
+    if (!instance) return;
+
+    let current = {
+      position: { x: instance.position.x, y: 0, z: instance.position.z },
+      rotationY: instance.rotation.y,
+      scale: instance.scale.x
+    };
+
+    if (mode === "move") {
+      const point = this.callbacks.getGroundPoint(event.x, event.y);
+      if (!point) return;
+      const position = moveOnGround(startObject.position, startPointer, point);
+      instance.position.set(position.x, 0, position.z);
+      current = { ...current, position };
+    } else if (mode === "scale") {
+      const point = this.callbacks.getGroundPoint(event.x, event.y);
+      if (!point) return;
+      const scale = scaleFromGroundHandle(startObject.scale, center, startPointer, point);
+      instance.scale.setScalar(scale);
+      current = { ...current, scale };
+    } else {
+      const rotationY = rotateFromHorizontalDrag(startObject.rotationY, startScreenX, event.x);
+      instance.rotation.y = rotationY;
+      current = { ...current, rotationY };
+    }
+
+    if (hasTransformChanged(startObject, current)) this.activeTransform.changed = true;
+    this.refreshSelectionControlsFor(objectId);
+  }
+
+  private finishTransform(event: { x: number; y: number }) {
+    if (!this.activeTransform) return;
+    this.updateTransform(event);
+
+    const { objectId, changed } = this.activeTransform;
+    const instance = this.meshesById.get(objectId);
+    this.activeTransform = null;
+    this.callbacks.onTransformEnd();
+    this.callbacks.setCursor("default");
+
+    if (!changed || !instance) return;
+    this.callbacks.onTransformCommit(objectId, {
+      position: { x: instance.position.x, y: 0, z: instance.position.z },
+      rotationY: instance.rotation.y,
+      scale: instance.scale.x
+    });
+  }
+
+  private refreshSelectionControlsFor(objectId: string) {
+    if (this.selectedObjectId !== objectId) return;
+    const instance = this.meshesById.get(objectId);
+    if (!instance) return;
+    instance.updateWorldMatrix(true, false);
+    this.selectionControls?.setBox(new THREE.Box3().setFromObject(instance));
   }
 
   private clearInstances() {
     for (const unregister of this.unregisterByRoot.values()) unregister();
     this.unregisterByRoot.clear();
     this.meshesById.clear();
+    this.objectsById.clear();
     this.originalMaterialsById.clear();
-    this.clearSelectionHelper();
+    this.activeTransform = null;
+    this.clearHoverHelper();
+    this.clearSelectionControls();
+    this.callbacks.setCursor("default");
     this.root.clear();
   }
 
@@ -149,4 +312,112 @@ function captureMaterials(instance: THREE.Object3D): Map<THREE.Mesh, THREE.Mater
     if (child instanceof THREE.Mesh) materials.set(child, child.material);
   });
   return materials;
+}
+
+function cloneSceneObject(object: SceneObject): SceneObject {
+  return { ...object, position: { ...object.position } };
+}
+
+function disposeObject(object: THREE.Object3D) {
+  object.traverse((child) => {
+    if (child instanceof THREE.Mesh || child instanceof THREE.Line) {
+      child.geometry.dispose();
+      const material = child.material;
+      if (Array.isArray(material)) material.forEach((item) => item.dispose());
+      else material.dispose();
+    }
+  });
+}
+
+class ObjectTransformControls {
+  readonly root = new THREE.Group();
+
+  private readonly outline: THREE.Box3Helper;
+  private readonly resizeEdges: ResizeEdgeControl[] = [];
+  private readonly unregisters: Array<() => void> = [];
+
+  constructor(
+    box: THREE.Box3,
+    interaction: InteractionSystem,
+    handlers: {
+      onPointerDown(mode: Exclude<TransformMode, "move">, event: { x: number; y: number }): void;
+      onPointerMove(event: { x: number; y: number }): void;
+      onPointerUp(event: { x: number; y: number }): void;
+      onResizeHover(cursor: string): void;
+    }
+  ) {
+    this.outline = new THREE.Box3Helper(box, theme.selectionHighlight.hex);
+    this.root.add(this.outline);
+
+    for (let index = 0; index < 4; index += 1) {
+      const edge = new ResizeEdgeControl();
+      this.resizeEdges.push(edge);
+      this.root.add(edge.mesh);
+      this.unregisters.push(
+        interaction.register(edge.mesh, {
+          onPointerDown: (event) => handlers.onPointerDown("scale", event),
+          onPointerMove: (event) => handlers.onPointerMove(event),
+          onPointerUp: (event) => handlers.onPointerUp(event),
+          onHover: () => {
+            edge.setHovered(true);
+            handlers.onResizeHover(edge.cursor);
+          },
+          onLeave: () => {
+            edge.setHovered(false);
+            handlers.onResizeHover("default");
+          }
+        })
+      );
+    }
+
+    this.setBox(box);
+  }
+
+  setBox(box: THREE.Box3) {
+    this.outline.box.copy(box);
+
+    const center = box.getCenter(new THREE.Vector3());
+    const size = box.getSize(new THREE.Vector3());
+    const y = box.max.y + 0.06;
+    const halfX = Math.max(size.x / 2, 0.3);
+    const halfZ = Math.max(size.z / 2, 0.3);
+
+    this.resizeEdges[0].setTransform(center.x, y, center.z - halfZ, halfX * 2, 0, "ns-resize");
+    this.resizeEdges[1].setTransform(center.x + halfX, y, center.z, halfZ * 2, Math.PI / 2, "ew-resize");
+    this.resizeEdges[2].setTransform(center.x, y, center.z + halfZ, halfX * 2, 0, "ns-resize");
+    this.resizeEdges[3].setTransform(center.x - halfX, y, center.z, halfZ * 2, Math.PI / 2, "ew-resize");
+  }
+
+  dispose() {
+    for (const unregister of this.unregisters) unregister();
+    disposeObject(this.root);
+  }
+}
+
+class ResizeEdgeControl {
+  readonly mesh: THREE.Mesh<THREE.BoxGeometry, THREE.MeshBasicMaterial>;
+  cursor = "ew-resize";
+
+  constructor() {
+    this.mesh = new THREE.Mesh(
+      new THREE.BoxGeometry(1, 0.1, 0.1),
+      new THREE.MeshBasicMaterial({
+        color: theme.selectionHighlight.hex,
+        transparent: true,
+        opacity: 0.28
+      })
+    );
+  }
+
+  setTransform(x: number, y: number, z: number, length: number, rotationY: number, cursor: string) {
+    this.cursor = cursor;
+    this.mesh.position.set(x, y, z);
+    this.mesh.scale.set(Math.max(length, 0.3), 1, 1);
+    this.mesh.rotation.y = rotationY;
+  }
+
+  setHovered(hovered: boolean) {
+    this.mesh.material.color.set(hovered ? theme.assetPlaceholderTemporary.hex : theme.selectionHighlight.hex);
+    this.mesh.material.opacity = hovered ? 0.85 : 0.28;
+  }
 }
