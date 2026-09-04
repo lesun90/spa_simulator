@@ -1,8 +1,8 @@
-import { mkdtemp, mkdir, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, test } from "vitest";
-import { discoverAssetCatalog } from "../server/assetCatalog";
+import { discoverAssetCatalog, importSharedAsset } from "../server/assetCatalog";
 
 describe("asset catalog discovery", () => {
   test("recursively discovers module-primary and glb-fallback assets", async () => {
@@ -34,6 +34,44 @@ describe("asset catalog discovery", () => {
 
     expect(catalog).toHaveLength(2);
     expect(catalog.every((entry) => entry.diagnostics?.some((diagnostic) => diagnostic.includes("Duplicate asset ID")))).toBe(true);
+  });
+
+  test("discovers top-level glb files as standalone shared assets", async () => {
+    const root = await mkdtemp(join(tmpdir(), "steerlab-assets-"));
+    await writeFile(join(root, "delivery-van.glb"), "glb");
+
+    const catalog = await discoverAssetCatalog(root);
+
+    expect(catalog).toEqual([
+      expect.objectContaining({
+        id: "delivery-van",
+        label: "Delivery Van",
+        category: "uncategorized",
+        implementation: "glb",
+        modelUrl: "/assets/delivery-van.glb"
+      })
+    ]);
+  });
+
+  test("imports glb-only shared assets as model assets", async () => {
+    const root = await mkdtemp(join(tmpdir(), "steerlab-assets-"));
+    const imported = await importSharedAsset(root, {
+      id: "vehicles.delivery-van",
+      label: "Delivery van",
+      category: "vehicles",
+      folderName: "delivery-van",
+      files: [{ name: "delivery-van.glb", contentBase64: Buffer.from("glb").toString("base64") }]
+    });
+
+    expect(imported).toMatchObject({
+      id: "vehicles.delivery-van",
+      label: "Delivery van",
+      category: "vehicles",
+      implementation: "glb",
+      modelUrl: "/assets/vehicles/delivery-van/delivery-van.glb"
+    });
+    const files = await readdir(join(root, "vehicles", "delivery-van"));
+    expect(files.sort()).toEqual(["asset.json", "delivery-van.glb"]);
   });
 
   test("includes the low-poly sports car in the shared vehicle catalog", async () => {

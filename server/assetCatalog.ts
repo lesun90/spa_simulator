@@ -1,5 +1,5 @@
 import { mkdir, readdir, readFile, stat, writeFile } from "node:fs/promises";
-import { join, relative, sep } from "node:path";
+import { basename, extname, join, relative, sep } from "node:path";
 import type { AssetCatalogEntry } from "../src/editor-core/assets";
 import { assetLabelFromId } from "../src/editor-core/assets";
 
@@ -21,7 +21,11 @@ export interface SharedImportRequest {
 
 export async function discoverAssetCatalog(assetRoot: string): Promise<AssetCatalogEntry[]> {
   const folders = await discoverAssetFolders(assetRoot);
-  const entries = await Promise.all(folders.map((folder) => normalizeAssetFolder(assetRoot, folder)));
+  const rootModels = await discoverRootModelFiles(assetRoot);
+  const entries = await Promise.all([
+    ...folders.map((folder) => normalizeAssetFolder(assetRoot, folder)),
+    ...rootModels.map((modelFile) => normalizeRootModelAsset(assetRoot, modelFile))
+  ]);
   const duplicateIds = findDuplicateIds(entries);
 
   return entries
@@ -47,8 +51,17 @@ export async function importSharedAsset(assetRoot: string, request: SharedImport
 
   const metadataFile = `${folder}.js`;
   const hasModule = request.files.some((file) => file.name.endsWith(".js"));
+  const hasModel = request.files.some((file) => file.name.endsWith(".glb"));
   const files = hasModule
     ? request.files
+    : hasModel
+      ? [
+          ...request.files,
+          {
+            name: "asset.json",
+            contentBase64: Buffer.from(JSON.stringify({ id: request.id, label: request.label, category }, null, 2)).toString("base64")
+          }
+        ]
     : [
         ...request.files,
         {
@@ -83,7 +96,7 @@ async function discoverAssetFolders(assetRoot: string) {
     }
 
     const fileNames = children.filter((child) => child.isFile()).map((child) => child.name);
-    if (fileNames.some((name) => name.endsWith(".js") || name.endsWith(".glb") || name.endsWith(".png"))) {
+    if (directory !== assetRoot && fileNames.some((name) => name.endsWith(".js") || name.endsWith(".glb") || name.endsWith(".png"))) {
       folders.push(directory);
     }
 
@@ -94,6 +107,33 @@ async function discoverAssetFolders(assetRoot: string) {
   return folders;
 }
 
+async function discoverRootModelFiles(assetRoot: string) {
+  try {
+    const children = await readdir(assetRoot, { withFileTypes: true });
+    return children.filter((child) => child.isFile() && child.name.endsWith(".glb")).map((child) => child.name);
+  } catch {
+    return [];
+  }
+}
+
+async function normalizeRootModelAsset(assetRoot: string, modelFile: string): Promise<AssetCatalogEntry> {
+  const names = await readdir(assetRoot);
+  const id = basename(modelFile, extname(modelFile));
+  const thumbnailFile = names.includes(`${id}.png`) ? `${id}.png` : undefined;
+
+  return {
+    id,
+    label: assetLabelFromId(id),
+    category: "uncategorized",
+    tags: [],
+    source: "shared",
+    implementation: "glb",
+    modelUrl: `/assets/${encodeURIComponent(modelFile)}`,
+    thumbnailUrl: thumbnailFile ? `/assets/${encodeURIComponent(thumbnailFile)}` : undefined,
+    diagnostics: []
+  };
+}
+
 async function normalizeAssetFolder(assetRoot: string, folder: string): Promise<AssetCatalogEntry> {
   const names = await readdir(folder);
   const relativeFolder = relative(assetRoot, folder);
@@ -102,8 +142,13 @@ async function normalizeAssetFolder(assetRoot: string, folder: string): Promise<
   const moduleFile = names.find((name) => name.endsWith(".js"));
   const glbFile = names.find((name) => name.endsWith(".glb"));
   const pngFile = names.find((name) => name.endsWith(".png"));
+  const metadataFile = names.includes("asset.json") ? "asset.json" : undefined;
   const diagnostics: string[] = [];
-  const metadata = moduleFile ? await readModuleMetadata(join(folder, moduleFile), diagnostics) : {};
+  const metadata = moduleFile
+    ? await readModuleMetadata(join(folder, moduleFile), diagnostics)
+    : metadataFile
+      ? await readJsonMetadata(join(folder, metadataFile), diagnostics)
+      : {};
   const id = metadata.id ?? defaultId;
   const urlBase = `/assets/${relativeFolder.split(sep).map(encodeURIComponent).join("/")}`;
 
@@ -137,6 +182,15 @@ async function readModuleMetadata(filePath: string, diagnostics: string[]): Prom
     return Function(`"use strict"; return (${match[1]});`)() as AssetMetadata;
   } catch {
     diagnostics.push("Module metadata could not be read.");
+    return {};
+  }
+}
+
+async function readJsonMetadata(filePath: string, diagnostics: string[]): Promise<AssetMetadata> {
+  try {
+    return JSON.parse(await readFile(filePath, "utf8")) as AssetMetadata;
+  } catch {
+    diagnostics.push("Asset metadata could not be read.");
     return {};
   }
 }
