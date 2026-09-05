@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { theme } from "../../app/theme";
 import type { AssetManager } from "../../engine/AssetManager";
-import type { InteractionSystem } from "../../engine/InteractionSystem";
+import type { InteractionEvent, InteractionSystem } from "../../engine/InteractionSystem";
 import type { AssetCatalogEntry } from "../../editor-core/assets";
 import type { Scene as EditorScene, SceneObject, Vector3Data } from "../../editor-core/scene";
 import { GHOST_OPACITY } from "./PlacementGhost";
@@ -19,6 +19,8 @@ import { worldSceneConfig } from "./world.config";
 export interface SceneObjectsCallbacks {
   getGroundPoint(x: number, y: number): Vector3Data | null;
   onObjectPointerDown(objectId: string): boolean;
+  onObjectPointerMove(objectId: string, event: InteractionEvent): void;
+  onObjectPointerUp(objectId: string, event: InteractionEvent): void;
   onObjectClick(objectId: string): void;
   onTransformPreview(
     objectId: string,
@@ -77,6 +79,13 @@ export class SceneObjectsFeature {
     this.root.visible = visible;
   }
 
+  getObjectBox(objectId: string): THREE.Box3 | null {
+    const instance = this.meshesById.get(objectId);
+    if (!instance) return null;
+    instance.updateWorldMatrix(true, false);
+    return new THREE.Box3().setFromObject(instance);
+  }
+
   async sync(
     scene: EditorScene,
     assets: AssetCatalogEntry[],
@@ -109,8 +118,8 @@ export class SceneObjectsFeature {
       this.originalMaterialsById.set(object.id, captureMaterials(instance));
       const unregister = this.interaction.register(instance, {
         onPointerDown: (event) => this.startObjectMove(object.id, event),
-        onPointerMove: (event) => this.updateTransform(event),
-        onPointerUp: (event) => this.finishTransform(event),
+        onPointerMove: (event) => this.handleObjectPointerMove(object.id, event),
+        onPointerUp: (event) => this.handleObjectPointerUp(object.id, event),
         onClick: () => this.callbacks.onObjectClick(object.id),
         onHover: () => this.setHovered(object.id),
         onLeave: () => this.clearHovered(object.id)
@@ -199,6 +208,22 @@ export class SceneObjectsFeature {
     const mode = transformModeForPointerButton(event.button);
     if (!mode) return;
     this.beginTransform(objectId, mode, event);
+  }
+
+  private handleObjectPointerMove(objectId: string, event: InteractionEvent) {
+    if (this.activeTransform) {
+      this.updateTransform(event);
+      return;
+    }
+    this.callbacks.onObjectPointerMove(objectId, event);
+  }
+
+  private handleObjectPointerUp(objectId: string, event: InteractionEvent) {
+    if (this.activeTransform) {
+      this.finishTransform(event);
+      return;
+    }
+    this.callbacks.onObjectPointerUp(objectId, event);
   }
 
   private startHandleTransform(mode: Exclude<TransformMode, "move">, event: { x: number; y: number }) {

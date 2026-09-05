@@ -144,6 +144,15 @@ test("placement can store a snapped object scale", () => {
   });
 });
 
+test("placement preserves a stacked object height", () => {
+  const state = new EditorState();
+  state.history = { scene: createScene("Downtown"), undoStack: [], redoStack: [] };
+
+  state.placeAsset("props.cone", { x: 1.5, y: 3.25, z: 2.5 });
+
+  expect(state.scene?.objects[0]?.position).toEqual({ x: 1.5, y: 3.25, z: 2.5 });
+});
+
 test("inspection resolution is independent from placement resolution", () => {
   const state = new EditorState();
   const onPlacement = vi.fn();

@@ -74,7 +74,9 @@ export class WorldFeature {
     this.objects = new SceneObjectsFeature(assetManager, interaction, {
       getGroundPoint: (x, y) => this.interaction.raycastAgainst(x, y, this.ground, this.camera),
       onObjectPointerDown: (objectId) => this.handleObjectPointerDown(objectId),
-      onObjectClick: (objectId) => state.selectObject(objectId),
+      onObjectPointerMove: (objectId, event) => this.handleObjectPlacementPointerMove(objectId, event.point ?? null),
+      onObjectPointerUp: (objectId, event) => this.handleObjectPlacementPointerUp(objectId, event.point ?? null),
+      onObjectClick: (objectId) => this.handleObjectClick(objectId),
       onTransformPreview: (_objectId, _mode, patch) => this.snapTransformPatch(patch),
       onTransformCommit: (objectId, patch) => this.commitObjectTransform(objectId, patch),
       onTransformStart: () => this.cameraRig.setEnabled(false),
@@ -150,17 +152,33 @@ export class WorldFeature {
       return;
     }
 
-    void this.tryPlace(point);
+    void this.tryPlace(point ? this.resolvePlacementPosition(point, 0) : null);
   }
 
   private handleObjectPointerDown(objectId: string): boolean {
     if (this.state.activeTool !== "select" || this.state.placementAssetId) {
-      this.state.selectObject(objectId);
+      if (!this.state.placementAssetId) this.state.selectObject(objectId);
       return false;
     }
 
     this.state.selectObject(objectId);
     return true;
+  }
+
+  private handleObjectClick(objectId: string) {
+    if (this.state.placementAssetId) return;
+    this.state.selectObject(objectId);
+  }
+
+  private handleObjectPlacementPointerMove(objectId: string, point: THREE.Vector3 | null) {
+    if (!this.state.placementAssetId) return;
+    const position = this.resolveObjectPlacementPosition(objectId, point);
+    this.updateGhostAtPosition(position);
+  }
+
+  private handleObjectPlacementPointerUp(objectId: string, point: THREE.Vector3 | null) {
+    if (!this.state.placementAssetId) return;
+    void this.tryPlace(this.resolveObjectPlacementPosition(objectId, point));
   }
 
   private commitObjectTransform(
@@ -290,19 +308,36 @@ export class WorldFeature {
       this.ghost.visible = false;
       return;
     }
-    const resolved = resolveGroundPosition(point, this.state.placementResolution, this.state.scene.grid);
-    this.ghost.setPosition(resolved.x, resolved.z);
+    this.updateGhostAtPosition(this.resolvePlacementPosition(point, 0));
+  }
+
+  private updateGhostAtPosition(position: SceneObject["position"] | null) {
+    if (!position || !this.state.scene || !this.state.placementAssetId) {
+      this.ghost.visible = false;
+      return;
+    }
+    this.ghost.setPosition(position.x, position.z, position.y);
     this.ghost.visible = true;
   }
 
-  private async tryPlace(point: THREE.Vector3 | null) {
-    if (!point || !this.state.scene || !this.state.placementAssetId) return;
+  private async tryPlace(position: SceneObject["position"] | null) {
+    if (!position || !this.state.scene || !this.state.placementAssetId) return;
     const assetId = this.state.placementAssetId;
-    const resolved = resolveGroundPosition(point, this.state.placementResolution, this.state.scene.grid);
     const scale = await this.resolvePlacementScale(assetId);
     if (this.state.placementAssetId !== assetId) return;
-    this.state.placeAsset(assetId, resolved, { scale });
+    this.state.placeAsset(assetId, position, { scale });
     this.ghost.visible = false;
+  }
+
+  private resolveObjectPlacementPosition(objectId: string, point: THREE.Vector3 | null): SceneObject["position"] | null {
+    if (!point) return null;
+    const box = this.objects.getObjectBox(objectId);
+    return this.resolvePlacementPosition(point, box ? box.max.y : 0);
+  }
+
+  private resolvePlacementPosition(point: THREE.Vector3, y: number): SceneObject["position"] | null {
+    if (!this.state.scene) return null;
+    return resolveGroundPosition(point, this.state.placementResolution, this.state.scene.grid, y);
   }
 
   private async resolvePlacementScale(assetId: string): Promise<number> {

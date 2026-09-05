@@ -24,8 +24,8 @@ export class PlacementGhost {
     this.root.visible = value;
   }
 
-  setPosition(x: number, z: number) {
-    this.root.position.set(x, 0, z);
+  setPosition(x: number, z: number, y = 0) {
+    this.root.position.set(x, y, z);
   }
 
   setScale(scale: number) {

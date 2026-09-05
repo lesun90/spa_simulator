@@ -16,6 +16,14 @@ describe("grid placement", () => {
     });
   });
 
+  test("stacked placement snaps x and z while preserving the target surface height", () => {
+    expect(resolveGroundPosition({ x: 1.1, y: 4, z: 2.1 }, "snap", { cellSize: 1, width: 20, depth: 20 }, 3.25)).toEqual({
+      x: 1.5,
+      y: 3.25,
+      z: 2.5
+    });
+  });
+
   test("snaps values to the supported grid-size multipliers", () => {
     expect(snapToGridMultiplier(0.7)).toBe(0.5);
     expect(snapToGridMultiplier(1.45)).toBe(1);

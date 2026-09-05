@@ -232,7 +232,7 @@ export class EditorState {
       id: createId("obj"),
       assetId,
       name: nextObjectName(scene.objects, assetId),
-      position: { x: position.x, y: 0, z: position.z },
+      position: { x: position.x, y: Number.isFinite(position.y) ? position.y : 0, z: position.z },
       rotationY: 0,
       scale: Number.isFinite(options.scale) && options.scale! > 0 ? options.scale! : 1
     };

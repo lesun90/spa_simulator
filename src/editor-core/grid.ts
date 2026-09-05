@@ -18,13 +18,15 @@ export function snapToCellCenter(point: Vector3Data, grid: GridDefinition): Vect
 export function resolveGroundPosition(
   point: Vector3Data,
   resolution: PlacementResolution,
-  grid: GridDefinition
+  grid: GridDefinition,
+  y = 0
 ): Vector3Data {
   if (resolution === "snap") {
-    return snapToCellCenter(point, grid);
+    const snapped = snapToCellCenter(point, grid);
+    return { ...snapped, y };
   }
 
-  return { x: point.x, y: 0, z: point.z };
+  return { x: point.x, y, z: point.z };
 }
 
 export function snapToGridMultiplier(value: number): number {
