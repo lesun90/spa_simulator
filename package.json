@@ -7,14 +7,17 @@
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "build:check": "tsc --noEmit && vite build --outDir /tmp/steerlab-dist --emptyOutDir",
+    "assets:import": "vite-node scripts/importAssets.ts",
     "test": "vitest"
   },
   "dependencies": {
+    "stats.js": "^0.17.0",
     "three": "0.185.1"
   },
   "devDependencies": {
     "@playwright/test": "^1.62.1",
     "@types/node": "^26.4.1",
+    "@types/stats.js": "^0.17.4",
     "@types/three": "0.185.4",
     "jsdom": "^26.1.0",
     "typescript": "^5.9.2",

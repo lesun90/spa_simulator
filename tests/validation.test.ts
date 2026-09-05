@@ -17,6 +17,7 @@ describe("scene validation", () => {
           {
             id: "obj_1",
             assetId: "temp.imported",
+            name: "Imported",
             position: { x: 0, y: 0, z: 0 },
             rotationY: 0,
             scale: 1
@@ -43,6 +44,7 @@ test("server save validation rejects mismatched route ids and temporary assets",
       {
         id: "obj_1",
         assetId: "temp.review",
+        name: "Review",
         position: { x: 0, y: 0, z: 0 },
         rotationY: 0,
         scale: 1

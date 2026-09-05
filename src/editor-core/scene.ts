@@ -24,6 +24,7 @@ export interface SurfaceAppearance {
 export interface SceneObject {
   id: string;
   assetId: string;
+  name: string;
   position: Vector3Data;
   rotationY: number;
   scale: number;
@@ -71,6 +72,7 @@ export function cloneScene(scene: Scene): Scene {
     ground: { ...scene.ground },
     objects: scene.objects.map((object) => ({
       ...object,
+      name: object.name,
       position: { ...object.position }
     }))
   };
@@ -78,11 +80,17 @@ export function cloneScene(scene: Scene): Scene {
 
 /** Backfills fields absent from scene files saved before they existed, so old saves keep loading. */
 export function normalizeScene(scene: Scene): Scene {
+  const names = objectDisplayNames(scene.objects);
   return {
     ...scene,
     description: typeof scene.description === "string" ? scene.description : "",
     background: isSurfaceAppearance(scene.background) ? scene.background : defaultSurfaceAppearance(),
-    ground: isSurfaceAppearance(scene.ground) ? scene.ground : defaultSurfaceAppearance()
+    ground: isSurfaceAppearance(scene.ground) ? scene.ground : defaultSurfaceAppearance(),
+    objects: scene.objects.map((object) => ({
+      ...object,
+      name: typeof object.name === "string" && object.name.trim() ? object.name : names.get(object.id) ?? assetSlug(object.assetId),
+      position: { ...object.position, y: 0 }
+    }))
   };
 }
 
@@ -100,7 +108,7 @@ export function assetSlug(assetId: string): string {
   return tail.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "") || "object";
 }
 
-/** Maps each object to a stable "asset_slug_N" display name, numbered per asset in scene order. */
+/** Maps each object to a stable custom name or "asset_slug_N" display name, numbered per asset in scene order. */
 export function objectDisplayNames(objects: SceneObject[]): Map<string, string> {
   const counts = new Map<string, number>();
   const names = new Map<string, string>();
@@ -108,7 +116,7 @@ export function objectDisplayNames(objects: SceneObject[]): Map<string, string> 
     const slug = assetSlug(object.assetId);
     const count = (counts.get(slug) ?? 0) + 1;
     counts.set(slug, count);
-    names.set(object.id, `${slug}_${count}`);
+    names.set(object.id, object.name?.trim() || `${slug}_${count}`);
   }
   return names;
 }

@@ -12,7 +12,8 @@ export const shellLayout = {
   assetBrowserHeight: 190,
   narrowBreakpoint: 980,
   narrowAssetBrowserHeight: 150,
-  leftPanelWidth: 280
+  leftPanelWidth: 280,
+  inspectorPanelWidth: 300
 };
 
 export const assetTileSize = { width: 148, height: 100, gap: 10 };

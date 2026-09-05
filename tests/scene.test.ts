@@ -22,6 +22,18 @@ describe("objectDisplayNames", () => {
     expect(names.get("obj_2")).toBe("cone_1");
     expect(names.get("obj_3")).toBe("oak_2");
   });
+
+  test("uses custom object names before generated asset names", () => {
+    const objects: SceneObject[] = [
+      { ...object("obj_1", "vegetation.oak"), name: "Entry tree" },
+      object("obj_2", "vegetation.oak")
+    ];
+
+    const names = objectDisplayNames(objects);
+
+    expect(names.get("obj_1")).toBe("Entry tree");
+    expect(names.get("obj_2")).toBe("oak_2");
+  });
 });
 
 describe("normalizeScene", () => {
@@ -40,6 +52,25 @@ describe("normalizeScene", () => {
     expect(normalized.ground).toEqual({ type: "color", color: "#eef2f7", textureUrl: null });
   });
 
+  test("backfills object names for scenes saved before object names existed", () => {
+    const legacy = {
+      id: "scene_1",
+      name: "Downtown",
+      description: "",
+      grid: { cellSize: 1, width: 100, depth: 100 },
+      background: { type: "color", color: "#eef2f7", textureUrl: null },
+      ground: { type: "color", color: "#eef2f7", textureUrl: null },
+      objects: [
+        object("obj_1", "props.traffic-cone"),
+        object("obj_2", "props.traffic-cone")
+      ]
+    } as Scene;
+
+    const normalized = normalizeScene(legacy);
+
+    expect(normalized.objects.map((item) => item.name)).toEqual(["traffic_cone_1", "traffic_cone_2"]);
+  });
+
   test("leaves already-populated fields untouched", () => {
     const scene: Scene = {
       id: "scene_1",
@@ -56,5 +87,5 @@ describe("normalizeScene", () => {
 });
 
 function object(id: string, assetId: string): SceneObject {
-  return { id, assetId, position: { x: 0, y: 0, z: 0 }, rotationY: 0, scale: 1 };
+  return { id, assetId, name: "", position: { x: 0, y: 0, z: 0 }, rotationY: 0, scale: 1 };
 }

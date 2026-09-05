@@ -11,7 +11,7 @@ import {
   type HistoryState
 } from "../editor-core/commands";
 import type { PlacementResolution } from "../editor-core/grid";
-import { createId, type Scene, type SceneObject, type SurfaceAppearanceType, type Vector3Data } from "../editor-core/scene";
+import { createId, objectDisplayNames, type Scene, type SceneObject, type SurfaceAppearanceType, type Vector3Data } from "../editor-core/scene";
 import { validateSceneForSave } from "../editor-core/validation";
 import {
   createSceneRequest,
@@ -224,10 +224,12 @@ export class EditorState {
   }
 
   placeAsset(assetId: string, position: Vector3Data) {
-    if (!this.history) return;
+    const scene = this.scene;
+    if (!this.history || !scene) return;
     const object: SceneObject = {
       id: createId("obj"),
       assetId,
+      name: nextObjectName(scene.objects, assetId),
       position: { x: position.x, y: 0, z: position.z },
       rotationY: 0,
       scale: 1
@@ -252,10 +254,16 @@ export class EditorState {
     this.emit("selection");
   }
 
-  updateSelectedObject(patch: Partial<Pick<SceneObject, "position" | "rotationY" | "scale">>) {
+  updateSelectedObject(patch: Partial<Pick<SceneObject, "name" | "position" | "rotationY" | "scale">>) {
     if (!this.history || !this.selectedObjectId) return;
     this.history = executeCommand(this.history, updateObjectCommand(this.selectedObjectId, patch));
     this.emit("scene");
+  }
+
+  renameSelectedObject(name: string) {
+    const trimmed = name.trim();
+    if (!trimmed || this.selected?.name === trimmed) return;
+    this.updateSelectedObject({ name: trimmed });
   }
 
   duplicateSelectedObject() {
@@ -525,4 +533,9 @@ async function fileToBase64(file: File) {
     binary += String.fromCharCode(byte);
   }
   return btoa(binary);
+}
+
+function nextObjectName(objects: SceneObject[], assetId: string): string {
+  const id = "__next__";
+  return objectDisplayNames([...objects, { id, assetId, name: "", position: { x: 0, y: 0, z: 0 }, rotationY: 0, scale: 1 }]).get(id) ?? assetId;
 }

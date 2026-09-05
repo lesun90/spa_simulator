@@ -27,6 +27,14 @@ export interface RaycastLayer {
   camera: THREE.Camera;
 }
 
+/** A screen-space rect (same coordinate space as raycast hit points against an orthographic HUD camera). */
+export interface ClipRect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
 export interface FocusableField {
   onKeyDown?(event: KeyboardEvent): void;
   onBlur?(): void;
@@ -48,6 +56,7 @@ type HandlerPredicate = (handlers: InteractiveHandlers) => boolean;
 export class InteractionSystem {
   private layers: RaycastLayer[] = [];
   private readonly registry = new Map<THREE.Object3D, InteractiveHandlers>();
+  private readonly clipRects = new Map<THREE.Object3D, ClipRect>();
   private readonly raycaster = new THREE.Raycaster();
   private readonly ndc = new THREE.Vector2();
   private hovered: THREE.Object3D | null = null;
@@ -70,6 +79,16 @@ export class InteractionSystem {
     };
   }
 
+  /**
+   * Marks every descendant of `root` as hit-testable only within `rect` — for content a scrollable
+   * region clips visually (via shader clip planes), since raycasting has no idea those clip planes
+   * exist and would otherwise keep hitting geometry the viewer can no longer see. Pass null to clear.
+   */
+  setClipRect(root: THREE.Object3D, rect: ClipRect | null) {
+    if (rect) this.clipRects.set(root, rect);
+    else this.clipRects.delete(root);
+  }
+
   /** Raycasts a specific target (e.g. the ground plane) outside of the registry-dispatch flow. */
   raycastAgainst(x: number, y: number, target: THREE.Object3D, camera: THREE.Camera): THREE.Vector3 | null {
     this.resolveNdc(x, y);
@@ -82,14 +101,26 @@ export class InteractionSystem {
     this.ndc.set((x / width) * 2 - 1, -(y / height) * 2 + 1);
   }
 
+  private isClippedOut(object: THREE.Object3D, point: THREE.Vector3): boolean {
+    let node: THREE.Object3D | null = object;
+    while (node) {
+      const rect = this.clipRects.get(node);
+      if (rect && (point.x < rect.x || point.x > rect.x + rect.width || point.y < rect.y || point.y > rect.y + rect.height)) {
+        return true;
+      }
+      node = node.parent;
+    }
+    return false;
+  }
+
   private hitTest(x: number, y: number, accepts?: HandlerPredicate): Hit | null {
     this.resolveNdc(x, y);
     for (const layer of this.layers) {
       this.raycaster.setFromCamera(this.ndc, layer.camera);
-      const hits = this.raycaster.intersectObjects(layer.scene.children, true).filter((hit) => isVisibleInHierarchy(hit.object));
-      let layerBlocked = false;
+      const hits = this.raycaster
+        .intersectObjects(layer.scene.children, true)
+        .filter((hit) => isVisibleInHierarchy(hit.object) && !this.isClippedOut(hit.object, hit.point));
       for (const hit of hits) {
-        layerBlocked = true;
         let node: THREE.Object3D | null = hit.object;
         while (node) {
           const handlers = this.registry.get(node);
@@ -97,7 +128,7 @@ export class InteractionSystem {
           node = node.parent;
         }
       }
-      if (layerBlocked) return { root: null, handlers: {}, point: hits[0]?.point };
+      if (hits.length > 0 && !accepts) return { root: null, handlers: {}, point: hits[0]?.point };
     }
     return null;
   }
@@ -123,6 +154,17 @@ export class InteractionSystem {
   }
 
   handlePointerMove(x: number, y: number, event: PointerEvent): Hit | null {
+    // Pointerup/pointercancel only fire on the canvas, so a drag released past its edge (e.g.
+    // dragging a resize handle or scrollbar thumb toward the window edge) never reaches handlePointerUp.
+    // Left uncaught, `captured` would stay set forever, routing every future move to the dead drag
+    // target instead of whatever is actually under the pointer (e.g. the ground, breaking the
+    // placement ghost). The button state on this move is enough to detect and self-heal that.
+    if (this.captured && (event.buttons & 1) !== 1) {
+      const stale = this.captured;
+      this.captured = null;
+      this.registry.get(stale)?.onPointerUp?.(this.toEvent(x, y, null, event));
+    }
+
     const hit = this.hitTest(x, y, acceptsPointerMove);
     const hitRoot = hit?.root ?? null;
     if (this.hovered !== hitRoot) {
@@ -154,6 +196,20 @@ export class InteractionSystem {
     const hit = this.hitTest(x, y, (handlers) => Boolean(handlers.onWheel));
     hit?.handlers.onWheel?.({ ...this.toEvent(x, y, hit, event), deltaY });
     return hit;
+  }
+
+  isPointerOverLayer(x: number, y: number, layerIndex = 0): boolean {
+    const layer = this.layers[layerIndex];
+    if (!layer) return false;
+    this.resolveNdc(x, y);
+    this.raycaster.setFromCamera(this.ndc, layer.camera);
+    return this.raycaster
+      .intersectObjects(layer.scene.children, true)
+      .some((hit) => isVisibleInHierarchy(hit.object) && !this.isClippedOut(hit.object, hit.point));
+  }
+
+  isPointerOverInteractiveLayer(x: number, y: number): boolean {
+    return this.isPointerOverLayer(x, y, 0);
   }
 
   isCaptured(): boolean {

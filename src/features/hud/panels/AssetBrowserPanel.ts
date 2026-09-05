@@ -16,6 +16,7 @@ import { Panel, unitPlane } from "../kit/Panel";
 import { hudBasicMaterial } from "../kit/materials";
 import { rasterizeText } from "../kit/TextRenderer";
 import { hudZ } from "../kit/zIndex";
+import { layoutAssetTiles } from "./assetBrowserLayout";
 
 const CONTROLS_HEIGHT = 52;
 const CONTROL_ROW_HEIGHT = 34;
@@ -28,7 +29,7 @@ interface TileRow {
   assetId: string;
 }
 
-/** The footer: search/category filter + refresh, and a horizontally-scrolling grid of asset tiles. */
+/** The footer: search/category filter + refresh, and a vertically-scrolling grid of asset tiles. */
 export class AssetBrowserPanel extends BasePanel {
   private readonly searchField: TextField;
   private readonly dropdown: Dropdown;
@@ -46,14 +47,18 @@ export class AssetBrowserPanel extends BasePanel {
     private readonly state: EditorState,
     private readonly thumbnails: ThumbnailRenderer
   ) {
-    super(rect, {
-      fill: theme.panel.hex,
-      border: theme.borderStrong.hex,
-      borderWidth: 1,
-      radius: { topLeft: theme.radius.lg, topRight: theme.radius.lg, bottomLeft: 0, bottomRight: 0 },
-      shadow: "lg",
-      z: -0.2
-    });
+    super(
+      rect,
+      {
+        fill: theme.panel.hex,
+        border: theme.borderStrong.hex,
+        borderWidth: 1,
+        radius: { topLeft: theme.radius.lg, topRight: theme.radius.lg, bottomLeft: 0, bottomRight: 0 },
+        shadow: "lg",
+        z: -0.2
+      },
+      interaction
+    );
 
     const searchWidth = Math.min(340, rect.width * 0.4);
     const controlsY = rect.y + (CONTROLS_HEIGHT - CONTROL_ROW_HEIGHT) / 2;
@@ -89,7 +94,7 @@ export class AssetBrowserPanel extends BasePanel {
     this.divider = new Panel(this.dividerRect(), { fill: theme.borderSubtle.hex, radius: 0 });
     this.root.add(this.divider.root);
 
-    this.scroll = new ScrollRegion(this.gridRect(), interaction, { axis: "horizontal" });
+    this.scroll = new ScrollRegion(this.gridRect(), interaction, { axis: "vertical" });
     this.root.add(this.scroll.root);
 
     this.registerCleanup(state.on("assets", () => this.rebuildGrid()));
@@ -121,11 +126,14 @@ export class AssetBrowserPanel extends BasePanel {
 
     const grid = this.gridRect();
     const { width: tileWidth, height: tileHeight, gap } = assetTileSize;
-    let x = grid.x;
-    const y = grid.y + (grid.height - tileHeight) / 2;
+    const tileLayout = layoutAssetTiles({
+      assetCount: this.state.filteredAssets.length,
+      grid,
+      tile: { width: tileWidth, height: tileHeight, gap }
+    });
 
-    for (const asset of this.state.filteredAssets) {
-      const tileRect: Rect = { x, y, width: tileWidth, height: tileHeight };
+    this.state.filteredAssets.forEach((asset, index) => {
+      const tileRect: Rect = tileLayout.tiles[index];
       const tile = new Tile(tileRect, this.interaction, {
         label: asset.label,
         tag: asset.source === "temporary" ? "temporary" : asset.category,
@@ -137,9 +145,8 @@ export class AssetBrowserPanel extends BasePanel {
       void this.thumbnails.getStaticThumbnail(asset).then((texture) => tile.setThumbnailTexture(texture));
       this.scroll.content.add(tile.root);
       this.rows.push({ tile, assetId: asset.id });
-      x += tileWidth + gap;
-    }
-    this.scroll.setContentSize(Math.max(x - grid.x - gap, 0));
+    });
+    this.scroll.setContentSize(tileLayout.contentSize);
     this.scroll.applyClipping();
 
     if (this.state.filteredAssets.length === 0) this.showEmptyState(grid);

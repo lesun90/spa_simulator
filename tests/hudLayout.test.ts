@@ -6,10 +6,16 @@ test("wide layout keeps the viewport, asset browser, and left panel", () => {
 
   expect(layout.narrow).toBe(false);
   expect(layout.leftPanel).toEqual({ x: 0, y: 0, width: shellLayout.leftPanelWidth, height: 900 - shellLayout.assetBrowserHeight });
+  expect(layout.inspectorPanel).toEqual({
+    x: 1400 - shellLayout.inspectorPanelWidth,
+    y: 0,
+    width: shellLayout.inspectorPanelWidth,
+    height: 900 - shellLayout.assetBrowserHeight
+  });
   expect(layout.viewport).toEqual({
     x: shellLayout.leftPanelWidth,
     y: 0,
-    width: 1400 - shellLayout.leftPanelWidth,
+    width: 1400 - shellLayout.leftPanelWidth - shellLayout.inspectorPanelWidth,
     height: 900 - shellLayout.assetBrowserHeight
   });
   expect(layout.assetBrowser.height).toBe(shellLayout.assetBrowserHeight);
@@ -25,7 +31,20 @@ test("wide layout lets the viewport reclaim hidden asset browser height", () => 
   expect(hidden.assetBrowser.height).toBe(0);
   expect(hidden.assetBrowser.y).toBe(900);
   expect(hidden.viewport.height).toBe(visible.viewport.height + visible.assetBrowser.height);
-  expect(hidden.viewport).toEqual({ x: shellLayout.leftPanelWidth, y: 0, width: 1400 - shellLayout.leftPanelWidth, height: 900 });
+  expect(hidden.viewport).toEqual({
+    x: shellLayout.leftPanelWidth,
+    y: 0,
+    width: 1400 - shellLayout.leftPanelWidth - shellLayout.inspectorPanelWidth,
+    height: 900
+  });
+});
+
+test("wide layout accepts a custom asset browser height", () => {
+  const layout = computeShellLayout(1400, 900, { assetBrowserHeight: 320 });
+
+  expect(layout.assetBrowser).toEqual({ x: 0, y: 580, width: 1400, height: 320 });
+  expect(layout.viewport.height).toBe(580);
+  expect(layout.leftPanel.height).toBe(580);
 });
 
 test("wide layout lets the viewport reclaim a hidden left panel", () => {
@@ -33,7 +52,45 @@ test("wide layout lets the viewport reclaim a hidden left panel", () => {
   const hidden = computeShellLayout(1400, 900, { leftPanelHidden: true });
 
   expect(hidden.leftPanel.width).toBe(0);
-  expect(hidden.viewport).toEqual({ x: 0, y: 0, width: 1400, height: visible.viewport.height });
+  expect(hidden.viewport).toEqual({ x: 0, y: 0, width: 1400 - shellLayout.inspectorPanelWidth, height: visible.viewport.height });
+});
+
+test("wide layout accepts a custom left panel width", () => {
+  const layout = computeShellLayout(1400, 900, { leftPanelWidth: 360 });
+
+  expect(layout.leftPanel.width).toBe(360);
+  expect(layout.viewport).toEqual({
+    x: 360,
+    y: 0,
+    width: 1400 - 360 - shellLayout.inspectorPanelWidth,
+    height: 900 - shellLayout.assetBrowserHeight
+  });
+});
+
+test("wide layout lets the viewport reclaim a hidden inspector panel", () => {
+  const visible = computeShellLayout(1400, 900);
+  const hidden = computeShellLayout(1400, 900, { inspectorPanelHidden: true });
+
+  expect(hidden.inspectorPanel.width).toBe(0);
+  expect(hidden.inspectorPanel.x).toBe(1400);
+  expect(hidden.viewport).toEqual({
+    x: shellLayout.leftPanelWidth,
+    y: 0,
+    width: visible.viewport.width + visible.inspectorPanel.width,
+    height: visible.viewport.height
+  });
+});
+
+test("wide layout accepts a custom inspector panel width", () => {
+  const layout = computeShellLayout(1400, 900, { inspectorPanelWidth: 340 });
+
+  expect(layout.inspectorPanel).toEqual({ x: 1060, y: 0, width: 340, height: 900 - shellLayout.assetBrowserHeight });
+  expect(layout.viewport).toEqual({
+    x: shellLayout.leftPanelWidth,
+    y: 0,
+    width: 1400 - shellLayout.leftPanelWidth - 340,
+    height: 900 - shellLayout.assetBrowserHeight
+  });
 });
 
 test("narrow layout keeps the viewport, asset browser, and left panel", () => {
@@ -41,6 +98,7 @@ test("narrow layout keeps the viewport, asset browser, and left panel", () => {
 
   expect(layout.narrow).toBe(true);
   expect(layout.leftPanel).toEqual({ x: 0, y: 0, width: shellLayout.leftPanelWidth, height: 1000 - shellLayout.narrowAssetBrowserHeight });
+  expect(layout.inspectorPanel).toEqual({ x: 700, y: 0, width: 0, height: 1000 - shellLayout.narrowAssetBrowserHeight });
   expect(layout.viewport).toEqual({
     x: shellLayout.leftPanelWidth,
     y: 0,

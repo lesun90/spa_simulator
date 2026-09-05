@@ -4,15 +4,18 @@ import type { InteractionSystem } from "../../../engine/InteractionSystem";
 import { Button } from "./Button";
 import type { Rect } from "./layout";
 import { hudBasicMaterial } from "./materials";
+import { ScrollRegion } from "./ScrollRegion";
 import { hudZ } from "./zIndex";
 
 const ITEM_HEIGHT = 30;
+const MAX_VISIBLE_ITEMS = 8;
 
 /** A click-to-open floating option list, replacing the HTML <select> for the category filter. */
 export class Dropdown {
   readonly root = new THREE.Group();
   private readonly toggleButton: Button;
   private readonly popupGroup = new THREE.Group();
+  private popupScroll: ScrollRegion | null = null;
   private optionButtons: Button[] = [];
   private open = false;
   private rect: Rect;
@@ -59,13 +62,15 @@ export class Dropdown {
 
   private openMenu() {
     this.open = true;
-    for (const button of this.optionButtons) button.dispose();
-    this.optionButtons = [];
+    this.clearMenu();
 
+    const popup = this.popupRect();
+    this.popupScroll = new ScrollRegion(popup, this.interaction, { axis: "vertical" });
+    this.popupGroup.add(this.popupScroll.root);
     this.options.forEach((option, index) => {
       const itemRect: Rect = {
-        x: this.rect.x,
-        y: this.rect.y + this.rect.height + index * ITEM_HEIGHT,
+        x: popup.x,
+        y: popup.y + index * ITEM_HEIGHT,
         width: this.rect.width,
         height: ITEM_HEIGHT
       };
@@ -76,9 +81,26 @@ export class Dropdown {
       });
       button.setActive(option === this.value);
       this.optionButtons.push(button);
-      this.popupGroup.add(button.root);
+      this.popupScroll?.content.add(button.root);
     });
+    this.popupScroll.setContentSize(this.options.length * ITEM_HEIGHT);
+    this.popupScroll.applyClipping();
     this.popupGroup.visible = true;
+  }
+
+  private popupRect(): Rect {
+    const totalHeight = this.options.length * ITEM_HEIGHT;
+    const height = Math.min(totalHeight, ITEM_HEIGHT * MAX_VISIBLE_ITEMS);
+    const viewportHeight = typeof window === "undefined" ? this.rect.y + this.rect.height + height : window.innerHeight;
+    const spaceBelow = Math.max(viewportHeight - (this.rect.y + this.rect.height), 0);
+    const spaceAbove = Math.max(this.rect.y, 0);
+    const opensBelow = spaceBelow >= height || spaceBelow >= spaceAbove;
+    return {
+      x: this.rect.x,
+      y: opensBelow ? this.rect.y + this.rect.height : Math.max(this.rect.y - height, 0),
+      width: this.rect.width,
+      height
+    };
   }
 
   private select(option: string) {
@@ -102,6 +124,16 @@ export class Dropdown {
   dispose() {
     this.unregisterOutsideClick();
     this.toggleButton.dispose();
+    this.clearMenu();
+  }
+
+  private clearMenu() {
     for (const button of this.optionButtons) button.dispose();
+    this.optionButtons = [];
+    if (this.popupScroll) {
+      this.popupGroup.remove(this.popupScroll.root);
+      this.popupScroll.dispose();
+      this.popupScroll = null;
+    }
   }
 }

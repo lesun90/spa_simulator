@@ -1,6 +1,7 @@
 import { AssetManager } from "../engine/AssetManager";
 import { InputManager } from "../engine/InputManager";
 import { InteractionSystem } from "../engine/InteractionSystem";
+import { PerformanceMonitor } from "../engine/PerformanceMonitor";
 import { Renderer } from "../engine/Renderer";
 import { RenderLoop } from "../engine/RenderLoop";
 import { Viewport } from "../engine/Viewport";
@@ -14,6 +15,7 @@ export class App {
   private readonly viewport: Viewport;
   private readonly renderer: Renderer;
   private readonly renderLoop: RenderLoop;
+  private readonly performanceMonitor: PerformanceMonitor;
   private readonly interaction: InteractionSystem;
   private readonly assetManager: AssetManager;
   readonly state: EditorState;
@@ -24,12 +26,19 @@ export class App {
     this.viewport = new Viewport(dprCap);
     this.renderer = new Renderer(canvas, this.viewport);
     this.renderLoop = new RenderLoop(this.renderer);
+    this.performanceMonitor = new PerformanceMonitor();
     this.interaction = new InteractionSystem(this.viewport);
     this.assetManager = new AssetManager();
     this.state = new EditorState();
 
     this.world = new WorldFeature(canvas, this.assetManager, this.interaction, this.state);
-    this.hud = new HudFeature(this.renderer.renderer, this.viewport.size, this.interaction, this.assetManager, this.state);
+    this.hud = new HudFeature(this.renderer.renderer, this.viewport.size, this.interaction, this.assetManager, this.state, {
+      onResetView: () => this.world.resetView(),
+      setCursor: (cursor) => {
+        canvas.style.cursor = cursor;
+      },
+      setWorldControlsEnabled: (enabled) => this.world.setCameraControlsEnabled(enabled)
+    });
 
     this.interaction.setLayers([
       { scene: this.hud.scene, camera: this.hud.camera },
@@ -40,7 +49,13 @@ export class App {
       onPointerDown: (x, y, event) => this.interaction.handlePointerDown(x, y, event),
       onPointerMove: (x, y, event) => this.interaction.handlePointerMove(x, y, event),
       onPointerUp: (x, y, event) => this.interaction.handlePointerUp(x, y, event),
-      onWheel: (x, y, deltaY, event) => this.interaction.handleWheel(x, y, deltaY, event),
+      onWheel: (x, y, deltaY, event) => {
+        if (this.interaction.isPointerOverInteractiveLayer(x, y)) {
+          const hit = this.interaction.handleWheel(x, y, deltaY, event);
+          if (hit) return;
+        }
+        this.world.zoom(deltaY);
+      },
       onKeyDown: (event) => {
         if (this.interaction.handleKeyDown(event)) return;
         this.state.handleGlobalKeyDown(event);
@@ -62,12 +77,14 @@ export class App {
 
   start() {
     this.renderLoop.start((dt, elapsed) => {
+      this.performanceMonitor.begin();
       this.world.update(dt, elapsed);
       this.hud.update(dt);
       this.renderer.renderLayers([
         { scene: this.world.scene, camera: this.world.camera },
         { scene: this.hud.scene, camera: this.hud.camera }
       ]);
+      this.performanceMonitor.end();
     });
   }
 }

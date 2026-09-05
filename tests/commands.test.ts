@@ -16,6 +16,7 @@ describe("scene command history", () => {
     const object = {
       id: "obj_1",
       assetId: "props.cone",
+      name: "cone_1",
       position: { x: 0.5, y: 0, z: 0.5 },
       rotationY: 0,
       scale: 1
@@ -38,6 +39,7 @@ describe("scene command history", () => {
       addObjectCommand({
         id: "obj_1",
         assetId: "props.cone",
+        name: "cone_1",
         position: { x: 0.5, y: 0, z: 0.5 },
         rotationY: 0,
         scale: 1
@@ -48,6 +50,7 @@ describe("scene command history", () => {
       addObjectCommand({
         id: "obj_2",
         assetId: "vegetation.oak",
+        name: "oak_1",
         position: { x: 1.5, y: 0, z: 1.5 },
         rotationY: 0,
         scale: 1
@@ -65,6 +68,7 @@ describe("scene command history", () => {
       addObjectCommand({
         id: "obj_1",
         assetId: "props.cone",
+        name: "cone_1",
         position: { x: 0.5, y: 0, z: 0.5 },
         rotationY: 0,
         scale: 1
@@ -73,13 +77,34 @@ describe("scene command history", () => {
 
     const moved = executeCommand(
       withObject,
-      updateObjectCommand("obj_1", { position: { x: 3, y: 0, z: 4 }, rotationY: 1, scale: 2 })
+      updateObjectCommand("obj_1", { name: "Corner cone", position: { x: 3, y: 0, z: 4 }, rotationY: 1, scale: 2 })
     );
     const duplicated = executeCommand(moved, duplicateObjectCommand("obj_1", "obj_2"));
 
     expect(duplicated.scene.objects).toMatchObject([
-      { id: "obj_1", position: { x: 3, y: 0, z: 4 }, rotationY: 1, scale: 2 },
-      { id: "obj_2", position: { x: 4, y: 0, z: 5 }, rotationY: 1, scale: 2 }
+      { id: "obj_1", name: "Corner cone", position: { x: 3, y: 0, z: 4 }, rotationY: 1, scale: 2 },
+      { id: "obj_2", name: "Corner cone copy", position: { x: 4, y: 0, z: 5 }, rotationY: 1, scale: 2 }
     ]);
+  });
+
+  test("undo restores the previous object name", () => {
+    const scene = createScene("Rename");
+    const withObject = executeCommand(
+      createHistory(scene),
+      addObjectCommand({
+        id: "obj_1",
+        assetId: "props.cone",
+        name: "cone_1",
+        position: { x: 0, y: 0, z: 0 },
+        rotationY: 0,
+        scale: 1
+      })
+    );
+
+    const renamed = executeCommand(withObject, updateObjectCommand("obj_1", { name: "Lobby cone" }));
+    const restored = undo(renamed);
+
+    expect(renamed.scene.objects[0].name).toBe("Lobby cone");
+    expect(restored.scene.objects[0].name).toBe("cone_1");
   });
 });

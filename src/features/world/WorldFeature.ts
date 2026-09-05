@@ -103,6 +103,18 @@ export class WorldFeature {
     return { scene: this.scene, camera: this.camera };
   }
 
+  resetView() {
+    this.cameraRig.resetView();
+  }
+
+  zoom(deltaY: number) {
+    this.cameraRig.zoom(deltaY);
+  }
+
+  setCameraControlsEnabled(enabled: boolean) {
+    this.cameraRig.setEnabled(enabled);
+  }
+
   private resync() {
     if (!this.state.scene) return;
     void this.objects.sync(this.state.scene, this.state.assets, this.state.selectedObjectId, this.state.hiddenObjectIds);

@@ -96,6 +96,7 @@ export function duplicateObjectCommand(objectId: string, duplicateId: string): S
       duplicate = {
         ...cloneObject(source),
         id: duplicateId,
+        name: `${source.name} copy`,
         position: { x: source.position.x + 1, y: 0, z: source.position.z + 1 }
       };
 
@@ -109,7 +110,7 @@ export function duplicateObjectCommand(objectId: string, duplicateId: string): S
 
 export function updateObjectCommand(
   objectId: string,
-  patch: Partial<Pick<SceneObject, "position" | "rotationY" | "scale">>
+  patch: Partial<Pick<SceneObject, "name" | "position" | "rotationY" | "scale">>
 ): SceneCommand {
   let previous: SceneObject | undefined;
 
@@ -125,6 +126,7 @@ export function updateObjectCommand(
       }
 
       return updateObject(scene, objectId, {
+        name: previous.name,
         position: previous.position,
         rotationY: previous.rotationY,
         scale: previous.scale
@@ -136,7 +138,7 @@ export function updateObjectCommand(
 function updateObject(
   scene: Scene,
   objectId: string,
-  patch: Partial<Pick<SceneObject, "position" | "rotationY" | "scale">>
+  patch: Partial<Pick<SceneObject, "name" | "position" | "rotationY" | "scale">>
 ) {
   return {
     ...cloneScene(scene),

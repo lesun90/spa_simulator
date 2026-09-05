@@ -32,14 +32,18 @@ export class LeftPanel extends BasePanel {
   private activeTab: LeftPanelTab = "scene";
 
   constructor(rect: Rect, interaction: InteractionSystem, state: EditorState) {
-    super(rect, {
-      fill: theme.panel.hex,
-      border: theme.borderStrong.hex,
-      borderWidth: 1,
-      radius: { topLeft: 0, topRight: theme.radius.lg, bottomLeft: 0, bottomRight: theme.radius.lg },
-      shadow: "lg",
-      z: -0.2
-    });
+    super(
+      rect,
+      {
+        fill: theme.panel.hex,
+        border: theme.borderStrong.hex,
+        borderWidth: 1,
+        radius: { topLeft: 0, topRight: theme.radius.lg, bottomLeft: 0, bottomRight: theme.radius.lg },
+        shadow: "lg",
+        z: -0.2
+      },
+      interaction
+    );
 
     const projectWidth = tabWidth("Project");
     const sceneWidth = tabWidth("Scene");

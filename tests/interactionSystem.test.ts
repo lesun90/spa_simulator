@@ -123,6 +123,26 @@ test("pointerup only fires onClick when the down and up hit the same registered 
   expect(onClickB).not.toHaveBeenCalled();
 });
 
+test("detects visible layer geometry even when it has no matching wheel handler", () => {
+  const viewport = new Viewport(2);
+  const interaction = new InteractionSystem(viewport);
+  const hudScene = new THREE.Scene();
+  const worldScene = new THREE.Scene();
+  const camera = makeOrthoHudCamera(400, 300);
+  interaction.setLayers([
+    { scene: hudScene, camera },
+    { scene: worldScene, camera }
+  ]);
+
+  const panel = makeHudQuad(0, 200, 400, 100, 1);
+  hudScene.add(panel);
+  settle(hudScene);
+  settle(worldScene);
+
+  expect(interaction.isPointerOverInteractiveLayer(20, 220)).toBe(true);
+  expect(interaction.isPointerOverInteractiveLayer(20, 120)).toBe(false);
+});
+
 test("unregister removes a node from future hit-tests", () => {
   const viewport = new Viewport(2);
   const interaction = new InteractionSystem(viewport);
@@ -192,7 +212,7 @@ test("clicks HUD controls nested in panel groups", () => {
   expect(onClick).toHaveBeenCalledTimes(1);
 });
 
-test("opaque HUD geometry blocks lower layers even without registered handlers", () => {
+test("non-interactive HUD geometry lets pointer events reach lower layers", () => {
   const viewport = new Viewport(2);
   const interaction = new InteractionSystem(viewport);
   const hudScene = new THREE.Scene();
@@ -217,7 +237,23 @@ test("opaque HUD geometry blocks lower layers even without registered handlers",
   interaction.handlePointerDown(40, 245, {} as PointerEvent);
   interaction.handlePointerUp(40, 245, {} as PointerEvent);
 
-  expect(onWorldClick).not.toHaveBeenCalled();
+  expect(onWorldClick).toHaveBeenCalledTimes(1);
+});
+
+test("handleWheel returns null when visible HUD geometry has no wheel handler", () => {
+  const viewport = new Viewport(2);
+  const interaction = new InteractionSystem(viewport);
+  const hudScene = new THREE.Scene();
+  const camera = makeOrthoHudCamera(400, 300);
+  interaction.setLayers([{ scene: hudScene, camera }]);
+
+  const panelBackground = makeHudQuad(0, 220, 400, 80, 0);
+  hudScene.add(panelBackground);
+  settle(hudScene);
+
+  const hit = interaction.handleWheel(40, 245, 100, {} as WheelEvent);
+
+  expect(hit).toBeNull();
 });
 
 test("wheel-only HUD hit areas do not steal clicks from controls behind them", () => {
@@ -269,4 +305,42 @@ test("hit-tests ignore controls whose ancestor group is hidden", () => {
 
   expect(onScrimClick).not.toHaveBeenCalled();
   expect(onControlClick).toHaveBeenCalledTimes(1);
+});
+
+test("a released drag whose pointerup fires outside the canvas doesn't strand the ground layer", () => {
+  // Mirrors dragging a resize handle (or scrollbar thumb) past the canvas/window edge and releasing
+  // there: no pointerup ever reaches the canvas, so only handlePointerMove sees the drag end — via
+  // event.buttons no longer reporting the primary button held.
+  const viewport = new Viewport(2);
+  const interaction = new InteractionSystem(viewport);
+  const hudScene = new THREE.Scene();
+  const worldScene = new THREE.Scene();
+  const camera = makeOrthoHudCamera(400, 300);
+  interaction.setLayers([
+    { scene: hudScene, camera },
+    { scene: worldScene, camera }
+  ]);
+
+  const resizeHandle = makeHudQuad(0, 0, 400, 14, 0);
+  const groundTarget = makeQuad(0, 0, 400, 300, -1);
+  hudScene.add(resizeHandle);
+  worldScene.add(groundTarget);
+  settle(hudScene);
+  settle(worldScene);
+
+  const onHandleDrag = vi.fn();
+  const onGroundMove = vi.fn();
+  interaction.register(resizeHandle, { onPointerDown: () => {}, onPointerMove: onHandleDrag });
+  interaction.register(groundTarget, { onPointerMove: onGroundMove });
+
+  interaction.handlePointerDown(200, 7, { buttons: 1 } as PointerEvent);
+  // Drag continues normally while the button is held...
+  interaction.handlePointerMove(200, 5, { buttons: 1 } as PointerEvent);
+  expect(onHandleDrag).toHaveBeenCalledTimes(1);
+
+  // ...then the button is released off-canvas (no pointerup/pointercancel ever fires), and the
+  // pointer comes back over the ground with buttons now reporting 0.
+  interaction.handlePointerMove(200, 200, { buttons: 0 } as PointerEvent);
+
+  expect(onGroundMove).toHaveBeenCalledTimes(1);
 });

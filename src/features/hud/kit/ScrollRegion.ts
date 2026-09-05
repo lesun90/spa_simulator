@@ -24,12 +24,16 @@ export class ScrollRegion {
 
   private readonly clipPlanes: THREE.Plane[];
   private readonly hitArea: THREE.Mesh;
+  private readonly scrollbarHitArea: THREE.Mesh;
   private readonly scrollbarTrack: Panel;
   private readonly scrollbarThumb: Panel;
   private rect: Rect;
   private scrollOffset = 0;
   private contentSize = 0;
   private readonly unregister: () => void;
+  private readonly unregisterScrollbar: () => void;
+  private dragPointerStart = 0;
+  private dragOffsetStart = 0;
 
   constructor(
     rect: Rect,
@@ -54,11 +58,17 @@ export class ScrollRegion {
 
     this.scrollbarTrack = new Panel(this.trackRect(), { fill: theme.borderSubtle.hex, fillOpacity: 0.6, z: hudZ.active });
     this.scrollbarThumb = new Panel(this.thumbRect(), { fill: theme.textMutedAlt.hex, fillOpacity: 0.7, z: hudZ.active + 0.001 });
-    this.root.add(this.scrollbarTrack.root, this.scrollbarThumb.root);
+    this.scrollbarHitArea = new THREE.Mesh(unitPlane, hudBasicMaterial({ visible: false }));
+    this.root.add(this.scrollbarTrack.root, this.scrollbarThumb.root, this.scrollbarHitArea);
     this.updateScrollbar();
 
     this.unregister = interaction.register(this.hitArea, {
       onWheel: (event) => this.scrollBy(this.options.axis === "vertical" ? event.deltaY : event.deltaY)
+    });
+    this.unregisterScrollbar = interaction.register(this.scrollbarHitArea, {
+      onPointerDown: (event) => this.startScrollbarDrag(event),
+      onPointerMove: (event) => this.dragScrollbar(event),
+      onWheel: (event) => this.scrollBy(event.deltaY)
     });
   }
 
@@ -68,6 +78,11 @@ export class ScrollRegion {
     this.clipPlanes[1].constant = x + width;
     this.clipPlanes[2].constant = -y;
     this.clipPlanes[3].constant = y + height;
+    // The clip planes above only hide scrolled-out content visually (GPU-side); raycasting doesn't
+    // consult them, so without this a row scrolled far out of view (e.g. reaching the bottom of a
+    // long list) still geometrically sits wherever it scrolled to and can keep intercepting pointer
+    // events meant for whatever's actually there now.
+    this.interaction.setClipRect(this.content, this.rect);
   }
 
   private trackRect(): Rect {
@@ -123,6 +138,50 @@ export class ScrollRegion {
     this.updateScrollbar();
   }
 
+  private startScrollbarDrag(event: { x: number; y: number }) {
+    if (this.maxScroll() <= 0) return;
+    this.jumpScrollbarTowardPointer(event);
+    this.dragPointerStart = this.pointerAxis(event);
+    this.dragOffsetStart = this.scrollOffset;
+  }
+
+  private dragScrollbar(event: { x: number; y: number; buttons: number }) {
+    if ((event.buttons & 1) !== 1 || this.maxScroll() <= 0) return;
+    const track = this.trackRect();
+    const thumb = this.thumbRect();
+    const trackLength = this.options.axis === "vertical" ? track.height : track.width;
+    const thumbLength = this.options.axis === "vertical" ? thumb.height : thumb.width;
+    const travel = Math.max(trackLength - thumbLength, 1);
+    const pointerDelta = this.pointerAxis(event) - this.dragPointerStart;
+    this.setScrollOffset(this.dragOffsetStart + (pointerDelta / travel) * this.maxScroll());
+  }
+
+  private jumpScrollbarTowardPointer(event: { x: number; y: number }) {
+    const thumb = this.thumbRect();
+    const pointer = this.pointerAxis(event);
+    const thumbStart = this.options.axis === "vertical" ? thumb.y : thumb.x;
+    const thumbEnd = thumbStart + (this.options.axis === "vertical" ? thumb.height : thumb.width);
+    if (pointer >= thumbStart && pointer <= thumbEnd) return;
+
+    const track = this.trackRect();
+    const trackStart = this.options.axis === "vertical" ? track.y : track.x;
+    const trackLength = this.options.axis === "vertical" ? track.height : track.width;
+    const thumbLength = this.options.axis === "vertical" ? thumb.height : thumb.width;
+    const travel = Math.max(trackLength - thumbLength, 1);
+    const centeredThumbStart = pointer - thumbLength / 2;
+    this.setScrollOffset(((centeredThumbStart - trackStart) / travel) * this.maxScroll());
+  }
+
+  private setScrollOffset(offset: number) {
+    this.scrollOffset = Math.min(Math.max(offset, 0), this.maxScroll());
+    this.applyScrollOffset();
+    this.updateScrollbar();
+  }
+
+  private pointerAxis(event: { x: number; y: number }) {
+    return this.options.axis === "vertical" ? event.y : event.x;
+  }
+
   private applyScrollOffset() {
     if (this.options.axis === "vertical") this.content.position.set(0, -this.scrollOffset, 0);
     else this.content.position.set(-this.scrollOffset, 0, 0);
@@ -133,7 +192,15 @@ export class ScrollRegion {
     const hasOverflow = this.contentSize > visible + 0.5;
     this.scrollbarTrack.root.visible = hasOverflow;
     this.scrollbarThumb.root.visible = hasOverflow;
+    this.scrollbarHitArea.visible = hasOverflow;
     if (hasOverflow) this.scrollbarThumb.setRect(this.thumbRect());
+    this.updateScrollbarHitArea();
+  }
+
+  private updateScrollbarHitArea() {
+    const track = this.trackRect();
+    this.scrollbarHitArea.position.set(track.x + track.width / 2, track.y + track.height / 2, hudZ.active + 0.002);
+    this.scrollbarHitArea.scale.set(track.width, track.height, 1);
   }
 
   /** Call after (re)populating `content`'s children so their materials pick up the clip planes. */
@@ -154,13 +221,16 @@ export class ScrollRegion {
     this.hitArea.position.set(rect.x + rect.width / 2, rect.y + rect.height / 2, hudZ.control);
     this.hitArea.scale.set(rect.width, rect.height, 1);
     this.scrollbarTrack.setRect(this.trackRect());
+    this.updateScrollbarHitArea();
     this.scrollOffset = Math.min(this.scrollOffset, this.maxScroll());
     this.applyScrollOffset();
     this.updateScrollbar();
   }
 
   dispose() {
+    this.interaction.setClipRect(this.content, null);
     this.unregister();
+    this.unregisterScrollbar();
     this.scrollbarTrack.dispose();
     this.scrollbarThumb.dispose();
   }
