@@ -1,13 +1,16 @@
 import * as THREE from "three";
 import { theme } from "../../../app/theme";
 import type { AssetCatalogEntry } from "../../../editor-core/assets";
+import { GRID_SIZE_MULTIPLIERS, snapToGridMultiplier } from "../../../editor-core/grid";
 import type { SceneObject } from "../../../editor-core/scene";
 import type { InteractionSystem } from "../../../engine/InteractionSystem";
 import type { EditorState } from "../../../state/EditorState";
 import { BasePanel } from "../kit/BasePanel";
+import { Button } from "../kit/Button";
 import type { Rect } from "../kit/layout";
 import { hudBasicMaterial } from "../kit/materials";
 import { Panel, unitPlane } from "../kit/Panel";
+import { segmentButtonRect } from "../kit/segmentedControl";
 import { Slider } from "../kit/Slider";
 import { rasterizeText } from "../kit/TextRenderer";
 import { TextField } from "../kit/TextField";
@@ -26,6 +29,8 @@ const FIELD_HEIGHT = 32;
 const SLIDER_HEIGHT = 28;
 const MIN_SCALE = 0.05;
 const MAX_SCALE = 3;
+const SNAP_MIN_SCALE = GRID_SIZE_MULTIPLIERS[0];
+const SNAP_MAX_SCALE = GRID_SIZE_MULTIPLIERS[GRID_SIZE_MULTIPLIERS.length - 1];
 
 export class InspectorPanel extends BasePanel {
   private readonly titleMeshes: LabelMesh[] = [];
@@ -34,6 +39,8 @@ export class InspectorPanel extends BasePanel {
   private readonly previewMesh: THREE.Mesh<THREE.PlaneGeometry, THREE.MeshBasicMaterial>;
   private readonly nameField: TextField;
   private readonly scaleSlider: Slider;
+  private readonly inspectionCellButton: Button;
+  private readonly inspectionFreeButton: Button;
   private readonly stateCleanups: Array<() => void> = [];
   private previewAssetId: string | null = null;
   private previewRequestId = 0;
@@ -84,18 +91,36 @@ export class InspectorPanel extends BasePanel {
       {
         min: MIN_SCALE,
         max: MAX_SCALE,
-        onChange: (scale) => this.state.updateSelectedObject({ scale }),
+        onChange: (scale) => this.state.updateSelectedObject({ scale: this.resolveScaleValue(scale) }),
         onDragStart: () => this.actions.setWorldControlsEnabled(false),
         onDragEnd: () => this.actions.setWorldControlsEnabled(true),
         setCursor: (cursor) => this.actions.setCursor(cursor)
       },
       1
     );
+    this.inspectionCellButton = new Button(this.inspectionCellButtonRect(), interaction, {
+      label: "Cell",
+      fontSize: 11.5,
+      onClick: () => this.state.setInspectionResolution("snap")
+    });
+    this.inspectionFreeButton = new Button(this.inspectionFreeButtonRect(), interaction, {
+      label: "Free",
+      fontSize: 11.5,
+      onClick: () => this.state.setInspectionResolution("free")
+    });
 
-    this.root.add(this.previewFrame.root, this.previewMesh, this.nameField.root, this.scaleSlider.root);
+    this.root.add(
+      this.previewFrame.root,
+      this.previewMesh,
+      this.nameField.root,
+      this.scaleSlider.root,
+      this.inspectionCellButton.root,
+      this.inspectionFreeButton.root
+    );
     this.stateCleanups.push(
       state.on("scene", () => this.refresh()),
       state.on("selection", () => this.refresh()),
+      state.on("inspection", () => this.refresh()),
       state.on("assets", () => this.refresh())
     );
     this.renderStatic();
@@ -110,6 +135,8 @@ export class InspectorPanel extends BasePanel {
   protected layout() {
     this.previewFrame?.setRect(this.previewRect());
     this.placePreviewMesh();
+    this.inspectionCellButton?.setRect(this.inspectionCellButtonRect());
+    this.inspectionFreeButton?.setRect(this.inspectionFreeButtonRect());
     this.nameField?.setRect(this.nameFieldRect());
     this.scaleSlider?.setRect(this.scaleSliderRect());
     this.renderStatic();
@@ -119,10 +146,15 @@ export class InspectorPanel extends BasePanel {
   private refresh() {
     const object = this.state.selected;
     const asset = object ? this.findAsset(object.assetId) : null;
+    const snap = this.state.inspectionResolution === "snap";
+    this.scaleSlider.setRange(snap ? SNAP_MIN_SCALE : MIN_SCALE, snap ? SNAP_MAX_SCALE : MAX_SCALE);
     this.nameField.setValue(object?.name ?? "");
-    this.scaleSlider.setValue(object?.scale ?? 1);
+    this.scaleSlider.setValue(object ? this.resolveScaleValue(object.scale) : 1);
     this.nameField.root.visible = Boolean(object);
     this.scaleSlider.root.visible = Boolean(object);
+    this.inspectionCellButton.root.visible = Boolean(object);
+    this.inspectionFreeButton.root.visible = Boolean(object);
+    this.refreshInspectionControls();
     this.previewFrame.root.visible = Boolean(object);
     this.previewMesh.visible = Boolean(object && this.previewMesh.material.map);
     this.renderDynamic(object, asset);
@@ -153,9 +185,19 @@ export class InspectorPanel extends BasePanel {
     this.dynamicMeshes.push(this.addText(`Id ${object.id}`, metaX, metaY + 42, BODY_SIZE, theme.textMuted.css, "500"));
     this.dynamicMeshes.push(this.addText(`Position ${formatNumber(object.position.x)}, ${formatNumber(object.position.z)}`, metaX, metaY + 70, BODY_SIZE, theme.textMuted.css, "500"));
     this.dynamicMeshes.push(this.addText(`Rotation ${formatDegrees(object.rotationY)}`, metaX, metaY + 90, BODY_SIZE, theme.textMuted.css, "500"));
+    this.dynamicMeshes.push(this.addText("Mode", this.rect.x + PADDING, this.inspectionControlRect().y - 10, LABEL_SIZE, theme.textMutedStrong.css, "700"));
     this.dynamicMeshes.push(this.addText("Name", this.rect.x + PADDING, this.nameFieldRect().y - 10, LABEL_SIZE, theme.textMutedStrong.css, "700"));
     this.dynamicMeshes.push(this.addText("Scale", this.rect.x + PADDING, this.scaleSliderRect().y - 10, LABEL_SIZE, theme.textMutedStrong.css, "700"));
-    this.dynamicMeshes.push(this.addText(`${formatNumber(object.scale)}x`, this.rect.x + this.rect.width - PADDING - 38, this.scaleSliderRect().y - 10, LABEL_SIZE, theme.textMutedStrong.css, "700"));
+    this.dynamicMeshes.push(
+      this.addText(
+        scaleLabel(this.resolveScaleValue(object.scale), this.state.inspectionResolution === "snap"),
+        this.rect.x + this.rect.width - PADDING - 56,
+        this.scaleSliderRect().y - 10,
+        LABEL_SIZE,
+        theme.textMutedStrong.css,
+        "700"
+      )
+    );
   }
 
   private refreshPreview(asset: AssetCatalogEntry | null) {
@@ -187,11 +229,25 @@ export class InspectorPanel extends BasePanel {
   }
 
   private nameFieldRect(): Rect {
-    return { x: this.rect.x + PADDING, y: this.rect.y + TITLE_HEIGHT + PREVIEW_SIZE + 168, width: this.contentWidth(), height: FIELD_HEIGHT };
+    const control = this.inspectionControlRect();
+    return { x: this.rect.x + PADDING, y: control.y + FIELD_HEIGHT + 36, width: this.contentWidth(), height: FIELD_HEIGHT };
   }
 
   private scaleSliderRect(): Rect {
     return { x: this.rect.x + PADDING, y: this.nameFieldRect().y + FIELD_HEIGHT + 46, width: this.contentWidth(), height: SLIDER_HEIGHT };
+  }
+
+  private inspectionControlRect(): Rect {
+    const metaY = this.previewRect().y + PREVIEW_SIZE + 26;
+    return { x: this.rect.x + PADDING, y: metaY + 122, width: this.contentWidth(), height: FIELD_HEIGHT };
+  }
+
+  private inspectionCellButtonRect(): Rect {
+    return segmentButtonRect(this.inspectionControlRect(), 0);
+  }
+
+  private inspectionFreeButtonRect(): Rect {
+    return segmentButtonRect(this.inspectionControlRect(), 1);
   }
 
   private contentWidth(): number {
@@ -220,6 +276,15 @@ export class InspectorPanel extends BasePanel {
     }
   }
 
+  private refreshInspectionControls() {
+    this.inspectionCellButton.setActive(this.state.inspectionResolution === "snap");
+    this.inspectionFreeButton.setActive(this.state.inspectionResolution === "free");
+  }
+
+  private resolveScaleValue(scale: number): number {
+    return this.state.inspectionResolution === "snap" ? snapToGridMultiplier(scale) : scale;
+  }
+
   dispose() {
     for (const cleanup of this.stateCleanups) cleanup();
     this.disposeMeshes(this.titleMeshes);
@@ -228,6 +293,8 @@ export class InspectorPanel extends BasePanel {
     this.previewMesh.material.dispose();
     this.nameField.dispose();
     this.scaleSlider.dispose();
+    this.inspectionCellButton.dispose();
+    this.inspectionFreeButton.dispose();
     super.dispose();
   }
 }
@@ -238,4 +305,8 @@ function formatNumber(value: number): string {
 
 function formatDegrees(radians: number): string {
   return `${Math.round(THREE.MathUtils.radToDeg(radians))} deg`;
+}
+
+function scaleLabel(scale: number, snapped: boolean): string {
+  return snapped ? `${formatNumber(scale)}x grid` : `${formatNumber(scale)}x`;
 }

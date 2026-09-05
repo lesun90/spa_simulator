@@ -11,6 +11,8 @@ export interface GridDefinition {
 }
 
 export type SurfaceAppearanceType = "color" | "texture";
+export const DEFAULT_BACKGROUND_COLOR = "#15181d";
+export const DEFAULT_GROUND_COLOR = "#050608";
 
 /** A paintable surface — the sky/backdrop or the ground plane — as a flat color or an image. */
 export interface SurfaceAppearance {
@@ -48,7 +50,7 @@ export function createId(prefix = "id") {
   return `${prefix}_${Math.random().toString(36).slice(2, 10)}`;
 }
 
-export function defaultSurfaceAppearance(color = "#eef2f7"): SurfaceAppearance {
+export function defaultSurfaceAppearance(color = DEFAULT_BACKGROUND_COLOR): SurfaceAppearance {
   return { type: "color", color, textureUrl: null };
 }
 
@@ -58,8 +60,8 @@ export function createScene(name: string): Scene {
     name,
     description: "",
     grid: { cellSize: 1, width: 100, depth: 100 },
-    background: defaultSurfaceAppearance(),
-    ground: defaultSurfaceAppearance(),
+    background: defaultSurfaceAppearance(DEFAULT_BACKGROUND_COLOR),
+    ground: defaultSurfaceAppearance(DEFAULT_GROUND_COLOR),
     objects: []
   };
 }
@@ -84,8 +86,8 @@ export function normalizeScene(scene: Scene): Scene {
   return {
     ...scene,
     description: typeof scene.description === "string" ? scene.description : "",
-    background: isSurfaceAppearance(scene.background) ? scene.background : defaultSurfaceAppearance(),
-    ground: isSurfaceAppearance(scene.ground) ? scene.ground : defaultSurfaceAppearance(),
+    background: isSurfaceAppearance(scene.background) ? scene.background : defaultSurfaceAppearance(DEFAULT_BACKGROUND_COLOR),
+    ground: isSurfaceAppearance(scene.ground) ? scene.ground : defaultSurfaceAppearance(DEFAULT_GROUND_COLOR),
     objects: scene.objects.map((object) => ({
       ...object,
       name: typeof object.name === "string" && object.name.trim() ? object.name : names.get(object.id) ?? assetSlug(object.assetId),

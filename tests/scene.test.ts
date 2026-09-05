@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { assetSlug, normalizeScene, objectDisplayNames, type Scene, type SceneObject } from "../src/editor-core/scene";
+import { assetSlug, createScene, normalizeScene, objectDisplayNames, type Scene, type SceneObject } from "../src/editor-core/scene";
 
 describe("assetSlug", () => {
   test("takes the lowercased, underscored tail of a dotted asset id", () => {
@@ -37,6 +37,13 @@ describe("objectDisplayNames", () => {
 });
 
 describe("normalizeScene", () => {
+  test("creates new scenes with dark background and ground colors for grid contrast", () => {
+    const scene = createScene("Downtown");
+
+    expect(scene.background).toEqual({ type: "color", color: "#15181d", textureUrl: null });
+    expect(scene.ground).toEqual({ type: "color", color: "#050608", textureUrl: null });
+  });
+
   test("backfills description and background on scenes saved before those fields existed", () => {
     const legacy = {
       id: "scene_1",
@@ -48,8 +55,8 @@ describe("normalizeScene", () => {
     const normalized = normalizeScene(legacy);
 
     expect(normalized.description).toBe("");
-    expect(normalized.background).toEqual({ type: "color", color: "#eef2f7", textureUrl: null });
-    expect(normalized.ground).toEqual({ type: "color", color: "#eef2f7", textureUrl: null });
+    expect(normalized.background).toEqual({ type: "color", color: "#15181d", textureUrl: null });
+    expect(normalized.ground).toEqual({ type: "color", color: "#050608", textureUrl: null });
   });
 
   test("backfills object names for scenes saved before object names existed", () => {

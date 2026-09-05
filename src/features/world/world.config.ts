@@ -1,5 +1,5 @@
 export const worldSceneConfig = {
-  backgroundColor: 0xeef2f7,
+  backgroundColor: 0x050608,
   gridColorCenter: 0x8fa1bb,
   gridColorGrid: 0xd7dde8,
   hemisphereLightSky: 0xeaf4ff,

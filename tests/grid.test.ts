@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { resolveGroundPosition, snapToCellCenter } from "../src/editor-core/grid";
+import { resolveGroundPosition, snapToCellCenter, snapToGridMultiplier } from "../src/editor-core/grid";
 
 describe("grid placement", () => {
   test("snaps a ground position to the nearest square cell center", () => {
@@ -14,5 +14,12 @@ describe("grid placement", () => {
       y: 0,
       z: 3.75
     });
+  });
+
+  test("snaps values to the supported grid-size multipliers", () => {
+    expect(snapToGridMultiplier(0.7)).toBe(0.5);
+    expect(snapToGridMultiplier(1.45)).toBe(1);
+    expect(snapToGridMultiplier(2.6)).toBe(3);
+    expect(snapToGridMultiplier(9)).toBe(8);
   });
 });

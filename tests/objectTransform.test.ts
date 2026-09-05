@@ -1,9 +1,11 @@
+import * as THREE from "three";
 import { describe, expect, test } from "vitest";
 import {
   hasTransformChanged,
   moveOnGround,
   rotateFromHorizontalDrag,
   rotateAroundGroundCenter,
+  snapRotationToQuarterTurn,
   scaleFromGroundHandle,
   transformModeForPointerButton
 } from "../src/features/world/objectTransform";
@@ -54,6 +56,12 @@ describe("object transform gestures", () => {
     expect(rotateFromHorizontalDrag(1, 100, 140)).toBeCloseTo(1.4);
     expect(rotateFromHorizontalDrag(1, 100, 60)).toBeCloseTo(0.6);
     expect(rotateFromHorizontalDrag(1, 100, 100)).toBe(1);
+  });
+
+  test("snaps rotation to the nearest quarter turn", () => {
+    expect(snapRotationToQuarterTurn(THREE.MathUtils.degToRad(40))).toBeCloseTo(0);
+    expect(snapRotationToQuarterTurn(THREE.MathUtils.degToRad(50))).toBeCloseTo(Math.PI / 2);
+    expect(snapRotationToQuarterTurn(THREE.MathUtils.degToRad(181))).toBeCloseTo(Math.PI);
   });
 
   test("ignores no-op transform previews so clicks do not create history entries", () => {

@@ -40,6 +40,7 @@ export type EditorTopic =
   | "selection"
   | "tool"
   | "placement"
+  | "inspection"
   | "objectsVisible"
   | "objectVisibility"
   | "search"
@@ -61,6 +62,7 @@ export class EditorState {
   activeTool: EditorTool = "select";
   placementAssetId: string | null = null;
   placementResolution: PlacementResolution = "snap";
+  inspectionResolution: PlacementResolution = "snap";
   objectsVisible = true;
   assetSearch = "";
   category = "all";
@@ -223,7 +225,7 @@ export class EditorState {
     this.setNotice("Deleted scene");
   }
 
-  placeAsset(assetId: string, position: Vector3Data) {
+  placeAsset(assetId: string, position: Vector3Data, options: { scale?: number } = {}) {
     const scene = this.scene;
     if (!this.history || !scene) return;
     const object: SceneObject = {
@@ -232,7 +234,7 @@ export class EditorState {
       name: nextObjectName(scene.objects, assetId),
       position: { x: position.x, y: 0, z: position.z },
       rotationY: 0,
-      scale: 1
+      scale: Number.isFinite(options.scale) && options.scale! > 0 ? options.scale! : 1
     };
     this.history = executeCommand(this.history, addObjectCommand(object));
     this.selectedObjectId = object.id;
@@ -409,8 +411,15 @@ export class EditorState {
   }
 
   setPlacementResolution(resolution: PlacementResolution) {
+    if (this.placementResolution === resolution) return;
     this.placementResolution = resolution;
     this.emit("placement");
+  }
+
+  setInspectionResolution(resolution: PlacementResolution) {
+    if (this.inspectionResolution === resolution) return;
+    this.inspectionResolution = resolution;
+    this.emit("inspection");
   }
 
   setObjectsVisible(visible: boolean) {

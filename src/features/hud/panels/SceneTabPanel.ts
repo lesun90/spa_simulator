@@ -11,6 +11,7 @@ import { hudBasicMaterial } from "../kit/materials";
 import { pickColor, pickImageFile } from "../kit/nativeInputs";
 import { Panel, unitPlane } from "../kit/Panel";
 import { ScrollRegion } from "../kit/ScrollRegion";
+import { segmentButtonRect } from "../kit/segmentedControl";
 import { TextField } from "../kit/TextField";
 import { rasterizeText } from "../kit/TextRenderer";
 import { hudZ } from "../kit/zIndex";
@@ -32,8 +33,8 @@ const ROW_LABEL_WIDTH = 76;
 
 // One "header + dropdown + value row" surface-appearance block (used for Background and Ground).
 const APPEARANCE_BLOCK_HEIGHT = HEADER_HEIGHT + HEADER_GAP + CONTROL_HEIGHT + STACK_GAP + CONTROL_HEIGHT;
-// The grid block: header + two labeled rows (cell size, scene size).
-const GRID_BLOCK_HEIGHT = HEADER_HEIGHT + HEADER_GAP + CONTROL_HEIGHT + STACK_GAP + CONTROL_HEIGHT;
+// The grid block: header + three labeled rows (cell size, scene size, placement).
+const GRID_BLOCK_HEIGHT = HEADER_HEIGHT + HEADER_GAP + CONTROL_HEIGHT + STACK_GAP + CONTROL_HEIGHT + STACK_GAP + CONTROL_HEIGHT;
 
 const FOOTER_HEIGHT =
   SECTION_GAP + // above divider
@@ -70,6 +71,9 @@ export class SceneTabPanel {
   private readonly gridField: TextField;
   private sceneSizeLabel: LabelMesh | null = null;
   private readonly sceneSizeField: TextField;
+  private placementLabel: LabelMesh | null = null;
+  private readonly placementCellButton: Button;
+  private readonly placementFreeButton: Button;
 
   private rect: Rect;
   private readonly cleanups: Array<() => void> = [];
@@ -129,12 +133,25 @@ export class SceneTabPanel {
     );
     this.root.add(this.sceneSizeField.root);
 
+    this.placementCellButton = new Button(this.placementCellButtonRect(), interaction, {
+      label: "Cell",
+      fontSize: 11.5,
+      onClick: () => this.state.setPlacementResolution("snap")
+    });
+    this.placementFreeButton = new Button(this.placementFreeButtonRect(), interaction, {
+      label: "Free",
+      fontSize: 11.5,
+      onClick: () => this.state.setPlacementResolution("free")
+    });
+    this.root.add(this.placementCellButton.root, this.placementFreeButton.root);
+
     this.applyStaticHeaders();
 
     this.cleanups.push(
       state.on("scene", () => this.onSceneChanged()),
       state.on("selection", () => this.refreshSelection()),
       state.on("objectVisibility", () => this.refreshVisibility()),
+      state.on("placement", () => this.refreshPlacementControls()),
       state.on("sceneBackground", () => this.backgroundEditor.refresh()),
       state.on("sceneGround", () => this.groundEditor.refresh())
     );
@@ -235,6 +252,24 @@ export class SceneTabPanel {
     return { x: field.x - ROW_LABEL_WIDTH, y: field.y, width: ROW_LABEL_WIDTH, height: CONTROL_HEIGHT };
   }
 
+  private placementControlRect(): Rect {
+    const field = this.sceneSizeFieldRect();
+    return { x: field.x, y: field.y + CONTROL_HEIGHT + STACK_GAP, width: field.width, height: CONTROL_HEIGHT };
+  }
+
+  private placementLabelRect(): Rect {
+    const control = this.placementControlRect();
+    return { x: control.x - ROW_LABEL_WIDTH, y: control.y, width: ROW_LABEL_WIDTH, height: CONTROL_HEIGHT };
+  }
+
+  private placementCellButtonRect(): Rect {
+    return segmentButtonRect(this.placementControlRect(), 0);
+  }
+
+  private placementFreeButtonRect(): Rect {
+    return segmentButtonRect(this.placementControlRect(), 1);
+  }
+
   private applyStaticHeaders() {
     this.objectsHeader.setRect(this.objectsHeaderRect());
     this.backgroundHeader.setRect(this.backgroundHeaderRect());
@@ -246,9 +281,11 @@ export class SceneTabPanel {
     this.gridHeader.setLabel("Grid", "");
     this.renderRowLabel("cellSizeLabel", "Cell size", this.cellSizeLabelRect());
     this.renderRowLabel("sceneSizeLabel", "Scene size", this.sceneSizeLabelRect());
+    this.renderRowLabel("placementLabel", "Placement", this.placementLabelRect());
+    this.refreshPlacementControls();
   }
 
-  private renderRowLabel(field: "cellSizeLabel" | "sceneSizeLabel", text: string, rect: Rect) {
+  private renderRowLabel(field: "cellSizeLabel" | "sceneSizeLabel" | "placementLabel", text: string, rect: Rect) {
     const existing = this[field];
     if (existing) {
       this.root.remove(existing);
@@ -262,6 +299,11 @@ export class SceneTabPanel {
     mesh.position.x += rasterized.width / 2;
     this.root.add(mesh);
     this[field] = mesh;
+  }
+
+  private refreshPlacementControls() {
+    this.placementCellButton.setActive(this.state.placementResolution === "snap");
+    this.placementFreeButton.setActive(this.state.placementResolution === "free");
   }
 
   // --- object list --------------------------------------------------------
@@ -357,6 +399,8 @@ export class SceneTabPanel {
     this.groundEditor.setRects(this.groundDropdownRect(), this.groundValueRect());
     this.gridField.setRect(this.gridFieldRect());
     this.sceneSizeField.setRect(this.sceneSizeFieldRect());
+    this.placementCellButton.setRect(this.placementCellButtonRect());
+    this.placementFreeButton.setRect(this.placementFreeButtonRect());
     this.applyStaticHeaders();
     this.rebuildRows();
   }
@@ -377,6 +421,9 @@ export class SceneTabPanel {
     this.gridField.dispose();
     this.sceneSizeLabel?.material.dispose();
     this.sceneSizeField.dispose();
+    this.placementLabel?.material.dispose();
+    this.placementCellButton.dispose();
+    this.placementFreeButton.dispose();
   }
 }
 
@@ -493,7 +540,7 @@ class SurfaceAppearanceEditor {
     // Repainting the swatch is far cheaper than a full teardown/rebuild, and matters here: a color
     // drag fires this on every tick, so staying in color mode takes the light path.
     if (type === "color" && this.currentType === "color") {
-      this.updateColorSwatch(appearance?.color ?? "#eef2f7");
+      this.updateColorSwatch(appearance?.color ?? "#696969");
       return;
     }
     this.rebuildValueControl();
@@ -525,7 +572,7 @@ class SurfaceAppearanceEditor {
     if (!appearance || appearance.type === "color") {
       this.releasePreviewTexture();
       this.currentType = "color";
-      const color = appearance?.color ?? "#eef2f7";
+      const color = appearance?.color ?? "#696969";
 
       const hoverBg = new Panel(rect, { fill: theme.panelSubtle.hex, radius: 8, z: hudZ.panel + 0.01 });
       hoverBg.root.visible = false;

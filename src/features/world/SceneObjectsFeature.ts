@@ -13,12 +13,18 @@ import {
   scaleFromGroundHandle,
   transformModeForPointerButton
 } from "./objectTransform";
+import { centerGroundFootprintOnOrigin } from "./placementSizing";
 import { worldSceneConfig } from "./world.config";
 
 export interface SceneObjectsCallbacks {
   getGroundPoint(x: number, y: number): Vector3Data | null;
   onObjectPointerDown(objectId: string): boolean;
   onObjectClick(objectId: string): void;
+  onTransformPreview(
+    objectId: string,
+    mode: TransformMode,
+    patch: Partial<Pick<SceneObject, "position" | "rotationY" | "scale">>
+  ): Partial<Pick<SceneObject, "position" | "rotationY" | "scale">>;
   onTransformCommit(objectId: string, patch: Partial<Pick<SceneObject, "position" | "rotationY" | "scale">>): void;
   onTransformStart(): void;
   onTransformEnd(): void;
@@ -93,6 +99,7 @@ export class SceneObjectsFeature {
     this.clearInstances();
 
     for (const { object, instance } of instances) {
+      centerGroundFootprintOnOrigin(instance);
       instance.position.set(object.position.x, object.position.y, object.position.z);
       instance.rotation.y = object.rotationY;
       instance.scale.setScalar(object.scale);
@@ -235,17 +242,26 @@ export class SceneObjectsFeature {
     if (mode === "move") {
       const point = this.callbacks.getGroundPoint(event.x, event.y);
       if (!point) return;
-      const position = moveOnGround(startObject.position, startPointer, point);
+      const patch = this.callbacks.onTransformPreview(objectId, mode, {
+        position: moveOnGround(startObject.position, startPointer, point)
+      });
+      const position = patch.position ?? startObject.position;
       instance.position.set(position.x, 0, position.z);
       current = { ...current, position };
     } else if (mode === "scale") {
       const point = this.callbacks.getGroundPoint(event.x, event.y);
       if (!point) return;
-      const scale = scaleFromGroundHandle(startObject.scale, center, startPointer, point);
+      const patch = this.callbacks.onTransformPreview(objectId, mode, {
+        scale: scaleFromGroundHandle(startObject.scale, center, startPointer, point)
+      });
+      const scale = patch.scale ?? startObject.scale;
       instance.scale.setScalar(scale);
       current = { ...current, scale };
     } else {
-      const rotationY = rotateFromHorizontalDrag(startObject.rotationY, startScreenX, event.x);
+      const patch = this.callbacks.onTransformPreview(objectId, mode, {
+        rotationY: rotateFromHorizontalDrag(startObject.rotationY, startScreenX, event.x)
+      });
+      const rotationY = patch.rotationY ?? startObject.rotationY;
       instance.rotation.y = rotationY;
       current = { ...current, rotationY };
     }

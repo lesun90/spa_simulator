@@ -4,12 +4,15 @@ import type { AssetManager } from "../../engine/AssetManager";
 import type { InteractionSystem, RaycastLayer } from "../../engine/InteractionSystem";
 import { CameraRig } from "../../engine/CameraRig";
 import type { ViewportSize } from "../../engine/Viewport";
-import { resolveGroundPosition } from "../../editor-core/grid";
+import { resolveGroundPosition, snapToGridMultiplier } from "../../editor-core/grid";
 import type { GridDefinition, SceneObject } from "../../editor-core/scene";
 import type { EditorState } from "../../state/EditorState";
 import { createGround, disposeGround, type GroundMesh } from "./Ground";
+import { applyGridVisibilityColors, gridColorsForGroundColor } from "./gridVisibility";
 import { PlacementGhost } from "./PlacementGhost";
+import { centerGroundFootprintOnOrigin, scaleToFitGridCell } from "./placementSizing";
 import { SceneObjectsFeature } from "./SceneObjectsFeature";
+import { snapRotationToQuarterTurn } from "./objectTransform";
 import { shouldClearSelectionOnGroundClick } from "./worldInteraction";
 import { worldSceneConfig } from "./world.config";
 
@@ -39,6 +42,7 @@ export class WorldFeature {
   private backgroundToken = 0;
   private groundTexture: THREE.Texture | null = null;
   private groundToken = 0;
+  private placementScale = 1;
 
   constructor(
     private readonly canvas: HTMLCanvasElement,
@@ -71,6 +75,7 @@ export class WorldFeature {
       getGroundPoint: (x, y) => this.interaction.raycastAgainst(x, y, this.ground, this.camera),
       onObjectPointerDown: (objectId) => this.handleObjectPointerDown(objectId),
       onObjectClick: (objectId) => state.selectObject(objectId),
+      onTransformPreview: (_objectId, _mode, patch) => this.snapTransformPatch(patch),
       onTransformCommit: (objectId, patch) => this.commitObjectTransform(objectId, patch),
       onTransformStart: () => this.cameraRig.setEnabled(false),
       onTransformEnd: () => this.cameraRig.setEnabled(true),
@@ -93,7 +98,10 @@ export class WorldFeature {
       state.on("placement", () => this.syncGhostAsset()),
       state.on("sceneBackground", () => this.applyBackground()),
       state.on("sceneGround", () => this.applyGround()),
-      state.on("sceneGrid", () => this.syncGrid())
+      state.on("sceneGrid", () => {
+        this.syncGrid();
+        void this.syncGhostAsset();
+      })
     );
 
     this.resync();
@@ -142,7 +150,7 @@ export class WorldFeature {
       return;
     }
 
-    this.tryPlace(point);
+    void this.tryPlace(point);
   }
 
   private handleObjectPointerDown(objectId: string): boolean {
@@ -221,6 +229,7 @@ export class WorldFeature {
     if (!ground) return;
     const token = ++this.groundToken;
     const material = this.ground.material;
+    applyGridVisibilityColors(this.gridHelper, gridColorsForGroundColor(ground.color));
 
     if (ground.type === "color" || !ground.textureUrl) {
       this.disposeGroundTexture();
@@ -262,12 +271,18 @@ export class WorldFeature {
     if (!assetId) {
       this.ghost.visible = false;
       this.ghost.setAsset(null);
+      this.ghost.setScale(1);
+      this.placementScale = 1;
       return;
     }
     const asset = this.state.assets.find((entry) => entry.id === assetId);
     const instance = asset ? await this.assetManager.instantiate(asset) : null;
     if (token !== this.ghostAssetToken || this.state.placementAssetId !== assetId) return;
+    if (instance) centerGroundFootprintOnOrigin(instance);
+    this.placementScale =
+      instance && this.state.scene && this.state.placementResolution === "snap" ? scaleToFitGridCell(instance, this.state.scene.grid.cellSize) : 1;
     this.ghost.setAsset(instance);
+    this.ghost.setScale(this.placementScale);
   }
 
   private updateGhost(point: THREE.Vector3 | null) {
@@ -280,11 +295,30 @@ export class WorldFeature {
     this.ghost.visible = true;
   }
 
-  private tryPlace(point: THREE.Vector3 | null) {
+  private async tryPlace(point: THREE.Vector3 | null) {
     if (!point || !this.state.scene || !this.state.placementAssetId) return;
+    const assetId = this.state.placementAssetId;
     const resolved = resolveGroundPosition(point, this.state.placementResolution, this.state.scene.grid);
-    this.state.placeAsset(this.state.placementAssetId, resolved);
+    const scale = await this.resolvePlacementScale(assetId);
+    if (this.state.placementAssetId !== assetId) return;
+    this.state.placeAsset(assetId, resolved, { scale });
     this.ghost.visible = false;
+  }
+
+  private async resolvePlacementScale(assetId: string): Promise<number> {
+    if (!this.state.scene || this.state.placementResolution === "free") return 1;
+    const asset = this.state.assets.find((entry) => entry.id === assetId);
+    const instance = asset ? await this.assetManager.instantiate(asset) : null;
+    return instance ? scaleToFitGridCell(instance, this.state.scene.grid.cellSize) : this.placementScale;
+  }
+
+  private snapTransformPatch(patch: Partial<Pick<SceneObject, "position" | "rotationY" | "scale">>) {
+    if (this.state.inspectionResolution === "free") return patch;
+    return {
+      ...patch,
+      rotationY: patch.rotationY === undefined ? undefined : snapRotationToQuarterTurn(patch.rotationY),
+      scale: patch.scale === undefined ? undefined : snapToGridMultiplier(patch.scale)
+    };
   }
 
   async init() {}

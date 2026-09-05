@@ -45,4 +45,23 @@ describe("slider math", () => {
     expect(onDragEnd).toHaveBeenCalledTimes(1);
     slider.dispose();
   });
+
+  test("can switch ranges and clamps the current value into the new range", () => {
+    const interaction = {
+      register: () => vi.fn()
+    };
+    const onChange = vi.fn();
+    const slider = new Slider(
+      { x: 20, y: 10, width: 200, height: 28 },
+      interaction as never,
+      { min: 0.05, max: 3, onChange },
+      2
+    );
+
+    slider.setRange(0.5, 8);
+    slider.setValue(7, true);
+
+    expect(onChange).toHaveBeenLastCalledWith(7);
+    slider.dispose();
+  });
 });

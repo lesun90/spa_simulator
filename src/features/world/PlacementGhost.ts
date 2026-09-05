@@ -28,6 +28,10 @@ export class PlacementGhost {
     this.root.position.set(x, 0, z);
   }
 
+  setScale(scale: number) {
+    this.root.scale.setScalar(Number.isFinite(scale) && scale > 0 ? scale : 1);
+  }
+
   /** Swaps in a cloned asset instance to preview; pass null to clear (e.g. placement cancelled). */
   setAsset(instance: THREE.Object3D | null) {
     this.clearContent();

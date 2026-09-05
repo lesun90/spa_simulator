@@ -52,6 +52,11 @@ export function rotateFromHorizontalDrag(
   return startRotationY + (currentScreenX - startScreenX) * radiansPerPixel;
 }
 
+export function snapRotationToQuarterTurn(radians: number): number {
+  const quarterTurn = Math.PI / 2;
+  return Math.round(radians / quarterTurn) * quarterTurn;
+}
+
 export function hasTransformChanged(start: ObjectTransformSnapshot, current: ObjectTransformSnapshot): boolean {
   return (
     Math.abs(start.position.x - current.position.x) > TRANSFORM_EPSILON ||

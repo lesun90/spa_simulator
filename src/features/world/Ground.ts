@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { applyGridVisibilityColors, gridColorsForGroundColor } from "./gridVisibility";
 import { worldSceneConfig } from "./world.config";
 
 export type GroundMesh = THREE.Mesh<THREE.PlaneGeometry, THREE.MeshStandardMaterial>;
@@ -12,6 +13,7 @@ export type GroundMesh = THREE.Mesh<THREE.PlaneGeometry, THREE.MeshStandardMater
 export function createGround(width: number, depth: number, cellSize: number) {
   const divisions = Math.max(Math.round(width / cellSize), 1);
   const grid = new THREE.GridHelper(width, divisions, worldSceneConfig.gridColorCenter, worldSceneConfig.gridColorGrid);
+  applyGridVisibilityColors(grid, gridColorsForGroundColor(`#${worldSceneConfig.backgroundColor.toString(16).padStart(6, "0")}`));
 
   const material = new THREE.MeshStandardMaterial({
     color: worldSceneConfig.backgroundColor,

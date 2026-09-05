@@ -131,6 +131,35 @@ test("refreshAssets resets a stale selected category when the catalog no longer 
   expect(onCategory).toHaveBeenCalledTimes(1);
 });
 
+test("placement can store a snapped object scale", () => {
+  const state = new EditorState();
+  state.history = { scene: createScene("Downtown"), undoStack: [], redoStack: [] };
+
+  state.placeAsset("props.cone", { x: 1.5, y: 0, z: 2.5 }, { scale: 2.5 });
+
+  expect(state.scene?.objects[0]).toMatchObject({
+    assetId: "props.cone",
+    position: { x: 1.5, y: 0, z: 2.5 },
+    scale: 2.5
+  });
+});
+
+test("inspection resolution is independent from placement resolution", () => {
+  const state = new EditorState();
+  const onPlacement = vi.fn();
+  const onInspection = vi.fn();
+  state.on("placement", onPlacement);
+  state.on("inspection", onInspection);
+
+  state.setPlacementResolution("free");
+  state.setInspectionResolution("free");
+
+  expect(state.placementResolution).toBe("free");
+  expect(state.inspectionResolution).toBe("free");
+  expect(onPlacement).toHaveBeenCalledTimes(1);
+  expect(onInspection).toHaveBeenCalledTimes(1);
+});
+
 function asset(patch: Partial<AssetCatalogEntry>): AssetCatalogEntry {
   return {
     id: patch.id ?? "props.cone",

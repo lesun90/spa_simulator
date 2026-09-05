@@ -40,7 +40,7 @@ export class Slider {
   private rect: Rect;
   private value: number;
 
-  constructor(rect: Rect, private readonly interaction: InteractionSystem, private readonly options: SliderOptions, initialValue: number) {
+  constructor(rect: Rect, private readonly interaction: InteractionSystem, private options: SliderOptions, initialValue: number) {
     this.rect = rect;
     this.value = this.clampValue(initialValue);
 
@@ -100,6 +100,13 @@ export class Slider {
   setRect(rect: Rect) {
     this.rect = rect;
     this.placeHitArea();
+    this.layout();
+  }
+
+  setRange(min: number, max: number) {
+    if (this.options.min === min && this.options.max === max) return;
+    this.options = { ...this.options, min, max };
+    this.value = this.clampValue(this.value);
     this.layout();
   }
 
