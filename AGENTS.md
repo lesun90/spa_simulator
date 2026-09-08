@@ -1,5 +1,9 @@
 ## Software Design
 
+**Testing**
+- Do not create unit tests unless explicitly asked.
+- Verify changes directly in the product experience whenever possible.
+
 **Object model**
 - Model the domain as objects that own their data and enforce their own invariants.
 - Program against interfaces or abstract base classes, not concrete types. Inject dependencies instead of constructing them inside.
