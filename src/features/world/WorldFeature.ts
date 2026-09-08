@@ -4,7 +4,7 @@ import type { AssetManager } from "../../engine/AssetManager";
 import type { InteractionSystem, RaycastLayer } from "../../engine/InteractionSystem";
 import { CameraRig } from "../../engine/CameraRig";
 import type { ViewportSize } from "../../engine/Viewport";
-import { resolveGroundPosition, snapToGridMultiplier } from "../../editor-core/grid";
+import { resolveGroundPosition } from "../../editor-core/grid";
 import type { GridDefinition, SceneObject } from "../../editor-core/scene";
 import type { EditorState } from "../../state/EditorState";
 import { createGround, disposeGround, type GroundMesh } from "./Ground";
@@ -12,7 +12,7 @@ import { applyGridVisibilityColors, gridColorsForGroundColor } from "./gridVisib
 import { PlacementGhost } from "./PlacementGhost";
 import { centerGroundFootprintOnOrigin, scaleToFitGridCell } from "./placementSizing";
 import { SceneObjectsFeature } from "./SceneObjectsFeature";
-import { snapRotationToQuarterTurn } from "./objectTransform";
+import { snapTransformPatchForInspection } from "./transformSnap";
 import { shouldClearSelectionOnGroundClick } from "./worldInteraction";
 import { worldSceneConfig } from "./world.config";
 
@@ -77,7 +77,7 @@ export class WorldFeature {
       onObjectPointerMove: (objectId, event) => this.handleObjectPlacementPointerMove(objectId, event.point ?? null),
       onObjectPointerUp: (objectId, event) => this.handleObjectPlacementPointerUp(objectId, event.point ?? null),
       onObjectClick: (objectId) => this.handleObjectClick(objectId),
-      onTransformPreview: (_objectId, _mode, patch) => this.snapTransformPatch(patch),
+      onTransformPreview: (objectId, _mode, patch) => this.snapTransformPatch(objectId, patch),
       onTransformCommit: (objectId, patch) => this.commitObjectTransform(objectId, patch),
       onTransformStart: () => this.cameraRig.setEnabled(false),
       onTransformEnd: () => this.cameraRig.setEnabled(true),
@@ -347,13 +347,10 @@ export class WorldFeature {
     return instance ? scaleToFitGridCell(instance, this.state.scene.grid.cellSize) : this.placementScale;
   }
 
-  private snapTransformPatch(patch: Partial<Pick<SceneObject, "position" | "rotationY" | "scale">>) {
-    if (this.state.inspectionResolution === "free") return patch;
-    return {
-      ...patch,
-      rotationY: patch.rotationY === undefined ? undefined : snapRotationToQuarterTurn(patch.rotationY),
-      scale: patch.scale === undefined ? undefined : snapToGridMultiplier(patch.scale)
-    };
+  private snapTransformPatch(objectId: string, patch: Partial<Pick<SceneObject, "position" | "rotationY" | "scale">>) {
+    if (!this.state.scene) return patch;
+    const cellFitScale = this.objects.getObjectScaleToFitGridCell(objectId, this.state.scene.grid.cellSize);
+    return snapTransformPatchForInspection(patch, this.state.inspectionResolution, this.state.scene.grid, cellFitScale ?? 1);
   }
 
   async init() {}

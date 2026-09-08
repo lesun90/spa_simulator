@@ -3,8 +3,10 @@ import { theme } from "../../../app/theme";
 import type { AssetCatalogEntry } from "../../../editor-core/assets";
 import { GRID_SIZE_MULTIPLIERS, snapToGridMultiplier } from "../../../editor-core/grid";
 import type { SceneObject } from "../../../editor-core/scene";
+import type { AssetManager } from "../../../engine/AssetManager";
 import type { InteractionSystem } from "../../../engine/InteractionSystem";
 import type { EditorState } from "../../../state/EditorState";
+import { gridCellsForScale, scaleToFitGridCell, snapScaleToGridCells } from "../../world/placementSizing";
 import { BasePanel } from "../kit/BasePanel";
 import { Button } from "../kit/Button";
 import type { Rect } from "../kit/layout";
@@ -44,11 +46,15 @@ export class InspectorPanel extends BasePanel {
   private readonly stateCleanups: Array<() => void> = [];
   private previewAssetId: string | null = null;
   private previewRequestId = 0;
+  private cellFitScale = 1;
+  private cellFitScaleKey = "";
+  private cellFitScaleRequestId = 0;
 
   constructor(
     rect: Rect,
     interaction: InteractionSystem,
     private readonly state: EditorState,
+    private readonly assetManager: AssetManager,
     private readonly thumbnails: ThumbnailRenderer,
     private readonly actions: {
       setCursor(cursor: string): void;
@@ -119,6 +125,7 @@ export class InspectorPanel extends BasePanel {
     );
     this.stateCleanups.push(
       state.on("scene", () => this.refresh()),
+      state.on("sceneGrid", () => this.refresh()),
       state.on("selection", () => this.refresh()),
       state.on("inspection", () => this.refresh()),
       state.on("assets", () => this.refresh())
@@ -147,9 +154,10 @@ export class InspectorPanel extends BasePanel {
     const object = this.state.selected;
     const asset = object ? this.findAsset(object.assetId) : null;
     const snap = this.state.inspectionResolution === "snap";
+    this.refreshCellFitScale(object, asset);
     this.scaleSlider.setRange(snap ? SNAP_MIN_SCALE : MIN_SCALE, snap ? SNAP_MAX_SCALE : MAX_SCALE);
     this.nameField.setValue(object?.name ?? "");
-    this.scaleSlider.setValue(object ? this.resolveScaleValue(object.scale) : 1);
+    this.scaleSlider.setValue(object ? this.displayScaleValue(object.scale) : 1);
     this.nameField.root.visible = Boolean(object);
     this.scaleSlider.root.visible = Boolean(object);
     this.inspectionCellButton.root.visible = Boolean(object);
@@ -190,7 +198,7 @@ export class InspectorPanel extends BasePanel {
     this.dynamicMeshes.push(this.addText("Scale", this.rect.x + PADDING, this.scaleSliderRect().y - 10, LABEL_SIZE, theme.textMutedStrong.css, "700"));
     this.dynamicMeshes.push(
       this.addText(
-        scaleLabel(this.resolveScaleValue(object.scale), this.state.inspectionResolution === "snap"),
+        scaleLabel(this.displayScaleValue(object.scale), this.state.inspectionResolution === "snap"),
         this.rect.x + this.rect.width - PADDING - 56,
         this.scaleSliderRect().y - 10,
         LABEL_SIZE,
@@ -282,7 +290,28 @@ export class InspectorPanel extends BasePanel {
   }
 
   private resolveScaleValue(scale: number): number {
-    return this.state.inspectionResolution === "snap" ? snapToGridMultiplier(scale) : scale;
+    return this.state.inspectionResolution === "snap" ? snapScaleToGridCells(scale * this.cellFitScale, this.cellFitScale) : scale;
+  }
+
+  private displayScaleValue(scale: number): number {
+    return this.state.inspectionResolution === "snap" ? snapToGridMultiplier(gridCellsForScale(scale, this.cellFitScale)) : scale;
+  }
+
+  private refreshCellFitScale(object: SceneObject | null, asset: AssetCatalogEntry | null) {
+    const cellSize = this.state.scene?.grid.cellSize;
+    const key = object && asset && cellSize ? `${asset.id}:${cellSize}` : "";
+    if (key === this.cellFitScaleKey) return;
+
+    this.cellFitScaleKey = key;
+    this.cellFitScale = 1;
+    const requestId = ++this.cellFitScaleRequestId;
+    if (!asset || !cellSize) return;
+
+    this.assetManager.instantiate(asset).then((instance) => {
+      if (requestId !== this.cellFitScaleRequestId || key !== this.cellFitScaleKey) return;
+      this.cellFitScale = scaleToFitGridCell(instance, cellSize);
+      this.refresh();
+    });
   }
 
   dispose() {

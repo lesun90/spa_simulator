@@ -13,7 +13,7 @@ import {
   scaleFromGroundHandle,
   transformModeForPointerButton
 } from "./objectTransform";
-import { centerGroundFootprintOnOrigin } from "./placementSizing";
+import { centerGroundFootprintOnOrigin, scaleToFitGridCell } from "./placementSizing";
 import { worldSceneConfig } from "./world.config";
 
 export interface SceneObjectsCallbacks {
@@ -84,6 +84,18 @@ export class SceneObjectsFeature {
     if (!instance) return null;
     instance.updateWorldMatrix(true, false);
     return new THREE.Box3().setFromObject(instance);
+  }
+
+  getObjectScaleToFitGridCell(objectId: string, cellSize: number): number | null {
+    const instance = this.meshesById.get(objectId);
+    if (!instance) return null;
+
+    const previousScale = instance.scale.clone();
+    instance.scale.setScalar(1);
+    const cellFitScale = scaleToFitGridCell(instance, cellSize);
+    instance.scale.copy(previousScale);
+    instance.updateWorldMatrix(true, true);
+    return cellFitScale;
   }
 
   async sync(

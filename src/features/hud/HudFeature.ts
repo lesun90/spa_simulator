@@ -103,7 +103,7 @@ export class HudFeature {
       onDrag: (delta) => this.dragLeftPanelResize(delta),
       onDragEnd: () => this.endPanelResize()
     });
-    this.inspectorPanel = new InspectorPanel(layout.inspectorPanel, interaction, state, this.thumbnails, {
+    this.inspectorPanel = new InspectorPanel(layout.inspectorPanel, interaction, state, assetManager, this.thumbnails, {
       setCursor: (cursor) => this.actions.setCursor(cursor),
       setWorldControlsEnabled: (enabled) => this.actions.setWorldControlsEnabled(enabled)
     });

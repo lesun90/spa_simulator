@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { describe, expect, test } from "vitest";
-import { centerGroundFootprintOnOrigin, scaleToFitGridCell } from "../src/features/world/placementSizing";
+import { centerGroundFootprintOnOrigin, gridCellsForScale, scaleToFitGridCell, snapScaleToGridCells } from "../src/features/world/placementSizing";
 
 describe("placement sizing", () => {
   test("fits an object's largest ground footprint side into one grid cell", () => {
@@ -12,6 +12,17 @@ describe("placement sizing", () => {
   test("keeps the default scale when the footprint cannot be measured", () => {
     expect(scaleToFitGridCell(new THREE.Group(), 2)).toBe(1);
     expect(scaleToFitGridCell(new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1)), 0)).toBe(1);
+  });
+
+  test("snaps scalar scale to grid-cell multiples using the object's cell-fit scale", () => {
+    expect(snapScaleToGridCells(1.2, 0.5)).toBe(1);
+    expect(snapScaleToGridCells(1.35, 0.5)).toBe(1.5);
+    expect(snapScaleToGridCells(20, 0.5)).toBe(4);
+  });
+
+  test("reports scalar scale as grid-cell multiples using the object's cell-fit scale", () => {
+    expect(gridCellsForScale(1.5, 0.5)).toBe(3);
+    expect(gridCellsForScale(2, 0)).toBe(2);
   });
 
   test("centers an offset asset footprint on the placement origin", () => {
