@@ -25,6 +25,7 @@ export class Tile {
   private tagMesh: THREE.Mesh<THREE.PlaneGeometry, THREE.MeshBasicMaterial> | null = null;
   private rect: Rect;
   private isActive = false;
+  private isConnectable = false;
   private isHovered = false;
   private readonly unregister: () => void;
 
@@ -111,6 +112,12 @@ export class Tile {
     this.applyVisualState();
   }
 
+  setConnectable(connectable: boolean) {
+    if (this.isConnectable === connectable) return;
+    this.isConnectable = connectable;
+    this.applyVisualState();
+  }
+
   private setHovered(hovered: boolean) {
     if (this.isHovered === hovered) return;
     this.isHovered = hovered;
@@ -122,6 +129,10 @@ export class Tile {
       this.panel.setFill(theme.accentSelectedBg.hex);
       this.panel.setBorder(theme.accent.hex);
       this.panel.setShadow("none");
+    } else if (this.isConnectable) {
+      this.panel.setFill(theme.connectableSelectedBg.hex);
+      this.panel.setBorder(theme.connectable.hex);
+      this.panel.setShadow("md");
     } else if (this.isHovered) {
       this.panel.setFill(theme.panelSubtle.hex);
       this.panel.setBorder(theme.textMutedAlt.hex);

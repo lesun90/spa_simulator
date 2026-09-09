@@ -2,12 +2,14 @@ import { mkdir, readdir, readFile, stat, writeFile } from "node:fs/promises";
 import { basename, extname, join, relative, sep } from "node:path";
 import type { AssetCatalogEntry } from "../src/editor-core/assets";
 import { assetLabelFromId } from "../src/editor-core/assets";
+import type { WfcMetadata } from "../src/wfc/metadata/socketTypes";
 
 interface AssetMetadata {
   id?: string;
   label?: string;
   category?: string;
   tags?: string[];
+  wfc?: WfcMetadata;
 }
 
 export interface SharedImportRequest {
@@ -166,6 +168,7 @@ async function normalizeAssetFolder(assetRoot: string, folder: string): Promise<
     moduleUrl: moduleFile ? `${urlBase}/${encodeURIComponent(moduleFile)}` : undefined,
     modelUrl: glbFile ? `${urlBase}/${encodeURIComponent(glbFile)}` : undefined,
     thumbnailUrl: pngFile ? `${urlBase}/${encodeURIComponent(pngFile)}` : undefined,
+    wfc: metadata.wfc,
     diagnostics
   };
 }

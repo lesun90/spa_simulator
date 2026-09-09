@@ -22,6 +22,8 @@ export const theme = {
   borderSubtle: token("#d5dce8"),
   accent: token("#1f5de2"),
   accentSelectedBg: token("#eef4ff"),
+  connectable: token("#00a86b"),
+  connectableSelectedBg: token("#dcfce7"),
   focusRing: token("#77a2ff"),
   diagnostic: token("#a14720"),
   white: token("#ffffff"),

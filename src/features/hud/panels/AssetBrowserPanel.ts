@@ -4,6 +4,7 @@ import { theme } from "../../../app/theme";
 import type { AssetCatalogEntry } from "../../../editor-core/assets";
 import type { InteractionSystem } from "../../../engine/InteractionSystem";
 import type { EditorState } from "../../../state/EditorState";
+import { connectableAssetIdsForObject } from "../../../wfc/connectableAssets";
 import type { LiveThumbnailHandle, ThumbnailRenderer } from "../thumbnails/ThumbnailRenderer";
 import { BasePanel } from "../kit/BasePanel";
 import { Button } from "../kit/Button";
@@ -39,6 +40,7 @@ export class AssetBrowserPanel extends BasePanel {
   private rows: TileRow[] = [];
   private emptyStateMesh: THREE.Mesh<THREE.PlaneGeometry, THREE.MeshBasicMaterial> | null = null;
   private hoveredHandle: { assetId: string; handle: LiveThumbnailHandle } | null = null;
+  private connectableAssetIds = new Set<string>();
   private hoverToken = 0;
 
   constructor(
@@ -102,6 +104,8 @@ export class AssetBrowserPanel extends BasePanel {
     this.registerCleanup(state.on("category", () => this.rebuildGrid()));
     this.registerCleanup(state.on("assetRefresh", () => this.updateRefreshButton()));
     this.registerCleanup(state.on("placement", () => this.updateActiveTiles()));
+    this.registerCleanup(state.on("scene", () => this.updateConnectableTiles()));
+    this.registerCleanup(state.on("selection", () => this.updateConnectableTiles()));
     this.updateRefreshButton();
     this.rebuildGrid();
   }
@@ -123,6 +127,7 @@ export class AssetBrowserPanel extends BasePanel {
     this.clearEmptyState();
 
     this.dropdown.setOptions(this.state.categories, this.state.category);
+    this.connectableAssetIds = connectableAssetIdsForObject(this.state.selected, this.state.assets);
 
     const grid = this.gridRect();
     const { width: tileWidth, height: tileHeight, gap } = assetTileSize;
@@ -142,6 +147,7 @@ export class AssetBrowserPanel extends BasePanel {
         onLeave: () => this.endHover(asset)
       });
       tile.setActive(asset.id === this.state.placementAssetId);
+      tile.setConnectable(this.connectableAssetIds.has(asset.id));
       void this.thumbnails.getStaticThumbnail(asset).then((texture) => tile.setThumbnailTexture(texture));
       this.scroll.content.add(tile.root);
       this.rows.push({ tile, assetId: asset.id });
@@ -173,6 +179,11 @@ export class AssetBrowserPanel extends BasePanel {
 
   private updateActiveTiles() {
     for (const row of this.rows) row.tile.setActive(row.assetId === this.state.placementAssetId);
+  }
+
+  private updateConnectableTiles() {
+    this.connectableAssetIds = connectableAssetIdsForObject(this.state.selected, this.state.assets);
+    for (const row of this.rows) row.tile.setConnectable(this.connectableAssetIds.has(row.assetId));
   }
 
   private refreshAssets() {
