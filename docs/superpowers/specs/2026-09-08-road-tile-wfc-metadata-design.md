@@ -129,13 +129,17 @@ For each source GLB, the generator should:
 6. Generate rotated socket sets for `0`, `90`, `180`, and `270` degrees.
 7. Write the generated `wfc` block back to the tile's `asset.json`.
 
-The first implementation should use material-aware geometry signatures:
+The first implementation should use material-pattern-aware geometry signatures:
 
 - Geometry continuity: sampled and quantized boundary shape.
-- Visual continuity: material names used near the same boundary.
+- Visual continuity: an ordered boundary grid of material or texture samples.
 - Match rule: opposite sockets match only when geometry and visual signatures match.
 
-Texture pixel sampling can be added later if material identity is not enough.
+Visual continuity must preserve where each material appears on the boundary. A face that contains grass on one side and water on the other side must not match a face with the same materials in the opposite order unless the opposite-face mirror operation makes the sampled grids align.
+
+For the first pass, each face should be sampled into a small 2D grid. Each cell records the material touching that portion of the boundary. The visual socket hash is computed from the ordered grid, not from a set of material names.
+
+Texture pixel sampling can be added later if material-grid identity is not enough.
 
 ## Adjacency Generation
 
