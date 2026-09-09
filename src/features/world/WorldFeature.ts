@@ -11,7 +11,7 @@ import { createGround, disposeGround, type GroundMesh } from "./Ground";
 import { applyGridVisibilityColors, gridColorsForGroundColor } from "./gridVisibility";
 import { PlacementGhost } from "./PlacementGhost";
 import { centerGroundFootprintOnOrigin, scaleToFitGridCell } from "./placementSizing";
-import { SceneObjectsFeature } from "./SceneObjectsFeature";
+import { SceneObjectsFeature, type TransformMode } from "./SceneObjectsFeature";
 import { snapTransformPatchForInspection } from "./transformSnap";
 import { shouldClearSelectionOnGroundClick } from "./worldInteraction";
 import { worldSceneConfig } from "./world.config";
@@ -77,7 +77,7 @@ export class WorldFeature {
       onObjectPointerMove: (objectId, event) => this.handleObjectPlacementPointerMove(objectId, event.point ?? null),
       onObjectPointerUp: (objectId, event) => this.handleObjectPlacementPointerUp(objectId, event.point ?? null),
       onObjectClick: (objectId) => this.handleObjectClick(objectId),
-      onTransformPreview: (objectId, _mode, patch) => this.snapTransformPatch(objectId, patch),
+      onTransformPreview: (objectId, mode, patch) => this.snapTransformPatch(objectId, mode, patch),
       onTransformCommit: (objectId, patch) => this.commitObjectTransform(objectId, patch),
       onTransformStart: () => this.cameraRig.setEnabled(false),
       onTransformEnd: () => this.cameraRig.setEnabled(true),
@@ -332,7 +332,12 @@ export class WorldFeature {
   private resolveObjectPlacementPosition(objectId: string, point: THREE.Vector3 | null): SceneObject["position"] | null {
     if (!point) return null;
     const box = this.objects.getObjectBox(objectId);
-    return this.resolvePlacementPosition(point, box ? box.max.y : 0);
+    if (!box) return this.resolvePlacementPosition(point, 0);
+    if (this.state.placementResolution === "free") return this.resolvePlacementPosition(point, box.max.y);
+
+    const groundPosition = this.resolvePlacementPosition(point, 0);
+    if (!groundPosition) return null;
+    return boxContainsGroundPosition(box, groundPosition) ? { ...groundPosition, y: box.max.y } : groundPosition;
   }
 
   private resolvePlacementPosition(point: THREE.Vector3, y: number): SceneObject["position"] | null {
@@ -347,10 +352,37 @@ export class WorldFeature {
     return instance ? scaleToFitGridCell(instance, this.state.scene.grid.cellSize) : this.placementScale;
   }
 
-  private snapTransformPatch(objectId: string, patch: Partial<Pick<SceneObject, "position" | "rotationY" | "scale">>) {
+  private snapTransformPatch(objectId: string, mode: TransformMode, patch: Partial<Pick<SceneObject, "position" | "rotationY" | "scale">>) {
     if (!this.state.scene) return patch;
+    const object = this.state.scene.objects.find((item) => item.id === objectId);
+    const objectScale = object?.scale ?? 1;
     const cellFitScale = this.objects.getObjectScaleToFitGridCell(objectId, this.state.scene.grid.cellSize);
-    return snapTransformPatchForInspection(patch, this.state.inspectionResolution, this.state.scene.grid, cellFitScale ?? 1);
+    const snapped = snapTransformPatchForInspection(
+      patch,
+      this.state.inspectionResolution,
+      this.state.scene.grid,
+      objectScale,
+      cellFitScale ?? 1,
+      object?.position
+    );
+    if (mode !== "move" || this.state.inspectionResolution !== "snap" || !snapped.position) return snapped;
+
+    return {
+      ...snapped,
+      position: { ...snapped.position, y: this.topSurfaceHeightAt(objectId, snapped.position) ?? 0 }
+    };
+  }
+
+  private topSurfaceHeightAt(excludedObjectId: string, position: SceneObject["position"]): number | null {
+    if (!this.state.scene) return null;
+    let top: number | null = null;
+    for (const object of this.state.scene.objects) {
+      if (object.id === excludedObjectId) continue;
+      const box = this.objects.getObjectBox(object.id);
+      if (!box || !boxContainsGroundPosition(box, position)) continue;
+      top = Math.max(top ?? box.max.y, box.max.y);
+    }
+    return top;
   }
 
   async init() {}
@@ -374,4 +406,15 @@ export class WorldFeature {
     this.ghost.dispose();
     this.cameraRig.dispose();
   }
+}
+
+const BOX_FOOTPRINT_EPSILON = 0.0001;
+
+function boxContainsGroundPosition(box: THREE.Box3, position: SceneObject["position"]): boolean {
+  return (
+    position.x >= box.min.x - BOX_FOOTPRINT_EPSILON &&
+    position.x <= box.max.x + BOX_FOOTPRINT_EPSILON &&
+    position.z >= box.min.z - BOX_FOOTPRINT_EPSILON &&
+    position.z <= box.max.z + BOX_FOOTPRINT_EPSILON
+  );
 }

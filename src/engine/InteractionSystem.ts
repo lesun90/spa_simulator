@@ -61,6 +61,7 @@ export class InteractionSystem {
   private readonly ndc = new THREE.Vector2();
   private hovered: THREE.Object3D | null = null;
   private captured: THREE.Object3D | null = null;
+  private capturedButtonMask = 0;
   private focusedField: FocusableField | null = null;
 
   constructor(private readonly viewport: Viewport) {}
@@ -75,7 +76,7 @@ export class InteractionSystem {
     return () => {
       this.registry.delete(root);
       if (this.hovered === root) this.hovered = null;
-      if (this.captured === root) this.captured = null;
+      if (this.captured === root) this.clearCaptured();
     };
   }
 
@@ -149,6 +150,7 @@ export class InteractionSystem {
   handlePointerDown(x: number, y: number, event: PointerEvent): Hit | null {
     const hit = this.hitTest(x, y, acceptsPointerInteraction);
     this.captured = hit?.root ?? null;
+    this.capturedButtonMask = this.captured ? pointerButtonMask(event) : 0;
     hit?.handlers.onPointerDown?.(this.toEvent(x, y, hit, event));
     return hit;
   }
@@ -159,9 +161,9 @@ export class InteractionSystem {
     // Left uncaught, `captured` would stay set forever, routing every future move to the dead drag
     // target instead of whatever is actually under the pointer (e.g. the ground, breaking the
     // placement ghost). The button state on this move is enough to detect and self-heal that.
-    if (this.captured && (event.buttons & 1) !== 1) {
+    if (this.captured && this.capturedButtonMask !== 0 && (event.buttons & this.capturedButtonMask) !== this.capturedButtonMask) {
       const stale = this.captured;
-      this.captured = null;
+      this.clearCaptured();
       this.registry.get(stale)?.onPointerUp?.(this.toEvent(x, y, null, event));
     }
 
@@ -188,7 +190,7 @@ export class InteractionSystem {
     if (capturedRoot && capturedRoot === hit?.root) {
       capturedHandlers?.onClick?.(this.toEvent(x, y, hit, event));
     }
-    this.captured = null;
+    this.clearCaptured();
     return hit;
   }
 
@@ -214,6 +216,11 @@ export class InteractionSystem {
 
   isCaptured(): boolean {
     return this.captured !== null;
+  }
+
+  private clearCaptured() {
+    this.captured = null;
+    this.capturedButtonMask = 0;
   }
 
   focusField(field: FocusableField) {
@@ -254,6 +261,13 @@ function acceptsPointerMove(handlers: InteractiveHandlers): boolean {
       handlers.onHover ||
       handlers.onLeave
   );
+}
+
+function pointerButtonMask(event: PointerEvent): number {
+  if (event.buttons) return event.buttons;
+  if (event.button === 1) return 4;
+  if (event.button === 2) return 2;
+  return 1;
 }
 
 function isVisibleInHierarchy(object: THREE.Object3D): boolean {

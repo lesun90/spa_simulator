@@ -344,3 +344,25 @@ test("a released drag whose pointerup fires outside the canvas doesn't strand th
 
   expect(onGroundMove).toHaveBeenCalledTimes(1);
 });
+
+test("right-button captured drags continue while the secondary button is held", () => {
+  const viewport = new Viewport(2);
+  const interaction = new InteractionSystem(viewport);
+  const scene = new THREE.Scene();
+  const camera = makeOrthoHudCamera(400, 300);
+  interaction.setLayers([{ scene, camera }]);
+
+  const target = makeQuad(0, 0, 400, 300, 0);
+  scene.add(target);
+  settle(scene);
+
+  const onDrag = vi.fn();
+  const onRelease = vi.fn();
+  interaction.register(target, { onPointerDown: () => {}, onPointerMove: onDrag, onPointerUp: onRelease });
+
+  interaction.handlePointerDown(200, 150, { button: 2, buttons: 2 } as PointerEvent);
+  interaction.handlePointerMove(210, 150, { button: 2, buttons: 2 } as PointerEvent);
+
+  expect(onDrag).toHaveBeenCalledTimes(1);
+  expect(onRelease).not.toHaveBeenCalled();
+});

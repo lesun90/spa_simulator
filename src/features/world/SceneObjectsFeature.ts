@@ -33,7 +33,7 @@ export interface SceneObjectsCallbacks {
   setCursor(cursor: string): void;
 }
 
-type TransformMode = DirectObjectTransformMode | "scale";
+export type TransformMode = DirectObjectTransformMode | "scale";
 
 interface ActiveTransform {
   readonly objectId: string;
@@ -271,7 +271,7 @@ export class SceneObjectsFeature {
     if (!instance) return;
 
     let current = {
-      position: { x: instance.position.x, y: 0, z: instance.position.z },
+      position: { x: instance.position.x, y: instance.position.y, z: instance.position.z },
       rotationY: instance.rotation.y,
       scale: instance.scale.x
     };
@@ -283,7 +283,7 @@ export class SceneObjectsFeature {
         position: moveOnGround(startObject.position, startPointer, point)
       });
       const position = patch.position ?? startObject.position;
-      instance.position.set(position.x, 0, position.z);
+      instance.position.set(position.x, position.y, position.z);
       current = { ...current, position };
     } else if (mode === "scale") {
       const point = this.callbacks.getGroundPoint(event.x, event.y);
@@ -292,8 +292,10 @@ export class SceneObjectsFeature {
         scale: scaleFromGroundHandle(startObject.scale, center, startPointer, point)
       });
       const scale = patch.scale ?? startObject.scale;
+      const position = patch.position ?? startObject.position;
       instance.scale.setScalar(scale);
-      current = { ...current, scale };
+      instance.position.set(position.x, position.y, position.z);
+      current = { ...current, position, scale };
     } else {
       const patch = this.callbacks.onTransformPreview(objectId, mode, {
         rotationY: rotateFromHorizontalDrag(startObject.rotationY, startScreenX, event.x)
@@ -319,7 +321,7 @@ export class SceneObjectsFeature {
 
     if (!changed || !instance) return;
     this.callbacks.onTransformCommit(objectId, {
-      position: { x: instance.position.x, y: 0, z: instance.position.z },
+      position: { x: instance.position.x, y: instance.position.y, z: instance.position.z },
       rotationY: instance.rotation.y,
       scale: instance.scale.x
     });
@@ -386,6 +388,7 @@ class ObjectTransformControls {
   readonly root = new THREE.Group();
 
   private readonly outline: THREE.Box3Helper;
+  private readonly rotateHandle = new RotateHandleControl();
   private readonly resizeEdges: ResizeEdgeControl[] = [];
   private readonly unregisters: Array<() => void> = [];
 
@@ -400,7 +403,22 @@ class ObjectTransformControls {
     }
   ) {
     this.outline = new THREE.Box3Helper(box, theme.selectionHighlight.hex);
-    this.root.add(this.outline);
+    this.root.add(this.outline, this.rotateHandle.root);
+    this.unregisters.push(
+      interaction.register(this.rotateHandle.root, {
+        onPointerDown: (event) => handlers.onPointerDown("rotate", event),
+        onPointerMove: (event) => handlers.onPointerMove(event),
+        onPointerUp: (event) => handlers.onPointerUp(event),
+        onHover: () => {
+          this.rotateHandle.setHovered(true);
+          handlers.onResizeHover("ew-resize");
+        },
+        onLeave: () => {
+          this.rotateHandle.setHovered(false);
+          handlers.onResizeHover("default");
+        }
+      })
+    );
 
     for (let index = 0; index < 4; index += 1) {
       const edge = new ResizeEdgeControl();
@@ -434,7 +452,9 @@ class ObjectTransformControls {
     const y = box.max.y + 0.06;
     const halfX = Math.max(size.x / 2, 0.3);
     const halfZ = Math.max(size.z / 2, 0.3);
+    const rotateRadius = Math.max(halfX, halfZ) + 0.18;
 
+    this.rotateHandle.setTransform(center.x, box.max.y + 0.12, center.z, rotateRadius);
     this.resizeEdges[0].setTransform(center.x, y, center.z - halfZ, halfX * 2, 0, "ns-resize");
     this.resizeEdges[1].setTransform(center.x + halfX, y, center.z, halfZ * 2, Math.PI / 2, "ew-resize");
     this.resizeEdges[2].setTransform(center.x, y, center.z + halfZ, halfX * 2, 0, "ns-resize");
@@ -444,6 +464,42 @@ class ObjectTransformControls {
   dispose() {
     for (const unregister of this.unregisters) unregister();
     disposeObject(this.root);
+  }
+}
+
+class RotateHandleControl {
+  readonly root = new THREE.Group();
+
+  private readonly ring: THREE.Mesh<THREE.TorusGeometry, THREE.MeshBasicMaterial>;
+  private readonly hitRing: THREE.Mesh<THREE.TorusGeometry, THREE.MeshBasicMaterial>;
+
+  constructor() {
+    const material = new THREE.MeshBasicMaterial({
+      color: theme.selectionHighlight.hex,
+      transparent: true,
+      opacity: 0.54,
+      depthTest: false
+    });
+    this.ring = new THREE.Mesh(new THREE.TorusGeometry(1, 0.025, 8, 64), material);
+    this.ring.rotation.x = Math.PI / 2;
+    this.ring.renderOrder = 2;
+
+    this.hitRing = new THREE.Mesh(
+      new THREE.TorusGeometry(1, 0.11, 8, 64),
+      new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false })
+    );
+    this.hitRing.rotation.x = Math.PI / 2;
+    this.root.add(this.hitRing, this.ring);
+  }
+
+  setTransform(x: number, y: number, z: number, radius: number) {
+    this.root.position.set(x, y, z);
+    this.root.scale.setScalar(Math.max(radius, 0.42));
+  }
+
+  setHovered(hovered: boolean) {
+    this.ring.material.color.set(hovered ? theme.assetPlaceholderTemporary.hex : theme.selectionHighlight.hex);
+    this.ring.material.opacity = hovered ? 0.86 : 0.54;
   }
 }
 

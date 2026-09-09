@@ -87,6 +87,25 @@ describe("scene command history", () => {
     ]);
   });
 
+  test("updates preserve stacked object height", () => {
+    const scene = createScene("Stacked Transform");
+    const withObject = executeCommand(
+      createHistory(scene),
+      addObjectCommand({
+        id: "obj_1",
+        assetId: "props.cone",
+        name: "cone_1",
+        position: { x: 0.5, y: 0, z: 0.5 },
+        rotationY: 0,
+        scale: 1
+      })
+    );
+
+    const moved = executeCommand(withObject, updateObjectCommand("obj_1", { position: { x: 1.5, y: 2.75, z: 1.5 } }));
+
+    expect(moved.scene.objects[0].position).toEqual({ x: 1.5, y: 2.75, z: 1.5 });
+  });
+
   test("undo restores the previous object name", () => {
     const scene = createScene("Rename");
     const withObject = executeCommand(

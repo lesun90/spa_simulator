@@ -78,6 +78,22 @@ describe("normalizeScene", () => {
     expect(normalized.objects.map((item) => item.name)).toEqual(["traffic_cone_1", "traffic_cone_2"]);
   });
 
+  test("preserves stacked object heights when loading scenes", () => {
+    const scene: Scene = {
+      id: "scene_1",
+      name: "Downtown",
+      description: "",
+      grid: { cellSize: 1, width: 100, depth: 100 },
+      background: { type: "color", color: "#eef2f7", textureUrl: null },
+      ground: { type: "color", color: "#eef2f7", textureUrl: null },
+      objects: [
+        { ...object("obj_1", "props.traffic-cone"), position: { x: 1.5, y: 2.75, z: 1.5 } }
+      ]
+    };
+
+    expect(normalizeScene(scene).objects[0].position).toEqual({ x: 1.5, y: 2.75, z: 1.5 });
+  });
+
   test("leaves already-populated fields untouched", () => {
     const scene: Scene = {
       id: "scene_1",

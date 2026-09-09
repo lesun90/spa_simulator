@@ -147,7 +147,7 @@ function updateObject(
         ? {
             ...object,
             ...patch,
-            position: patch.position ? { ...patch.position, y: 0 } : { ...object.position, y: 0 }
+            position: normalizeObjectPosition(patch.position ?? object.position)
           }
         : cloneObject(object)
     )
@@ -156,4 +156,12 @@ function updateObject(
 
 function cloneObject(object: SceneObject): SceneObject {
   return { ...object, position: { ...object.position } };
+}
+
+function normalizeObjectPosition(position: SceneObject["position"]): SceneObject["position"] {
+  return {
+    x: Number.isFinite(position.x) ? position.x : 0,
+    y: Number.isFinite(position.y) ? position.y : 0,
+    z: Number.isFinite(position.z) ? position.z : 0
+  };
 }

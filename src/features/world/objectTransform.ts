@@ -60,6 +60,7 @@ export function snapRotationToQuarterTurn(radians: number): number {
 export function hasTransformChanged(start: ObjectTransformSnapshot, current: ObjectTransformSnapshot): boolean {
   return (
     Math.abs(start.position.x - current.position.x) > TRANSFORM_EPSILON ||
+    Math.abs(start.position.y - current.position.y) > TRANSFORM_EPSILON ||
     Math.abs(start.position.z - current.position.z) > TRANSFORM_EPSILON ||
     Math.abs(start.rotationY - current.rotationY) > TRANSFORM_EPSILON ||
     Math.abs(start.scale - current.scale) > TRANSFORM_EPSILON

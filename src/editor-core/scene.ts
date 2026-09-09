@@ -91,7 +91,7 @@ export function normalizeScene(scene: Scene): Scene {
     objects: scene.objects.map((object) => ({
       ...object,
       name: typeof object.name === "string" && object.name.trim() ? object.name : names.get(object.id) ?? assetSlug(object.assetId),
-      position: { ...object.position, y: 0 }
+      position: normalizeObjectPosition(object.position)
     }))
   };
 }
@@ -121,4 +121,12 @@ export function objectDisplayNames(objects: SceneObject[]): Map<string, string> 
     names.set(object.id, object.name?.trim() || `${slug}_${count}`);
   }
   return names;
+}
+
+function normalizeObjectPosition(position: SceneObject["position"]): SceneObject["position"] {
+  return {
+    x: Number.isFinite(position.x) ? position.x : 0,
+    y: Number.isFinite(position.y) ? position.y : 0,
+    z: Number.isFinite(position.z) ? position.z : 0
+  };
 }

@@ -73,6 +73,7 @@ describe("object transform gestures", () => {
 
     expect(hasTransformChanged(start, { position: { x: 2, y: 0, z: 3 }, rotationY: 1, scale: 1.5 })).toBe(false);
     expect(hasTransformChanged(start, { position: { x: 2.2, y: 0, z: 3 }, rotationY: 1, scale: 1.5 })).toBe(true);
+    expect(hasTransformChanged(start, { position: { x: 2, y: 2.75, z: 3 }, rotationY: 1, scale: 1.5 })).toBe(true);
   });
 
   test("maps pointer buttons to direct object transform modes", () => {
