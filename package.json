@@ -8,6 +8,7 @@
     "build": "tsc --noEmit && vite build",
     "build:check": "tsc --noEmit && vite build --outDir /tmp/steerlab-dist --emptyOutDir",
     "assets:import": "vite-node scripts/importAssets.ts",
+    "assets:thumbnails": "vite-node scripts/generateAssetThumbnails.ts",
     "test": "vitest"
   },
   "dependencies": {
