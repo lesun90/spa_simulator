@@ -26,6 +26,14 @@
       "east boundary contains empty sample cells",
       "south boundary contains empty sample cells",
       "west boundary contains empty sample cells"
-    ]
+    ],
+    "defaultWeight": 1
+  },
+  "semantics": {
+    "roles": [
+      "terrain.ground",
+      "terrain.elevated"
+    ],
+    "sockets": {}
   }
 }

@@ -58,3 +58,6 @@ export function cloneCompactPalette(compact: CompactPlanarPalette): CompactPlana
 }
 
 export function compactDirectionIndex(direction: PlanarDirection) { return planarDirections.indexOf(direction); }
+
+/** Preserve catalog ordering when the worker solver sorts compact variant IDs. */
+export function compactVariantId(index: number) { return String(index).padStart(8, "0"); }

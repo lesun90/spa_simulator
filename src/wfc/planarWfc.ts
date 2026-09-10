@@ -57,6 +57,7 @@ export interface PlanarWfcProgress {
 }
 
 export type PlanarPolicySpec =
+  | { type: "cell-variants"; id: string; column: number; row: number; variantIds: readonly string[] }
   | { type: "max-role-count"; id: string; role: string; max: number }
   | { type: "required-boundary-port"; id: string; direction: PlanarDirection; channel: string; positions?: readonly number[] }
   | { type: "forbid-role-adjacency"; id: string; sourceRole: string; neighborRole: string }
@@ -228,7 +229,7 @@ export function solvePlanarWfc(palette: PlanarWfcPalette, request: PlanarWfcRequ
       }
       latestPolicyRejection = rejection;
       backtracks++;
-      if (!backtrack()) return { status: "failed", seed, reason: "quality-policy", diagnostics: [rejection] };
+      if (backtracks > (request.maxBacktracks ?? Math.max(256, cells.length * 8)) || !backtrack()) return { status: "failed", seed, reason: "quality-policy", diagnostics: [rejection] };
       continue;
     }
     const choices = weightedShuffle(bitIndexes(cells[nextCell]), variants, random);
@@ -254,6 +255,14 @@ export function arePlanarNeighborsCompatible(palette: PlanarWfcPalette, sourceId
 
 function constrainRequiredPorts(specs: readonly PlanarPolicySpec[], cells: Uint32Array<ArrayBufferLike>[], variants: readonly PlanarWfcVariant[], width: number, depth: number): string | undefined {
   for (const spec of specs) {
+    if (spec.type === "cell-variants") {
+      if (!Number.isInteger(spec.column) || !Number.isInteger(spec.row) || spec.column < 0 || spec.column >= width || spec.row < 0 || spec.row >= depth) return `${spec.id}: constrained cell is outside the layout.`;
+      const domain = cells[spec.row * width + spec.column];
+      const allowed = new Set(spec.variantIds);
+      forEachBit(domain, (index) => { if (!allowed.has(variants[index].id)) domain[index >>> 5] &= ~(1 << (index & 31)); });
+      if (isEmpty(domain)) return `${spec.id}: no tile satisfies the planned variant constraints.`;
+      continue;
+    }
     const requirements = spec.type === "required-cell-ports"
       ? [{ column: spec.column, row: spec.row, ports: spec.ports, forbidden: false, exact: false }]
       : spec.type === "exact-cell-ports"

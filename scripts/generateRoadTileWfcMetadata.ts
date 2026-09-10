@@ -8,9 +8,6 @@ import { wfcDirections, type RoadTopologyTag, type WfcDirection, type WfcMetadat
 
 const DEFAULT_ASSET_ROOT = "assets/3d-road-tiles";
 const GRID_SIZE = 16;
-// Compare the boundary-near row, not tile interiors: a turning curb may already
-// diverge from a straight curb in the second row while their seams still meet.
-const EDGE_STRIP_CELLS = 1;
 const EMPTY_CELL = "empty";
 const POSITION_EPSILON_RATIO = 1 / 1000;
 const TOP_SURFACE_NORMAL_Y_MIN = 0.65;
@@ -282,7 +279,6 @@ async function loadTileSamples(modelFile: string): Promise<TileSamples> {
 
 function generateSocketMap(tile: TileSamples): WfcSocketMap {
   const epsilon = Math.max(tile.bounds.getSize(new THREE.Vector3()).length() * POSITION_EPSILON_RATIO, 0.0001);
-  const topSurface = sampleTopSurface(tile);
 
   return Object.fromEntries(
     wfcDirections.map((direction) => {
@@ -290,7 +286,7 @@ function generateSocketMap(tile: TileSamples): WfcSocketMap {
       const signature =
         direction === "top" || direction === "bottom"
           ? boundarySignature
-          : `${boundarySignature}|e:${topEdgeSignature(topSurface, direction)}`;
+          : `${boundarySignature}|e:${topEdgeSignature(tile, direction)}`;
       return [direction, signature];
     })
   ) as WfcSocketMap;
@@ -335,45 +331,6 @@ function sampleBoundary(tile: TileSamples, direction: WfcDirection, epsilon: num
         if (pointInProjectedTriangle(center, projected)) {
           sample.geometry[v][u] = "solid";
           sample.visual[v][u] = triangle.material;
-        }
-      }
-    }
-  }
-
-  return sample;
-}
-
-function sampleTopSurface(tile: TileSamples): BoundarySample {
-  const sample = createEmptyBoundarySample();
-  const heights = Array.from({ length: GRID_SIZE }, () => Array.from({ length: GRID_SIZE }, () => -Infinity));
-
-  for (const triangle of tile.triangles) {
-    const normal = new THREE.Triangle(triangle.points[0], triangle.points[1], triangle.points[2]).getNormal(new THREE.Vector3());
-    if (normal.y < TOP_SURFACE_NORMAL_Y_MIN) continue;
-
-    const projected = triangle.points.map((point) => ({
-      u: normalized(point.x, tile.bounds.min.x, tile.bounds.max.x),
-      v: normalized(point.z, tile.bounds.min.z, tile.bounds.max.z)
-    }));
-    const minU = Math.min(...projected.map((point) => point.u));
-    const maxU = Math.max(...projected.map((point) => point.u));
-    const minV = Math.min(...projected.map((point) => point.v));
-    const maxV = Math.max(...projected.map((point) => point.v));
-    const startU = clampGridIndex(Math.floor(minU * GRID_SIZE));
-    const endU = clampGridIndex(Math.floor(maxU * GRID_SIZE));
-    const startV = clampGridIndex(Math.floor(minV * GRID_SIZE));
-    const endV = clampGridIndex(Math.floor(maxV * GRID_SIZE));
-    const height = Math.max(...triangle.points.map((point) => point.y));
-
-    for (let v = startV; v <= endV; v += 1) {
-      for (let u = startU; u <= endU; u += 1) {
-        const center = { u: (u + 0.5) / GRID_SIZE, v: (v + 0.5) / GRID_SIZE };
-        if (height < heights[v][u]) continue;
-        if (pointInProjectedTriangle(center, projected)) {
-          heights[v][u] = height;
-          sample.geometry[v][u] = "solid";
-          sample.visual[v][u] = triangle.material;
-          sample.height[v][u] = heightToken(height);
         }
       }
     }
@@ -456,35 +413,38 @@ function socketSignature(sample: BoundarySample) {
   return `g:${gridSignature(sample.geometry)}|v:${gridSignature(sample.visual)}`;
 }
 
-function topEdgeSignature(sample: BoundarySample, direction: WfcDirection) {
-  return `g:${gridSignature(edgeStrip(sample.geometry, direction))}|v:${gridSignature(edgeStrip(sample.visual, direction))}|h:${gridSignature(edgeStrip(sample.height, direction))}`;
-}
-
-function edgeStrip(grid: string[][], direction: WfcDirection) {
-  const strip: string[][] = [];
-
-  for (let depth = 0; depth < EDGE_STRIP_CELLS; depth += 1) {
-    switch (direction) {
-      case "north":
-        strip.push([...grid[GRID_SIZE - 1 - depth]]);
-        break;
-      case "south":
-        strip.push([...grid[depth]]);
-        break;
-      case "east":
-        strip.push(grid.map((row) => row[GRID_SIZE - 1 - depth]));
-        break;
-      case "west":
-        strip.push(grid.map((row) => row[depth]));
-        break;
-      case "top":
-      case "bottom":
-        strip.push(...grid.map((row) => [...row]));
-        break;
+/** Sample the actual seam, not an inset row or a triangle's highest vertex.
+ * Interpolating the surface plane makes ramps meet flat roads at their true height.
+ */
+function topEdgeSignature(tile: TileSamples, direction: WfcDirection) {
+  const geometry: string[] = [];
+  const visual: string[] = [];
+  const heights: string[] = [];
+  const inset = 0.000001;
+  for (let index = 0; index < GRID_SIZE; index += 1) {
+    const along = (index + 0.5) / GRID_SIZE;
+    const u = direction === "east" ? 1 - inset : direction === "west" ? inset : along;
+    const v = direction === "north" ? 1 - inset : direction === "south" ? inset : along;
+    const x = THREE.MathUtils.lerp(tile.bounds.min.x, tile.bounds.max.x, u);
+    const z = THREE.MathUtils.lerp(tile.bounds.min.z, tile.bounds.max.z, v);
+    let height = -Infinity;
+    let material = EMPTY_CELL;
+    for (const triangle of tile.triangles) {
+      const [a, b, c] = triangle.points;
+      const normal = new THREE.Triangle(a, b, c).getNormal(new THREE.Vector3());
+      if (normal.y < TOP_SURFACE_NORMAL_Y_MIN) continue;
+      const projected = triangle.points.map((point) => ({ u: point.x, v: point.z }));
+      if (!pointInProjectedTriangle({ u: x, v: z }, projected)) continue;
+      const y = a.y - (normal.x * (x - a.x) + normal.z * (z - a.z)) / normal.y;
+      if (y < height - 0.00001) continue;
+      height = y;
+      material = triangle.material;
     }
+    geometry.push(Number.isFinite(height) ? "solid" : EMPTY_CELL);
+    visual.push(material);
+    heights.push(Number.isFinite(height) ? heightToken(height) : EMPTY_CELL);
   }
-
-  return strip;
+  return `g:${gridSignature([geometry])}|v:${gridSignature([visual])}|h:${gridSignature([heights])}`;
 }
 
 function gridSignature(grid: string[][], tokenNormalizer: (value: string) => string = normalizeToken) {

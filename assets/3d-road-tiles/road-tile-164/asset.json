@@ -90,5 +90,12 @@
       "top boundary contains empty sample cells",
       "bottom boundary contains empty sample cells"
     ]
+  },
+  "semantics": {
+    "roles": [
+      "road.surface",
+      "road.elevated"
+    ],
+    "sockets": {}
   }
 }

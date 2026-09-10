@@ -31,7 +31,7 @@ export function policiesFromWorldPlan(plan: WorldPlan): readonly PlanarPolicySpe
     }
   }
 
-  return policies;
+  return [...policies, ...(plan.tiles ?? []).map((cell) => ({ type: "cell-variants" as const, id: `scenery-${cell.column}-${cell.row}`, ...cell }))];
 }
 
 /** Validates the concrete output against the accepted version-one world-plan contract. */
@@ -40,6 +40,11 @@ export function validateWorldPlanResult(plan: WorldPlan, palette: PlanarWfcPalet
   const cells = new Map<string, (typeof result.cells)[number]>(result.cells.map((cell) => [`${cell.column},${cell.row}`, cell]));
   const planned = new Map<string, (typeof plan.corridors)[number]["cells"][number]>(plan.corridors.flatMap((corridor) => corridor.cells.map((cell) => [`${cell.column},${cell.row}`, cell])));
   const diagnostics: string[] = [];
+
+  for (const tile of plan.tiles ?? []) {
+    const actual = cells.get(`${tile.column},${tile.row}`);
+    if (!actual || !tile.variantIds.includes(actual.variant.id)) diagnostics.push(`Scenery plan mismatch at ${tile.column},${tile.row}.`);
+  }
 
   if (cells.size !== plan.bounds.width * plan.bounds.depth) diagnostics.push("The concrete result does not place every planned world cell.");
   for (const [key, cell] of cells) {

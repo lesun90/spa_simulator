@@ -6,6 +6,8 @@ export interface CreateWorldPlanRequest extends WorldBounds {
   /** Fraction of macro regions visited by the primary route. */
   roadCoverage: number;
   maxRegionsPerAxis?: number;
+  /** Leave room for crosswalk approaches and scenery in small road worlds. */
+  scenic?: boolean;
 }
 
 const zones: readonly RegionZoneRole[] = ["terrain", "park", "built", "water"];
@@ -26,13 +28,13 @@ export function createWorldPlan(request: CreateWorldPlanRequest): WorldPlan {
   const regions = createRegions(columns, rows, columnWidths, rowDepths, request.seed);
   const graph = createGraph(regions);
   const routeIds = selectRoute(graph, request.seed, request.roadCoverage);
-  const portals = createPortals(routeIds, graph, request.seed);
+  const portals = createPortals(routeIds, graph, request.seed, request.scenic);
 
   return {
     bounds: { width: request.width, depth: request.depth },
     graph,
     route: { regionIds: routeIds, portals },
-    corridors: createCorridors(routeIds, graph, portals)
+    corridors: createCorridors(routeIds, graph, portals, request.scenic)
   };
 }
 
@@ -115,7 +117,7 @@ function findCycle(graph: MacroRegionGraph, startId: string, target: number) {
   return visit([startId]);
 }
 
-function createCorridors(route: readonly string[], graph: MacroRegionGraph, portals: readonly RoadPortal[]): readonly LocalCorridorPlan[] {
+function createCorridors(route: readonly string[], graph: MacroRegionGraph, portals: readonly RoadPortal[], scenic = false): readonly LocalCorridorPlan[] {
   const byId = new Map(graph.regions.map((region) => [region.id, region]));
   return route.map((regionId) => {
     const endpoints = portals.flatMap((portal) => {
@@ -125,12 +127,12 @@ function createCorridors(route: readonly string[], graph: MacroRegionGraph, port
     });
     const region = byId.get(regionId)!;
     if (endpoints.length !== 2) throw new Error(`${regionId} must have exactly two primary route portals.`);
-    return { regionId, cells: corridorCells(region, endpoints[0]!, endpoints[1]!) };
+    return { regionId, cells: corridorCells(region, endpoints[0]!, endpoints[1]!, scenic) };
   });
 }
 
-function corridorCells(region: MacroRegion, start: GridCell & { direction: PlanarDirection }, end: GridCell & { direction: PlanarDirection }): readonly PlannedRoadCell[] {
-  const cells = [start, ...manhattanPath(start, end)];
+function corridorCells(region: MacroRegion, start: GridCell & { direction: PlanarDirection }, end: GridCell & { direction: PlanarDirection }, scenic = false): readonly PlannedRoadCell[] {
+  const cells = [start, ...manhattanPath(start, end, scenic && (start.direction === "north" || start.direction === "south"))];
   const unique = new Map(cells.map((cell) => [`${cell.column},${cell.row}`, cell]));
   const output: PlannedRoadCell[] = [];
   for (const cell of unique.values()) {
@@ -147,17 +149,13 @@ function corridorCells(region: MacroRegion, start: GridCell & { direction: Plana
   return output;
 }
 
-function manhattanPath(start: GridCell, end: GridCell): readonly GridCell[] {
+function manhattanPath(start: GridCell, end: GridCell, verticalFirst = false): readonly GridCell[] {
   const output: GridCell[] = [];
-  let column = start.column;
-  let row = start.row;
-  while (column !== end.column) {
-    column += Math.sign(end.column - column);
-    output.push({ column, row });
-  }
-  while (row !== end.row) {
-    row += Math.sign(end.row - row);
-    output.push({ column, row });
+  const cell = { column: start.column, row: start.row };
+  const axes = verticalFirst ? ["row", "column"] as const : ["column", "row"] as const;
+  for (const axis of axes) while (cell[axis] !== end[axis]) {
+    cell[axis] += Math.sign(end[axis] - cell[axis]);
+    output.push({ ...cell });
   }
   return output;
 }
@@ -170,12 +168,25 @@ function directionFrom(source: GridCell, target: GridCell): PlanarDirection | un
   return undefined;
 }
 
-function createPortals(route: readonly string[], graph: MacroRegionGraph, seed: number): readonly RoadPortal[] {
+function createPortals(route: readonly string[], graph: MacroRegionGraph, seed: number, scenic = false): readonly RoadPortal[] {
   const byId = new Map(graph.regions.map((region) => [region.id, region]));
   return route.map((regionId, index) => {
     const from = byId.get(regionId)!;
     const to = byId.get(route[(index + 1) % route.length]!)!;
-    return createPortal(from, to, index, seed);
+    const portal = createPortal(from, to, index, seed);
+    const horizontal = portal.from.direction === "east" || portal.from.direction === "west";
+    const sides = [...new Set(route.map((id) => horizontal ? byId.get(id)!.row : byId.get(id)!.column))].sort((a, b) => a - b);
+    if (!scenic || sides.length !== 2) return portal;
+    // Expand each two-district axis independently, including narrow rectangular
+    // worlds. Both sides of a portal receive the same outward coordinate.
+    const span = horizontal ? from.bounds.depth : from.bounds.width;
+    const side = horizontal ? from.row : from.column;
+    const offset = span <= 2 ? Math.floor(span / 2) : side === sides[0] ? 1 : span - 2;
+    const coordinate = (horizontal ? from.bounds.row : from.bounds.column) + offset;
+    return { ...portal,
+      from: { ...portal.from, ...(horizontal ? { row: coordinate } : { column: coordinate }) },
+      to: { ...portal.to, ...(horizontal ? { row: coordinate } : { column: coordinate }) }
+    };
   });
 }
 

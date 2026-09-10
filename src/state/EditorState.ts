@@ -28,7 +28,7 @@ import {
 } from "../api/client";
 import { createTemporaryAsset, selectedObject } from "./editorHelpers";
 import type { EditorTool } from "./types";
-import { policiesFromWorldPlan, validateWorldPlanResult } from "../wfc/worldPlanPolicies";
+import { validateWorldPlanResult } from "../wfc/worldPlanPolicies";
 import { createWorldPlan } from "../wfc/worldPlanner";
 import {
   paletteFromAssets,
@@ -267,19 +267,18 @@ export class EditorState {
     this.setWfcProgress({ status: "building-palette" });
     const roadScene = this.assets.some((asset) => asset.category === "3d-road-tiles");
     try {
-      const worldPlan = roadScene
-        ? createWorldPlan({ width: request.width, depth: request.depth, seed: request.seed, roadCoverage: 0.5 })
+      let worldPlan = roadScene
+        ? createWorldPlan({ width: request.width, depth: request.depth, seed: request.seed, roadCoverage: 0.5, scenic: true })
         : undefined;
       const palette = paletteFromAssets("shared-assets", this.assets, {
         tileWidth: request.tileWidth,
         tileDepth: request.tileDepth,
         purpose: roadScene ? "road-scene" : undefined
       });
-      const policies = [...(request.policies ?? []), ...(worldPlan ? policiesFromWorldPlan(worldPlan) : [])];
       const solved = await solvePlanarWfcInWorker(
         palette,
-        { ...request, policies },
-        { onProgress: (progress) => this.setWfcProgress(progress) }
+        request,
+        { worldPlan, onWorldPlan: (plan) => { worldPlan = plan; }, onProgress: (progress) => this.setWfcProgress(progress) }
       );
       const validationDiagnostics = worldPlan ? validateWorldPlanResult(worldPlan, palette, solved) : [];
       const result = sceneObjectsFromWfcResult(solved, request, palette);

@@ -52,4 +52,6 @@ export interface WorldPlan {
   graph: MacroRegionGraph;
   route: PrimaryRoute;
   corridors: readonly LocalCorridorPlan[];
+  /** Reviewed concrete features; the ordinary WFC solve must honor every cell. */
+  tiles?: readonly (GridCell & { variantIds: readonly string[] })[];
 }

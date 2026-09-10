@@ -5,7 +5,7 @@ import type { RoadTopologyKind } from "./socketTypes";
  * Other catalog tiles may appear in scenic WFC palettes but cannot fulfill routes.
  */
 export const reviewedRoadTopologyKinds: Readonly<Record<string, RoadTopologyKind>> = {
-  "025": "straight", "026": "dead-end", "031": "straight", "032": "t-junction",
+  "025": "straight", "026": "dead-end", "027": "t-junction", "034": "four-way", "031": "straight", "032": "t-junction",
   "038": "dead-end", "041": "t-junction", "043": "t-junction", "048": "curve",
   "141": "four-way", "142": "straight", "153": "corner", "154": "straight",
   "156": "t-junction", "161": "straight", "162": "straight",

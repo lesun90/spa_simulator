@@ -39,5 +39,21 @@
       "west boundary contains empty sample cells",
       "top boundary contains empty sample cells"
     ]
+  },
+  "semantics": {
+    "roles": [
+      "terrain.ground",
+      "terrain.water",
+      "terrain.shore",
+      "terrain.elevated"
+    ],
+    "sockets": {
+      "east": {
+        "type": "water"
+      },
+      "west": {
+        "type": "water"
+      }
+    }
   }
 }

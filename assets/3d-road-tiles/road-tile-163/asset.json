@@ -26,7 +26,8 @@
       "east boundary contains empty sample cells",
       "south boundary contains empty sample cells",
       "west boundary contains empty sample cells"
-    ]
+    ],
+    "defaultWeight": 5
   },
   "semantics": {
     "roles": [

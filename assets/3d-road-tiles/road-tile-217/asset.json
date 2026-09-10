@@ -53,5 +53,19 @@
       "west boundary contains empty sample cells",
       "top boundary contains empty sample cells"
     ]
+  },
+  "semantics": {
+    "roles": [
+      "road.surface",
+      "road.bridge"
+    ],
+    "sockets": {
+      "east": {
+        "type": "water"
+      },
+      "west": {
+        "type": "water"
+      }
+    }
   }
 }
