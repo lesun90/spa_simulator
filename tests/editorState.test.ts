@@ -174,6 +174,19 @@ test("generates a connected WFC layout as one undoable scene operation", async (
   expect(state.scene?.objects).toHaveLength(6);
 });
 
+test("falls back to an unconstrained layout when road route constraints contradict the catalog", async () => {
+  const state = new EditorState();
+  state.history = { scene: createScene("Downtown"), undoStack: [], redoStack: [] };
+  state.assets = [
+    asset({ id: "roads.only", category: "3d-road-tiles", wfc: wfc("roads.only") })
+  ];
+
+  await state.generateWfcLayout({ width: 4, depth: 4, seed: 12, tileWidth: 3, tileDepth: 3 });
+
+  expect(state.scene?.objects).toHaveLength(16);
+  expect(state.notice).toContain("without road route constraints");
+});
+
 test("inspection resolution is independent from placement resolution", () => {
   const state = new EditorState();
   const onPlacement = vi.fn();

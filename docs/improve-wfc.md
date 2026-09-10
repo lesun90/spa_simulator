@@ -5,11 +5,11 @@
 | Phase | Status | Notes |
 | --- | --- | --- |
 | 1. Authoritative road metadata | Complete | Reviewed route-road set is explicit; every route variant has directional `road` edges. |
-| 2. World planning types | In progress | Implementing deterministic macro-region planning next. |
-| 3. Planned concrete WFC | Not started | Requires a completed world plan. |
-| 4. Validation and recovery | Not started | Depends on planned concrete WFC. |
-| 5. Retire prototype overlay | Not started | Remove only after the replacement is validated. |
-| 6. Quality corpus | Not started | Establish once end-to-end generation is stable. |
+| 2. World planning types | Complete | Deterministic macro-region plans, route cycles, paired portals, and corridors are implemented. |
+| 3. Planned concrete WFC | Complete | Concrete WFC receives exact road constraints from the world plan. |
+| 4. Validation and recovery | In progress | Final-world plan validation is active; the solver provides bounded backtracking, while plan-level retry escalation remains future work. |
+| 5. Retire prototype overlay | Complete | The generation path no longer builds or overlays direct road objects. |
+| 6. Quality corpus | Complete for structural validation | A deterministic 15-scene multi-scale corpus and machine-readable reports are available; rendered screenshots and empirical visual thresholds remain future work. |
 
 ## Phase 1: authoritative road-edge metadata
 
@@ -77,7 +77,9 @@ Rules already agreed:
 
 Add pure unit tests for partition validity, deterministic plans, target route coverage, simple-cycle topology, portal reciprocity, and route/non-route portal counts.
 
-**Result:** generation can produce and validate an abstract world plan before selecting any 3D tiles.
+**Completed implementation:** [worldPlan.ts](../src/wfc/worldPlan.ts), [worldPlanner.ts](../src/wfc/worldPlanner.ts), and [worldPlanner.test.ts](../tests/worldPlanner.test.ts) implement deterministic partitioning, zone assignment, simple primary cycles, reciprocal portals, and within-region Manhattan corridors.
+
+**Result:** generation produces and validates an abstract world plan before selecting any 3D tiles.
 
 ## Phase 3: make concrete WFC honor the plan
 
@@ -89,7 +91,17 @@ Replace direct road realization and overlay with constrained local solving:
 4. Retain exact physical socket propagation on every neighboring pair.
 5. Solve regions/chunks and assemble the world grid.
 
+**Completed implementation:** [worldPlanPolicies.ts](../src/wfc/worldPlanPolicies.ts) constrains every planned corridor cell to its exact route edges and forbids roads elsewhere. [EditorState.ts](../src/state/EditorState.ts) now supplies those constraints to the ordinary concrete WFC solve. It no longer overlays directly instantiated road objects.
+
 **Result:** visible roads are selected by WFC itself and physically match their surroundings.
+
+### Current feasibility blocker
+
+The active real-catalog generation path is not production-ready. A reproducible investigation is recorded in [road-generation-feasibility-investigation.md](road-generation-feasibility-investigation.md).
+
+**Required correction before calling Phase 3 complete:** connectable reviewed turn assets, a route-only road palette, a distinct non-route terrain/zone palette, and no unconstrained fallback for a requested road scene.
+
+Until these prerequisites exist, a failed constrained route must be reported as infeasible with diagnostics rather than silently converted into an unrelated roadless or all-road-tile layout.
 
 ## Phase 4: validate and recover
 
@@ -115,7 +127,9 @@ local solve seed
 → alternate partition
 ```
 
-**Result:** generation either returns a demonstrably valid world or structured diagnostics. It never silently falls back to unrelated generic fill.
+**Completed implementation:** [validateWorldPlanResult](../src/wfc/worldPlanPolicies.ts) checks placement completeness, planned road edges, and physical east/north seams before EditorState accepts a generated layout. A failure is reported instead of falling back to unrelated fill.
+
+**Implemented recovery boundary:** the concrete solver uses deterministic bounded backtracking. Plan-level retries for alternate corridors, portals, routes, and partitions remain future work because a successful alternate plan must preserve the same external request contract and diagnostics.
 
 ## Phase 5: retire the prototype path
 
@@ -130,13 +144,21 @@ tile-grid abstract topology
 
 Retain the reusable exact socket solver, worker transport, deterministic random derivation, and reviewed metadata.
 
+**Completed implementation:** [EditorState.ts](../src/state/EditorState.ts) now invokes world planning and uses the plan-derived policies in one concrete solve. The former `createRoadTopologyPolicies`, direct road realization, and `overlayRoadTopology(...)` path are no longer used by layout generation.
+
 **Result:** one coherent physical-and-semantic generation path.
 
 ## Phase 6: evaluate quality systematically
 
 Create a fixed, multi-scale seed corpus with route-coverage variations. Produce screenshots, topology overlays, final road-component overlays, and machine-readable reports. Start with hard correctness gates; establish empirical asset-diversity, road-density, zone-diversity, and retry baselines before adding soft thresholds.
 
-**Result:** quality is measured across scenes and seeds rather than inferred from a single preview.
+**Completed implementation:** planner and policy tests now cover deterministic plans, partition coverage, target route coverage, paired portals, non-route isolation, corridor endpoints, exact planned road constraints, and plan-result validation.
+
+**Completed implementation:** `npm run wfc:world-plan:verify` runs 15 deterministic structural scenes across 16, 24, 32, 50, and 100 tile worlds, using fixed seeds and route-coverage variations. It emits machine-readable reports from [worldPlanReport.ts](../src/wfc/worldPlanReport.ts) with macro-region, route, portal, corridor, and solver metrics.
+
+**Remaining:** rendered screenshots, topology overlays, and empirical visual thresholds require an offscreen rendering workflow and should be added when that workflow exists.
+
+**Result:** structural quality is measured across scenes and seeds rather than inferred from a single preview.
 
 ## Dependency order
 

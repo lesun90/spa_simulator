@@ -50,42 +50,6 @@ function sceneObjectsFromSolvedCells(cells: readonly { column: number; row: numb
 export function previewObjectsFromWfcProgress(cells: readonly { column: number; row: number; variant: PlanarWfcVariant }[], seed: number, request: GenerateWfcLayoutRequest, palette: PlanarWfcPalette) { return sceneObjectsFromSolvedCells(cells, seed, request, palette); }
 function previewObjectsFromCompactCells(cells: readonly CompactCell[], seed: number, request: GenerateWfcLayoutRequest, palette: PlanarWfcPalette) { return sceneObjectsFromSolvedCells(cells.map((cell) => ({ ...cell, variant: palette.variants[cell.variantIndex] })), seed, request, palette); }
 
-/**
- * Realizes a solved abstract road network with reviewed road variants. Exact geometric socket
- * matching is deliberately not applied here: the road tags are the authored connectivity contract.
- * The generic concrete WFC palette remains available for assets with compatible physical sockets.
- */
-export function sceneObjectsFromRoadTopologyPolicies(policies: readonly PlanarPolicySpec[], seed: number, request: GenerateWfcLayoutRequest, palette: PlanarWfcPalette): readonly SceneObject[] {
-  return policies.flatMap((policy) => {
-    if (policy.type !== "exact-cell-ports") return [];
-    const directions = policy.ports.filter((port) => port.channel === "road").map((port) => port.direction);
-    const candidates = palette.variants.filter((variant) => roadDirections(variant).length === directions.length && directions.every((direction) => roadDirections(variant).includes(direction)));
-    if (!candidates.length) return [];
-    const variant = candidates[stableIndex(seed, policy.column, policy.row, candidates.length)]!;
-    return sceneObjectsFromSolvedCells([{ column: policy.column, row: policy.row, variant }], seed, request, palette);
-  });
-}
-
-/** Replaces generic fill cells with the semantic road cells at the same grid positions. */
-export function overlayRoadTopology(fill: readonly SceneObject[], roads: readonly SceneObject[]): readonly SceneObject[] {
-  const roadsById = new Map(roads.map((object) => [object.id, object]));
-  const combined = fill.map((object) => roadsById.get(object.id) ?? object);
-  const filledIds = new Set(fill.map((object) => object.id));
-  return [...combined, ...roads.filter((object) => !filledIds.has(object.id))];
-}
-
-function roadDirections(variant: PlanarWfcVariant) {
-  return planarDirections.filter((direction) => variant.semanticPorts?.[direction]?.includes("road"));
-}
-
-function stableIndex(seed: number, column: number, row: number, length: number) {
-  let value = (seed ^ Math.imul(column + 1, 0x9e3779b9) ^ Math.imul(row + 1, 0x85ebca6b)) >>> 0;
-  value ^= value >>> 16;
-  value = Math.imul(value, 0x7feb352d) >>> 0;
-  value ^= value >>> 15;
-  return (value >>> 0) % length;
-}
-
 /** Builds one solver palette from every compatible asset in the requested category. */
 export function paletteFromAssets(id: string, assets: readonly AssetCatalogEntry[], options: { tileWidth?: number; tileDepth?: number; category?: string } = {}): PlanarWfcPalette {
   const key = JSON.stringify({ id, tileWidth: options.tileWidth ?? DEFAULT_WFC_TILE_SIZE, tileDepth: options.tileDepth ?? DEFAULT_WFC_TILE_SIZE, category: options.category });

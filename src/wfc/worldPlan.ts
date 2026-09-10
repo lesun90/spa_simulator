@@ -38,9 +38,13 @@ export interface PrimaryRoute {
   portals: readonly RoadPortal[];
 }
 
+export interface PlannedRoadCell extends GridCell {
+  directions: readonly PlanarDirection[];
+}
+
 export interface LocalCorridorPlan {
   regionId: string;
-  cells: readonly GridCell[];
+  cells: readonly PlannedRoadCell[];
 }
 
 export interface WorldPlan {

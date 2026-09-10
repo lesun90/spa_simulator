@@ -22,9 +22,16 @@ describe("world planning", () => {
     expect(cells).toHaveLength(request.width * request.depth);
   });
 
-  test("uses the requested fraction of macro regions for route coverage", () => {
+  test("uses the nearest feasible fraction of macro regions for route coverage", () => {
     const plan = createWorldPlan(request);
-    expect(plan.route.regionIds).toHaveLength(Math.round(plan.graph.regions.length * request.roadCoverage));
+    const requested = Math.max(4, Math.round(plan.graph.regions.length * request.roadCoverage));
+    expect(plan.route.regionIds).toHaveLength(requested % 2 === 0 ? requested : requested - 1);
+  });
+
+  test("rounds an odd coverage target to a realizable grid cycle", () => {
+    const plan = createWorldPlan({ width: 32, depth: 32, seed: 1, roadCoverage: 0.5 });
+    expect(plan.graph.regions).toHaveLength(9);
+    expect(plan.route.regionIds).toHaveLength(4);
   });
 
   test("forms a simple region cycle with reciprocal paired portals", () => {
@@ -46,6 +53,23 @@ describe("world planning", () => {
     expect([...portalCounts.values()]).toEqual(Array(plan.route.regionIds.length).fill(2));
     const nonRoute = plan.graph.regions.filter((region) => !routeIds.has(region.id));
     expect(nonRoute.every((region) => !portalCounts.has(region.id))).toBe(true);
+  });
+
+  test("connects each route region's two portals with an internal corridor", () => {
+    const plan = createWorldPlan(request);
+    const byRegionId = new Map(plan.corridors.map((corridor) => [corridor.regionId, corridor]));
+    for (const regionId of plan.route.regionIds) {
+      const corridor = byRegionId.get(regionId)!;
+      const portalEndpoints = plan.route.portals.flatMap((portal) => [
+        ...(portal.fromRegionId === regionId ? [portal.from] : []),
+        ...(portal.toRegionId === regionId ? [portal.to] : [])
+      ]);
+      for (const endpoint of portalEndpoints) {
+        const cell = corridor.cells.find((candidate) => candidate.column === endpoint.column && candidate.row === endpoint.row);
+        expect(cell?.directions).toContain(endpoint.direction);
+      }
+      expect(corridor.cells).toHaveLength(new Set(corridor.cells.map((cell) => `${cell.column},${cell.row}`)).size);
+    }
   });
 
   test("keeps portals off long shared-border corners", () => {

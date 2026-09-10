@@ -1,5 +1,5 @@
 import type { PlanarDirection } from "./planarWfc";
-import type { GridCell, MacroRegion, MacroRegionGraph, RegionZoneRole, RoadPortal, WorldBounds, WorldPlan } from "./worldPlan";
+import type { GridCell, LocalCorridorPlan, MacroRegion, MacroRegionGraph, PlannedRoadCell, RegionZoneRole, RoadPortal, WorldBounds, WorldPlan } from "./worldPlan";
 
 export interface CreateWorldPlanRequest extends WorldBounds {
   seed: number;
@@ -32,7 +32,7 @@ export function createWorldPlan(request: CreateWorldPlanRequest): WorldPlan {
     bounds: { width: request.width, depth: request.depth },
     graph,
     route: { regionIds: routeIds, portals },
-    corridors: []
+    corridors: createCorridors(routeIds, graph, portals)
   };
 }
 
@@ -89,12 +89,16 @@ function createGraph(regions: readonly MacroRegion[]): MacroRegionGraph {
 }
 
 function selectRoute(graph: MacroRegionGraph, seed: number, coverage: number) {
-  const target = Math.max(4, Math.min(graph.regions.length, Math.round(graph.regions.length * coverage)));
+  const requested = Math.max(4, Math.min(graph.regions.length, Math.round(graph.regions.length * coverage)));
+  // The macro graph is orthogonal and therefore bipartite: every simple cycle has an even size.
+  // Choose the nearest feasible cycle size rather than failing a valid coverage request such as 50% of 9 regions.
+  const target = requested % 2 === 0 ? requested : requested - 1;
   const ordered = [...graph.regions].sort((a, b) => stableIndex(seed, a.column, a.row, 1_000) - stableIndex(seed, b.column, b.row, 1_000));
-  const start = ordered[0]!;
-  const route = findCycle(graph, start.id, target);
-  if (!route) throw new Error(`Cannot create a primary route with ${target} regions.`);
-  return route;
+  for (const start of ordered) {
+    const route = findCycle(graph, start.id, target);
+    if (route) return route;
+  }
+  throw new Error(`Cannot create a primary route with ${target} regions.`);
 }
 
 function findCycle(graph: MacroRegionGraph, startId: string, target: number) {
@@ -109,6 +113,61 @@ function findCycle(graph: MacroRegionGraph, startId: string, target: number) {
     return undefined;
   };
   return visit([startId]);
+}
+
+function createCorridors(route: readonly string[], graph: MacroRegionGraph, portals: readonly RoadPortal[]): readonly LocalCorridorPlan[] {
+  const byId = new Map(graph.regions.map((region) => [region.id, region]));
+  return route.map((regionId) => {
+    const endpoints = portals.flatMap((portal) => {
+      if (portal.fromRegionId === regionId) return [portal.from];
+      if (portal.toRegionId === regionId) return [portal.to];
+      return [];
+    });
+    const region = byId.get(regionId)!;
+    if (endpoints.length !== 2) throw new Error(`${regionId} must have exactly two primary route portals.`);
+    return { regionId, cells: corridorCells(region, endpoints[0]!, endpoints[1]!) };
+  });
+}
+
+function corridorCells(region: MacroRegion, start: GridCell & { direction: PlanarDirection }, end: GridCell & { direction: PlanarDirection }): readonly PlannedRoadCell[] {
+  const cells = [start, ...manhattanPath(start, end)];
+  const unique = new Map(cells.map((cell) => [`${cell.column},${cell.row}`, cell]));
+  const output: PlannedRoadCell[] = [];
+  for (const cell of unique.values()) {
+    const directions = [start, end].filter((endpoint) => endpoint.column === cell.column && endpoint.row === cell.row).map((endpoint) => endpoint.direction);
+    for (const neighbor of cells) {
+      const direction = directionFrom(cell, neighbor);
+      if (direction && !directions.includes(direction)) directions.push(direction);
+    }
+    if (cell.column < region.bounds.column || cell.column >= region.bounds.column + region.bounds.width || cell.row < region.bounds.row || cell.row >= region.bounds.row + region.bounds.depth) {
+      throw new Error(`Corridor leaves ${region.id}.`);
+    }
+    output.push({ column: cell.column, row: cell.row, directions: [...new Set(directions)].sort() as PlanarDirection[] });
+  }
+  return output;
+}
+
+function manhattanPath(start: GridCell, end: GridCell): readonly GridCell[] {
+  const output: GridCell[] = [];
+  let column = start.column;
+  let row = start.row;
+  while (column !== end.column) {
+    column += Math.sign(end.column - column);
+    output.push({ column, row });
+  }
+  while (row !== end.row) {
+    row += Math.sign(end.row - row);
+    output.push({ column, row });
+  }
+  return output;
+}
+
+function directionFrom(source: GridCell, target: GridCell): PlanarDirection | undefined {
+  if (target.column === source.column && target.row === source.row + 1) return "north";
+  if (target.column === source.column + 1 && target.row === source.row) return "east";
+  if (target.column === source.column && target.row === source.row - 1) return "south";
+  if (target.column === source.column - 1 && target.row === source.row) return "west";
+  return undefined;
 }
 
 function createPortals(route: readonly string[], graph: MacroRegionGraph, seed: number): readonly RoadPortal[] {

@@ -12,6 +12,7 @@
     "assets:road-wfc": "vite-node scripts/generateRoadTileWfcMetadata.ts",
     "assets:road-topology": "vite-node scripts/retagRoadTopology.ts",
     "assets:road-wfc:verify": "vite-node scripts/verifyRoadWfc.ts",
+    "wfc:world-plan:verify": "vite-node scripts/verifyWorldPlanCorpus.ts",
     "assets:thumbnails": "vite-node scripts/generateAssetThumbnails.ts",
     "test": "vitest"
   },

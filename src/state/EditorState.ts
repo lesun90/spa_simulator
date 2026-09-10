@@ -28,11 +28,10 @@ import {
 } from "../api/client";
 import { createTemporaryAsset, selectedObject } from "./editorHelpers";
 import type { EditorTool } from "./types";
-import { createRoadTopologyPolicies } from "../wfc/roadTopology";
+import { policiesFromWorldPlan, validateWorldPlanResult } from "../wfc/worldPlanPolicies";
+import { createWorldPlan } from "../wfc/worldPlanner";
 import {
-  overlayRoadTopology,
   paletteFromAssets,
-  sceneObjectsFromRoadTopologyPolicies,
   sceneObjectsFromWfcResult,
   solvePlanarWfcInWorker,
   isGeneratedWfcObject,
@@ -270,37 +269,34 @@ export class EditorState {
       tileWidth: request.tileWidth,
       tileDepth: request.tileDepth
     });
-    const roadTopology = this.assets.some((asset) => asset.category === "3d-road-tiles")
-      ? createRoadTopologyPolicies(request, palette.variants)
-      : [];
+    const worldPlan = this.assets.some((asset) => asset.category === "3d-road-tiles")
+      ? createWorldPlan({ width: request.width, depth: request.depth, seed: request.seed, roadCoverage: 0.5 })
+      : undefined;
+    const worldPlanPolicies = worldPlan ? policiesFromWorldPlan(worldPlan) : [];
+    const policies = [...(request.policies ?? []), ...worldPlanPolicies];
     try {
-      // Road topology is a semantic, authored constraint. The generic asset palette cannot yet
-      // realize it using exact geometric sockets, so render the reviewed road network directly
-      // instead of allowing an unrelated whole-grid solve to hide it.
-      const roadObjects = roadTopology.length
-        ? sceneObjectsFromRoadTopologyPolicies(roadTopology, request.seed, request, palette)
-        : [];
-      if (roadTopology.length && !roadObjects.length) {
-        this.setNotice("No reviewed road tile can realize the generated topology");
-        return;
-      }
-      const solved = await solvePlanarWfcInWorker(
+      let solved = await solvePlanarWfcInWorker(
         palette,
-        { ...request, policies: request.policies },
+        { ...request, policies },
         { onProgress: (progress) => this.setWfcProgress(progress) }
       );
+      let validationDiagnostics = worldPlan ? validateWorldPlanResult(worldPlan, palette, solved) : [];
+      let routeConstraintsUnavailable = false;
+      if (worldPlan && (solved.status === "failed" || validationDiagnostics.length)) {
+        routeConstraintsUnavailable = true;
+        solved = await solvePlanarWfcInWorker(
+          palette,
+          request,
+          { onProgress: (progress) => this.setWfcProgress(progress) }
+        );
+        validationDiagnostics = [];
+      }
       const result = sceneObjectsFromWfcResult(solved, request, palette);
-      const objects = roadObjects.length && result.status === "solved"
-        ? overlayRoadTopology(result.objects, roadObjects)
-        : roadObjects.length
-          ? roadObjects
-          : result.status === "solved"
-            ? result.objects
-            : [];
+      const objects = result.status === "solved" && !validationDiagnostics.length ? result.objects : [];
       if (!objects.length) {
-        this.setNotice(result.status === "failed"
+        this.setNotice(validationDiagnostics[0] ?? (result.status === "failed"
           ? result.diagnostics[0] ?? "WFC generation failed"
-          : "WFC generation failed");
+          : "WFC generation failed"));
         return;
       }
 
@@ -308,8 +304,8 @@ export class EditorState {
       this.history = executeCommand(this.history, replaceGeneratedLayoutCommand(objects, isGeneratedWfcObject));
       this.selectedObjectId = objects[0]?.id ?? null;
       this.emit("scene", "selection");
-      this.setNotice(result.status === "failed"
-        ? `Generated ${objects.length} road tiles without generic fill (seed ${request.seed})`
+      this.setNotice(routeConstraintsUnavailable
+        ? `Generated ${objects.length} tiles without road route constraints (seed ${request.seed})`
         : `Generated ${objects.length} tiles (seed ${request.seed})`);
     } catch (error) {
       this.setNotice(error instanceof Error ? error.message : "WFC generation failed");
