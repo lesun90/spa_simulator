@@ -14,6 +14,7 @@ import { ScrollRegion } from "../kit/ScrollRegion";
 import { segmentButtonRect } from "../kit/segmentedControl";
 import { TextField } from "../kit/TextField";
 import { rasterizeText } from "../kit/TextRenderer";
+import { configureHudCanvasTexture } from "../kit/textures";
 import { hudZ } from "../kit/zIndex";
 
 const PADDING = 16;
@@ -36,7 +37,7 @@ const APPEARANCE_BLOCK_HEIGHT = HEADER_HEIGHT + HEADER_GAP + CONTROL_HEIGHT + ST
 // The grid block: header + three labeled rows (cell size, scene size, placement).
 const GRID_BLOCK_HEIGHT = HEADER_HEIGHT + HEADER_GAP + CONTROL_HEIGHT + STACK_GAP + CONTROL_HEIGHT + STACK_GAP + CONTROL_HEIGHT;
 
-const WFC_BLOCK_HEIGHT = HEADER_HEIGHT + HEADER_GAP + CONTROL_HEIGHT + STACK_GAP + CONTROL_HEIGHT;
+const WFC_BLOCK_HEIGHT = HEADER_HEIGHT + HEADER_GAP + CONTROL_HEIGHT + STACK_GAP + CONTROL_HEIGHT + STACK_GAP + CONTROL_HEIGHT;
 
 const FOOTER_HEIGHT =
   SECTION_GAP + // above divider
@@ -79,8 +80,10 @@ export class SceneTabPanel {
   private readonly placementCellButton: Button;
   private readonly placementFreeButton: Button;
   private wfcHeader: SectionHeader;
+  private readonly wfcRandomSeedCheckbox: CheckboxControl;
   private readonly wfcSeedField: TextField;
   private readonly generateWfcButton: Button;
+  private useRandomWfcSeed = false;
 
   private rect: Rect;
   private readonly cleanups: Array<() => void> = [];
@@ -154,6 +157,9 @@ export class SceneTabPanel {
 
     this.wfcHeader = new SectionHeader(this.wfcHeaderRect());
     this.root.add(this.wfcHeader.root);
+    this.wfcRandomSeedCheckbox = new CheckboxControl(this.wfcRandomSeedCheckboxRect(), interaction, "Random seed", (checked) => {
+      this.useRandomWfcSeed = checked;
+    });
     this.wfcSeedField = new TextField(
       this.wfcSeedFieldRect(),
       interaction,
@@ -165,7 +171,7 @@ export class SceneTabPanel {
       fontSize: 11.5,
       onClick: () => this.generateWfcLayout()
     });
-    this.root.add(this.wfcSeedField.root, this.generateWfcButton.root);
+    this.root.add(this.wfcRandomSeedCheckbox.root, this.wfcSeedField.root, this.generateWfcButton.root);
 
     this.applyStaticHeaders();
 
@@ -299,9 +305,14 @@ export class SceneTabPanel {
     return { x: this.rect.x + PADDING, y, width: this.rect.width - PADDING * 2, height: HEADER_HEIGHT };
   }
 
-  private wfcSeedFieldRect(): Rect {
+  private wfcRandomSeedCheckboxRect(): Rect {
     const header = this.wfcHeaderRect();
     return { x: header.x, y: header.y + HEADER_HEIGHT + HEADER_GAP, width: header.width, height: CONTROL_HEIGHT };
+  }
+
+  private wfcSeedFieldRect(): Rect {
+    const randomSeed = this.wfcRandomSeedCheckboxRect();
+    return { x: randomSeed.x, y: randomSeed.y + CONTROL_HEIGHT + STACK_GAP, width: randomSeed.width, height: CONTROL_HEIGHT };
   }
 
   private generateWfcButtonRect(): Rect {
@@ -349,6 +360,7 @@ export class SceneTabPanel {
 
   private refreshWfcGeneration() {
     const generating = this.state.wfcProgress !== null;
+    this.wfcRandomSeedCheckbox.root.visible = !generating;
     this.wfcSeedField.root.visible = !generating;
     this.generateWfcButton.setDisabled(generating);
     this.generateWfcButton.setLabel(generating ? "Generating layout…" : "Generate layout");
@@ -433,12 +445,12 @@ export class SceneTabPanel {
   }
 
   private generateWfcLayout() {
-    this.normalizeWfcSeed();
     const grid = this.state.scene?.grid;
     if (!grid) return;
     const width = Math.floor(grid.width / grid.cellSize);
     const depth = Math.floor(grid.depth / grid.cellSize);
-    const seed = integer(this.wfcSeedField.getValue(), 1);
+    const seed = this.useRandomWfcSeed ? randomSeed() : integer(this.wfcSeedField.getValue(), 1);
+    this.wfcSeedField.setValue(String(seed));
     this.state.generateWfcLayout({ width, depth, seed, tileWidth: grid.cellSize, tileDepth: grid.cellSize });
   }
 
@@ -464,6 +476,7 @@ export class SceneTabPanel {
     this.sceneSizeField.setRect(this.sceneSizeFieldRect());
     this.placementCellButton.setRect(this.placementCellButtonRect());
     this.placementFreeButton.setRect(this.placementFreeButtonRect());
+    this.wfcRandomSeedCheckbox.setRect(this.wfcRandomSeedCheckboxRect());
     this.wfcSeedField.setRect(this.wfcSeedFieldRect());
     this.generateWfcButton.setRect(this.generateWfcButtonRect());
     this.applyStaticHeaders();
@@ -490,8 +503,103 @@ export class SceneTabPanel {
     this.placementLabel?.material.dispose();
     this.placementCellButton.dispose();
     this.placementFreeButton.dispose();
+    this.wfcRandomSeedCheckbox.dispose();
     this.wfcSeedField.dispose();
     this.generateWfcButton.dispose();
+  }
+}
+
+class CheckboxControl {
+  readonly root = new THREE.Group();
+  private readonly hitArea: THREE.Mesh;
+  private renderedMeshes: LabelMesh[] = [];
+  private hovered = false;
+  private checked = false;
+  private readonly unregister: () => void;
+
+  constructor(
+    private rect: Rect,
+    private readonly interaction: InteractionSystem,
+    private readonly label: string,
+    private readonly onChange: (checked: boolean) => void
+  ) {
+    this.hitArea = new THREE.Mesh(unitPlane, hudBasicMaterial({ visible: false }));
+    this.hitArea.position.z = hudZ.control;
+    this.root.add(this.hitArea);
+    this.unregister = this.interaction.register(this.hitArea, {
+      onClick: () => this.setChecked(!this.checked),
+      onHover: () => {
+        this.hovered = true;
+        this.render();
+      },
+      onLeave: () => {
+        this.hovered = false;
+        this.render();
+      }
+    });
+    this.applyRect();
+    this.render();
+  }
+
+  private setChecked(checked: boolean) {
+    if (this.checked === checked) return;
+    this.checked = checked;
+    this.onChange(checked);
+    this.render();
+  }
+
+  setRect(rect: Rect) {
+    this.rect = rect;
+    this.applyRect();
+    this.render();
+  }
+
+  private applyRect() {
+    this.hitArea.position.set(this.rect.x + this.rect.width / 2, this.rect.y + this.rect.height / 2, hudZ.control);
+    this.hitArea.scale.set(this.rect.width, this.rect.height, 1);
+  }
+
+  private render() {
+    for (const mesh of this.renderedMeshes) {
+      this.root.remove(mesh);
+      mesh.material.dispose();
+    }
+    this.renderedMeshes = [];
+
+    const boxSize = 16;
+    const boxRect: Rect = { x: this.rect.x, y: this.rect.y + (this.rect.height - boxSize) / 2, width: boxSize, height: boxSize };
+    const stroke = this.checked ? theme.accent.css : this.hovered ? theme.textMutedStrong.css : theme.border.css;
+    const box = rasterizeCheckbox(boxSize, stroke, this.checked ? theme.accent.css : theme.white.css);
+    const boxMaterial = hudBasicMaterial({ map: box.texture, transparent: true });
+    const boxMesh = new THREE.Mesh(unitPlane, boxMaterial);
+    boxMesh.scale.set(boxSize, boxSize, 1);
+    boxMesh.position.set(boxRect.x + boxSize / 2, boxRect.y + boxSize / 2, hudZ.glyph);
+    this.root.add(boxMesh);
+    this.renderedMeshes.push(boxMesh);
+
+    if (this.checked) {
+      const icon = rasterizeIcon("check", 11, theme.white.css);
+      const iconMaterial = hudBasicMaterial({ map: icon.texture, transparent: true });
+      const iconMesh = new THREE.Mesh(unitPlane, iconMaterial);
+      iconMesh.scale.set(icon.size, icon.size, 1);
+      iconMesh.position.set(boxRect.x + boxSize / 2, boxRect.y + boxSize / 2, hudZ.glyph + 0.001);
+      this.root.add(iconMesh);
+      this.renderedMeshes.push(iconMesh);
+    }
+
+    const label = rasterizeText(this.label, { size: 12.5, color: theme.text.css, weight: "600" });
+    const labelMaterial = hudBasicMaterial({ map: label.texture, transparent: true });
+    const labelMesh = new THREE.Mesh(unitPlane, labelMaterial);
+    labelMesh.scale.set(label.width, label.height, 1);
+    labelMesh.position.set(boxRect.x + boxSize + 8 + label.width / 2, this.rect.y + this.rect.height / 2, hudZ.glyph);
+    this.root.add(labelMesh);
+    this.renderedMeshes.push(labelMesh);
+  }
+
+  dispose() {
+    this.unregister();
+    (this.hitArea.material as THREE.Material).dispose();
+    for (const mesh of this.renderedMeshes) mesh.material.dispose();
   }
 }
 
@@ -1025,6 +1133,30 @@ function formatGridSize(cellSize: number): string {
 function integer(value: string, fallback: number) {
   const parsed = Number.parseInt(value, 10);
   return Number.isInteger(parsed) ? parsed : fallback;
+}
+
+function randomSeed() {
+  const values = new Uint32Array(1);
+  if (typeof crypto !== "undefined" && crypto.getRandomValues) crypto.getRandomValues(values);
+  else values[0] = Math.floor(Math.random() * 0xffffffff);
+  return values[0] || 1;
+}
+
+function rasterizeCheckbox(size: number, stroke: string, fill: string) {
+  const canvas = document.createElement("canvas");
+  const scale = 2;
+  canvas.width = size * scale;
+  canvas.height = size * scale;
+  const ctx = canvas.getContext("2d")!;
+  ctx.scale(scale, scale);
+  ctx.fillStyle = fill;
+  ctx.strokeStyle = stroke;
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.roundRect(0.75, 0.75, size - 1.5, size - 1.5, 4);
+  ctx.fill();
+  ctx.stroke();
+  return { texture: configureHudCanvasTexture(new THREE.CanvasTexture(canvas)) };
 }
 
 function wfcGenerationLabel(state: EditorState) {
