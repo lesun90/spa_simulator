@@ -7,7 +7,7 @@ import type { RoadTopologyKind } from "./socketTypes";
 export const reviewedRoadTopologyKinds: Readonly<Record<string, RoadTopologyKind>> = {
   "025": "straight", "026": "dead-end", "027": "t-junction", "034": "four-way", "031": "straight", "032": "t-junction",
   "038": "dead-end", "041": "t-junction", "043": "t-junction", "048": "curve",
-  "141": "four-way", "142": "straight", "153": "corner", "154": "straight",
+  "141": "four-way", "142": "straight", "144": "curve", "147": "curve", "153": "corner", "154": "straight",
   "156": "t-junction", "161": "straight", "162": "straight",
   "164": "straight", "165": "straight", "170": "straight", "171": "straight",
   "179": "straight", "180": "straight", "181": "straight", "182": "straight",

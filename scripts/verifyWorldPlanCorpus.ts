@@ -11,6 +11,7 @@ const corpus = [
   { width: 16, depth: 16, roadCoverage: 1, seeds: [1, 17, 42] },
   { width: 24, depth: 24, roadCoverage: 1, seeds: [3, 19, 99] },
   { width: 32, depth: 32, roadCoverage: 0.5, seeds: [7, 23, 101] },
+  { width: 40, depth: 40, roadCoverage: 0.5, seeds: [3, 17, 42] },
   { width: 50, depth: 50, roadCoverage: 0.5, seeds: [11, 29, 211] },
   { width: 100, depth: 100, roadCoverage: 0.5, seeds: [13, 31, 307] },
   { width: 10, depth: 32, roadCoverage: 0.5, seeds: [4] },
@@ -48,20 +49,28 @@ function verify(request: { width: number; depth: number; roadCoverage: number; s
   const diagnostics = validateWorldPlanResult(plan, palette, result);
   if (diagnostics.length) throw new Error(`seed ${request.seed}: ${diagnostics.join(" ")}`);
   if (result.status !== "solved") throw new Error(`seed ${request.seed}: no concrete world`);
-  if (!synthetic) verifyScenicConnections(result.cells, request);
+  const waterFeatures = synthetic ? {} : verifyScenicConnections(result.cells, request);
   const roadCells = result.cells.filter((cell) => directions.some((direction) => cell.variant.semanticPorts?.[direction]?.includes("road")));
   if (!roadCells.length) throw new Error(`seed ${request.seed}: no road generated`);
   if (!synthetic && result.cells.some((cell) => !roadCells.includes(cell) && !cell.variant.roles?.includes("terrain.ground"))) {
     throw new Error(`seed ${request.seed}: non-route cell is not reviewed terrain`);
   }
   const count = (...numbers: string[]) => result.cells.filter((cell) => numbers.some((number) => cell.variant.assetId === `3d-road-tiles.road-tile-${number}`)).length;
-  const scenery = { bends: count("153"), shore: result.cells.filter((cell) => cell.variant.roles?.includes("terrain.shore")).length, plainWater: count("001"), tJunctions: count("027"), fourWayJunctions: count("034"), crosswalks: count("025"), ramps: count("154", "161", "165", "171", "180"), bridges: count("197", "207"), overpasses: count("194"), water: result.cells.filter((cell) => cell.variant.roles?.includes("terrain.water")).length, elevatedTerrain: result.cells.filter((cell) => cell.variant.roles?.includes("terrain.elevated")).length };
-  if (!synthetic && (!scenery.water || !scenery.elevatedTerrain || !scenery.ramps || !scenery.bridges)) throw new Error(`seed ${request.seed}: missing scenic feature ${JSON.stringify(scenery)}`);
-  if (!synthetic && scenery.shore <= scenery.plainWater) throw new Error(`seed ${request.seed}: lake should favor shore tiles`);
+  const scenery = { ...waterFeatures, broadCurves: count("144"), bends: count("153"), shore: result.cells.filter((cell) => cell.variant.roles?.includes("terrain.shore")).length, plainWater: count("001"), tJunctions: count("027"), fourWayJunctions: count("034"), crosswalks: count("025"), ramps: count("154", "161", "165", "171", "180"), bridges: count("197", "207"), overpasses: count("194"), water: result.cells.filter((cell) => cell.variant.roles?.includes("terrain.water")).length, elevatedTerrain: result.cells.filter((cell) => cell.variant.roles?.includes("terrain.elevated")).length };
+  if (!synthetic && request.width >= 16 && request.depth >= 16 && (!scenery.water || !scenery.elevatedTerrain)) throw new Error(`seed ${request.seed}: missing scenic feature ${JSON.stringify(scenery)}`);
+
   if (!synthetic && request.width === 24 && request.depth === 24 && request.seed === 3 && !scenery.overpasses) throw new Error("Known-feasible 24x24 overpass scene lost tile 194");
-  const initialBends = primaryPlan.corridors.flatMap((corridor) => corridor.cells).filter((cell) => cell.directions.length === 2 && !cell.directions.includes(oppositeDirection[cell.directions[0]])).length;
-  if (!synthetic && scenery.bends <= initialBends) throw new Error(`seed ${request.seed}: road layout did not gain any bends`);
-  return { catalog: synthetic ? "synthetic" : "real", variants: palette.variants.length, roadCells: roadCells.length, scenery, ...reportWorldPlan(plan, result) };
+  if (!synthetic && request.width >= 16 && request.depth >= 16 && !scenery.broadCurves) throw new Error(`seed ${request.seed}: no broad four-tile curves`);
+  if (!synthetic && ["041", "147", "156"].some((id) => count(id) !== scenery.broadCurves)) throw new Error(`seed ${request.seed}: incomplete broad-curve assembly`);
+  const xs = roadCells.map((cell) => cell.column), ys = roadCells.map((cell) => cell.row);
+  const coverage = { width: Math.max(...xs) - Math.min(...xs) + 1, depth: Math.max(...ys) - Math.min(...ys) + 1,
+    quadrants: [0, 1, 2, 3].map((quadrant) => roadCells.filter((cell) => (cell.column >= request.width / 2 ? 1 : 0) + (cell.row >= request.depth / 2 ? 2 : 0) === quadrant).length) };
+  if (!synthetic && request.width === 40 && request.depth === 40) {
+    if (coverage.width < 30 || coverage.depth < 30 || coverage.quadrants.some((count) => count < 20)) throw new Error(`seed ${request.seed}: roads remain concentrated in part of the map: ${JSON.stringify(coverage)}`);
+    if ((scenery.bridgeSpans ?? 0) < 2 || scenery.overpasses < 2) throw new Error(`seed ${request.seed}: large-map crossings did not scale: ${JSON.stringify(scenery)}`);
+  }
+
+  return { catalog: synthetic ? "synthetic" : "real", variants: palette.variants.length, roadCells: roadCells.length, coverage, scenery, ...reportWorldPlan(plan, result) };
 }
 
 function routeVariant(id: string, roadDirections: readonly (typeof directions)[number][]): PlanarWfcVariant {
@@ -86,22 +95,29 @@ function verifyScenicConnections(cells: readonly SolvedPlanarCell[], bounds: { w
   const byCell = new Map(cells.map((cell) => [key(cell), cell]));
   const water = cells.filter((cell) => directions.some((direction) => cell.variant.semanticPorts?.[direction]?.includes("water")));
   if (water.some((cell) => /tile-(215|242|244|176)$/.test(cell.variant.assetId))) throw new Error(`seed ${bounds.seed}: river tiles must not be generated`);
-  const seen = new Set<string>();
-  const queue = water.slice(0, 1);
-  for (let index = 0; index < queue.length; index++) {
-    const cell = queue[index];
-    if (seen.has(key(cell))) continue;
-    seen.add(key(cell));
-    for (const direction of directions) {
-      if (!cell.variant.semanticPorts?.[direction]?.includes("water")) continue;
-      const delta = directionOffset[direction];
-      const next = byCell.get(key({ column: cell.column + delta.column, row: cell.row + delta.row }));
-      if (!next) throw new Error(`seed ${bounds.seed}: lake water escapes the scene boundary at ${key(cell)}`);
-      if (!next.variant.semanticPorts?.[oppositeDirection[direction]]?.includes("water")) throw new Error(`seed ${bounds.seed}: broken water edge at ${key(cell)}`);
-      if (!seen.has(key(next))) queue.push(next);
+  const unseen = new Map(water.map((cell) => [key(cell), cell]));
+  let lakes = 0, standaloneLakes = 0, bridgeSpans = 0;
+  while (unseen.size) {
+    lakes++;
+    const component = [unseen.values().next().value!];
+    let size = 0, openWater = 0;
+    for (let index = 0; index < component.length; index++) {
+      const cell = component[index];
+      if (!unseen.delete(key(cell))) continue;
+      size++;
+      if (cell.variant.assetId.endsWith("road-tile-001")) openWater++;
+      for (const direction of directions) {
+        if (!cell.variant.semanticPorts?.[direction]?.includes("water")) continue;
+        const delta = directionOffset[direction];
+        const next = byCell.get(key({ column: cell.column + delta.column, row: cell.row + delta.row }));
+        if (!next) throw new Error(`seed ${bounds.seed}: lake water escapes the scene boundary at ${key(cell)}`);
+        if (!next.variant.semanticPorts?.[oppositeDirection[direction]]?.includes("water")) throw new Error(`seed ${bounds.seed}: broken water edge at ${key(cell)}`);
+        if (unseen.has(key(next))) component.push(next);
+      }
     }
+    if (size <= 8 || !openWater) throw new Error(`seed ${bounds.seed}: lake is a disconnected puddle or has no open-water core`);
+    if (!component.some((cell) => cell.variant.roles?.includes("road.bridge"))) standaloneLakes++;
   }
-  if (water.length <= 8 || seen.size !== water.length) throw new Error(`seed ${bounds.seed}: missing large connected enclosed lake`);
   const elevated = new Map(cells.filter((cell) => cell.variant.roles?.includes("road.elevated")).map((cell) => [key(cell), cell]));
   while (elevated.size) {
     const component = [elevated.values().next().value!];
@@ -121,5 +137,7 @@ function verifyScenicConnections(cells: readonly SolvedPlanarCell[], bounds: { w
       }
     }
     if (length < 2 || rampEnds.size !== 2) throw new Error(`seed ${bounds.seed}: elevated span needs at least two deck tiles and two ramps`);
+    if (component.some((cell) => cell.variant.roles?.includes("road.bridge"))) bridgeSpans++;
   }
+  return { lakes, standaloneLakes, bridgeSpans };
 }

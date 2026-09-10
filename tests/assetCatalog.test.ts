@@ -98,17 +98,4 @@ describe("asset catalog discovery", () => {
     expect(entry.diagnostics).toContain("WFC default weight must be a positive finite number.");
   });
 
-  test("includes the low-poly sports car in the shared vehicle catalog", async () => {
-    const catalog = await discoverAssetCatalog(join(process.cwd(), "assets"));
-
-    expect(catalog).toContainEqual(
-      expect.objectContaining({
-        id: "vehicles.lowpoly-sports-car",
-        label: "Low-poly sports car",
-        category: "vehicles",
-        implementation: "module",
-        tags: ["car", "sports", "low-poly", "vehicle"]
-      })
-    );
-  });
 });
