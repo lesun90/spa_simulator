@@ -93,3 +93,56 @@ connectable reviewed turn assets
 ```
 
 Until these prerequisites exist, a failed road-constrained solve should report an infeasible route with diagnostics rather than silently generate an unrelated roadless or all-road-tile scene.
+
+## Resolution — 2026-09-10
+
+The evidence above records the **pre-fix catalog**. Further model-level investigation found that tile 153 itself is usable: the generated sockets falsely rejected its physically matching road ends.
+
+### Corrected socket derivation
+
+Three exporter defects prevented the intended connections:
+
+- Rasterization accepted a triangle's whole bounding rectangle, painting grass/curb/asphalt samples outside the triangle. It now uses triangle containment only.
+- Comparing two rows inside each tile required corner and straight interiors to be identical. Only the boundary-near row is now compared; curved interiors are allowed to differ.
+- Side faces were normalized to each model's maximum height. A grass boundary was stretched differently on a road tile with a raised curb than on flat grass. Side sampling now uses the shared tile-footprint scale and absolute model elevation.
+
+An existing world-space seam check also exposed partial models being normalized into full-cell sockets. The exporter now leaves 57 non-3×3 assets available for manual placement but excludes them from WFC. No GLB geometry or reviewed road membership was changed.
+
+Regenerated metadata and adjacency now contain 845 generic variants. The same 36 reviewed road assets produce 121 route variants after symmetric rotations are deduplicated. Every required corner orientation has a road-compatible candidate.
+
+### Road-scene palette and failure behavior
+
+- The road-scene palette contains 121 reviewed road variants and one explicitly authored `terrain.ground` variant: flat grass tile 163. Lack of a road tag is **not** sufficient to qualify as terrain.
+- Existing world-plan policies require exact road directions on the corridor and exclude road variants everywhere else. Exact physical socket matching remains mandatory.
+- Generation performs one constrained worker solve, followed by world-plan validation. It never retries without the requested policies.
+- On an infeasible route or invalid dimensions, the previous scene, history and selection remain intact; progress and preview are cleared. Diagnostics identify the failing policy/cell when the solver provides that information.
+
+### Verification
+
+```sh
+# Real catalog by default; includes the reported screenshot seeds.
+npm run wfc:world-plan:verify
+# Retain the independent structural-planner corpus.
+npm run wfc:world-plan:verify -- --synthetic
+npm run assets:road-wfc:verify
+npx vitest run --exclude '.claude/**'
+npm run build:check
+```
+
+Both corpora solve all 18 scenes, spanning 10×10 through 100×100, with zero backtracks. The existing 149 tests pass, including transformed GLB seam checks. The production build passes.
+
+In-browser checks enter each seed and click **Generate layout** in the actual UI, using the real catalog, models and worker in an isolated scene without saving to the user's scene store:
+
+| Seed | Cells | Road cells | Grass cells | Worker solves |
+| --- | ---: | ---: | ---: | ---: |
+| 13 | 100 | 18 | 82 | 1 |
+| 134 | 100 | 22 | 78 | 1 |
+| 1345 | 100 | 18 | 82 | 1 |
+
+Removing corner tile 153, requesting a 3×3 road world, and adding a caller policy that prohibits roads each produce a diagnostic while preserving the prior scene, history and selection. Browser checks reported no page errors.
+
+Rendered results: [seed 13](road-quality-seed-13.png), [seed 134](road-quality-seed-134.png), [seed 1345](road-quality-seed-1345.png).
+
+### Remaining scope
+
+This establishes a connected road-and-grass baseline, not a finished multi-biome environment generator. Park, built and water zone-specific palettes, richer scenery, plan-level recovery and visual-diversity thresholds remain future work. The sampler is discrete; exact matching of sampled sockets is not a proof for every possible geometric detail in arbitrary imported models.

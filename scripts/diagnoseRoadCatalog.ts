@@ -8,6 +8,7 @@ const directions: readonly PlanarDirection[] = ["north", "east", "south", "west"
 const assets = await discoverAssetCatalog("assets");
 const palette = paletteFromAssets("catalog", assets, { tileWidth: 1, tileDepth: 1 });
 const roadPalette = paletteFromAssets("roads", assets, { tileWidth: 1, tileDepth: 1, category: "3d-road-tiles" });
+const scenePalette = paletteFromAssets("road-scene", assets, { tileWidth: 1, tileDepth: 1, purpose: "road-scene" });
 const plan = createWorldPlan({ width: 10, depth: 10, seed: 1345, roadCoverage: 0.5 });
 const policies = policiesFromWorldPlan(plan);
 
@@ -39,6 +40,11 @@ const plannedShapes = Object.fromEntries([...new Set(policyCandidates.map((entry
 
 console.log(JSON.stringify({
   catalog: { assets: assets.length, variants: palette.variants.length, roadVariants: roadVariants.length, reviewedRoadVariants: reviewedRoadVariants.length },
+  activeRoadScene: {
+    variants: scenePalette.variants.length,
+    roadVariants: scenePalette.variants.filter(hasRoadEdge).length,
+    terrainVariants: scenePalette.variants.filter((variant) => !hasRoadEdge(variant) && variant.roles?.includes("terrain.ground")).length
+  },
   roadOnlyCompatibility: reviewedRoadVariants.map((variant) => ({
     id: variant.id,
     shape: roadDirections(variant).join(","),

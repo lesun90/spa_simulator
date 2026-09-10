@@ -3,11 +3,14 @@ import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import { basename, dirname, extname, join, relative, resolve, sep } from "node:path";
 import { buildAdjacency } from "../src/wfc/metadata/buildAdjacency";
+import { DEFAULT_WFC_TILE_SIZE } from "../src/wfc/sceneLayout";
 import { wfcDirections, type RoadTopologyTag, type WfcDirection, type WfcMetadata, type WfcSocketMap, type WfcVariant } from "../src/wfc/metadata/socketTypes";
 
 const DEFAULT_ASSET_ROOT = "assets/3d-road-tiles";
 const GRID_SIZE = 16;
-const EDGE_STRIP_CELLS = 2;
+// Compare the boundary-near row, not tile interiors: a turning curb may already
+// diverge from a straight curb in the second row while their seams still meet.
+const EDGE_STRIP_CELLS = 1;
 const EMPTY_CELL = "empty";
 const POSITION_EPSILON_RATIO = 1 / 1000;
 const TOP_SURFACE_NORMAL_Y_MIN = 0.65;
@@ -198,6 +201,11 @@ async function generateWfcMetadata(asset: AssetFolder): Promise<{ wfc: WfcMetada
   }
 
   const baseTile = await loadTileSamples(asset.modelFile);
+  const footprint = baseTile.bounds.getSize(new THREE.Vector3());
+  if (Math.abs(footprint.x - DEFAULT_WFC_TILE_SIZE) > 0.001 || Math.abs(footprint.z - DEFAULT_WFC_TILE_SIZE) > 0.001) {
+    diagnostics.push(`Footprint ${round(footprint.x)} × ${round(footprint.z)} does not fill a ${DEFAULT_WFC_TILE_SIZE} × ${DEFAULT_WFC_TILE_SIZE} WFC cell; available for manual placement only.`);
+    return { wfc: { height: round(baseTile.height), variants: [], diagnostics }, variants: [] };
+  }
   const variants: WfcVariant[] = [];
   const seenSocketSets = new Map<string, number>();
 
@@ -324,7 +332,7 @@ function sampleBoundary(tile: TileSamples, direction: WfcDirection, epsilon: num
     for (let v = startV; v <= endV; v += 1) {
       for (let u = startU; u <= endU; u += 1) {
         const center = { u: (u + 0.5) / GRID_SIZE, v: (v + 0.5) / GRID_SIZE };
-        if (pointInProjectedTriangle(center, projected) || projectedAabbContains(center, { minU, maxU, minV, maxV })) {
+        if (pointInProjectedTriangle(center, projected)) {
           sample.geometry[v][u] = "solid";
           sample.visual[v][u] = triangle.material;
         }
@@ -361,7 +369,7 @@ function sampleTopSurface(tile: TileSamples): BoundarySample {
       for (let u = startU; u <= endU; u += 1) {
         const center = { u: (u + 0.5) / GRID_SIZE, v: (v + 0.5) / GRID_SIZE };
         if (height < heights[v][u]) continue;
-        if (pointInProjectedTriangle(center, projected) || projectedAabbContains(center, { minU, maxU, minV, maxV })) {
+        if (pointInProjectedTriangle(center, projected)) {
           heights[v][u] = height;
           sample.geometry[v][u] = "solid";
           sample.visual[v][u] = triangle.material;
@@ -404,15 +412,20 @@ function triangleTouchesPlane(triangle: TriangleSample, plane: { axis: PlaneAxis
 }
 
 function projectToBoundary(point: THREE.Vector3, bounds: THREE.Box3, direction: WfcDirection) {
+  // Neighboring tiles share a footprint, not a maximum height. Normalizing each
+  // side to its own height stretched a flat grass edge differently from the same
+  // grass edge on a road tile whose curb extends higher inside the tile.
+  const verticalExtent = Math.max(bounds.max.x - bounds.min.x, bounds.max.z - bounds.min.z);
+  const vertical = normalized(point.y, 0, verticalExtent);
   switch (direction) {
     case "north":
-      return { u: normalized(point.x, bounds.min.x, bounds.max.x), v: normalized(point.y, bounds.min.y, bounds.max.y) };
+      return { u: normalized(point.x, bounds.min.x, bounds.max.x), v: vertical };
     case "south":
-      return { u: normalized(point.x, bounds.min.x, bounds.max.x), v: normalized(point.y, bounds.min.y, bounds.max.y) };
+      return { u: normalized(point.x, bounds.min.x, bounds.max.x), v: vertical };
     case "east":
-      return { u: normalized(point.z, bounds.min.z, bounds.max.z), v: normalized(point.y, bounds.min.y, bounds.max.y) };
+      return { u: normalized(point.z, bounds.min.z, bounds.max.z), v: vertical };
     case "west":
-      return { u: normalized(point.z, bounds.min.z, bounds.max.z), v: normalized(point.y, bounds.min.y, bounds.max.y) };
+      return { u: normalized(point.z, bounds.min.z, bounds.max.z), v: vertical };
     case "top":
     case "bottom":
       return { u: normalized(point.x, bounds.min.x, bounds.max.x), v: normalized(point.z, bounds.min.z, bounds.max.z) };
@@ -437,10 +450,6 @@ function pointInProjectedTriangle(point: { u: number; v: number }, triangle: Arr
   const beta = ((c.v - a.v) * (point.u - c.u) + (a.u - c.u) * (point.v - c.v)) / denominator;
   const gamma = 1 - alpha - beta;
   return alpha >= -0.001 && beta >= -0.001 && gamma >= -0.001;
-}
-
-function projectedAabbContains(point: { u: number; v: number }, aabb: { minU: number; maxU: number; minV: number; maxV: number }) {
-  return point.u >= aabb.minU && point.u <= aabb.maxU && point.v >= aabb.minV && point.v <= aabb.maxV;
 }
 
 function socketSignature(sample: BoundarySample) {

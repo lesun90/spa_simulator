@@ -1,9 +1,12 @@
+import { discoverAssetCatalog } from "../server/assetCatalog";
+import { paletteFromAssets } from "../src/wfc/sceneLayout";
 import { createPlanarPalette, solvePlanarWfc, type PlanarWfcVariant } from "../src/wfc/planarWfc";
 import { policiesFromWorldPlan, validateWorldPlanResult } from "../src/wfc/worldPlanPolicies";
 import { reportWorldPlan } from "../src/wfc/worldPlanReport";
 import { createWorldPlan } from "../src/wfc/worldPlanner";
 
 const corpus = [
+  { width: 10, depth: 10, roadCoverage: 0.5, seeds: [13, 134, 1345] },
   { width: 16, depth: 16, roadCoverage: 1, seeds: [1, 17, 42] },
   { width: 24, depth: 24, roadCoverage: 1, seeds: [3, 19, 99] },
   { width: 32, depth: 32, roadCoverage: 0.5, seeds: [7, 23, 101] },
@@ -21,7 +24,10 @@ const variants: readonly PlanarWfcVariant[] = [
   routeVariant("south-east", ["south", "east"]),
   routeVariant("south-west", ["south", "west"])
 ];
-const palette = createPlanarPalette("world-plan-corpus", 1, 1, variants);
+const synthetic = process.argv.includes("--synthetic");
+const palette = synthetic
+  ? createPlanarPalette("world-plan-corpus", 1, 1, variants)
+  : paletteFromAssets("road-scene-corpus", await discoverAssetCatalog("assets"), { tileWidth: 1, tileDepth: 1, purpose: "road-scene" });
 const reports = corpus.flatMap((entry) => entry.seeds.map((seed) => verify({ ...entry, seed })));
 console.log(JSON.stringify(reports, null, 2));
 
@@ -36,7 +42,13 @@ function verify(request: { width: number; depth: number; roadCoverage: number; s
   });
   const diagnostics = validateWorldPlanResult(plan, palette, result);
   if (diagnostics.length) throw new Error(`seed ${request.seed}: ${diagnostics.join(" ")}`);
-  return reportWorldPlan(plan, result);
+  if (result.status !== "solved") throw new Error(`seed ${request.seed}: no concrete world`);
+  const roadCells = result.cells.filter((cell) => directions.some((direction) => cell.variant.semanticPorts?.[direction]?.includes("road")));
+  if (!roadCells.length) throw new Error(`seed ${request.seed}: no road generated`);
+  if (!synthetic && result.cells.some((cell) => !roadCells.includes(cell) && !cell.variant.roles?.includes("terrain.ground"))) {
+    throw new Error(`seed ${request.seed}: non-route cell is not reviewed terrain`);
+  }
+  return { catalog: synthetic ? "synthetic" : "real", variants: palette.variants.length, roadCells: roadCells.length, ...reportWorldPlan(plan, result) };
 }
 
 function routeVariant(id: string, roadDirections: readonly (typeof directions)[number][]): PlanarWfcVariant {

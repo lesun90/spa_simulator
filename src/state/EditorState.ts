@@ -265,50 +265,39 @@ export class EditorState {
     }
 
     this.setWfcProgress({ status: "building-palette" });
-    const palette = paletteFromAssets("shared-assets", this.assets, {
-      tileWidth: request.tileWidth,
-      tileDepth: request.tileDepth
-    });
-    const worldPlan = this.assets.some((asset) => asset.category === "3d-road-tiles")
-      ? createWorldPlan({ width: request.width, depth: request.depth, seed: request.seed, roadCoverage: 0.5 })
-      : undefined;
-    const worldPlanPolicies = worldPlan ? policiesFromWorldPlan(worldPlan) : [];
-    const policies = [...(request.policies ?? []), ...worldPlanPolicies];
+    const roadScene = this.assets.some((asset) => asset.category === "3d-road-tiles");
     try {
-      let solved = await solvePlanarWfcInWorker(
+      const worldPlan = roadScene
+        ? createWorldPlan({ width: request.width, depth: request.depth, seed: request.seed, roadCoverage: 0.5 })
+        : undefined;
+      const palette = paletteFromAssets("shared-assets", this.assets, {
+        tileWidth: request.tileWidth,
+        tileDepth: request.tileDepth,
+        purpose: roadScene ? "road-scene" : undefined
+      });
+      const policies = [...(request.policies ?? []), ...(worldPlan ? policiesFromWorldPlan(worldPlan) : [])];
+      const solved = await solvePlanarWfcInWorker(
         palette,
         { ...request, policies },
         { onProgress: (progress) => this.setWfcProgress(progress) }
       );
-      let validationDiagnostics = worldPlan ? validateWorldPlanResult(worldPlan, palette, solved) : [];
-      let routeConstraintsUnavailable = false;
-      if (worldPlan && (solved.status === "failed" || validationDiagnostics.length)) {
-        routeConstraintsUnavailable = true;
-        solved = await solvePlanarWfcInWorker(
-          palette,
-          request,
-          { onProgress: (progress) => this.setWfcProgress(progress) }
-        );
-        validationDiagnostics = [];
-      }
+      const validationDiagnostics = worldPlan ? validateWorldPlanResult(worldPlan, palette, solved) : [];
       const result = sceneObjectsFromWfcResult(solved, request, palette);
       const objects = result.status === "solved" && !validationDiagnostics.length ? result.objects : [];
       if (!objects.length) {
-        this.setNotice(validationDiagnostics[0] ?? (result.status === "failed"
+        throw new Error(validationDiagnostics[0] ?? (result.status === "failed"
           ? result.diagnostics[0] ?? "WFC generation failed"
           : "WFC generation failed"));
-        return;
       }
 
       this.setWfcProgress({ status: "placing", cells: objects.length });
       this.history = executeCommand(this.history, replaceGeneratedLayoutCommand(objects, isGeneratedWfcObject));
       this.selectedObjectId = objects[0]?.id ?? null;
       this.emit("scene", "selection");
-      this.setNotice(routeConstraintsUnavailable
-        ? `Generated ${objects.length} tiles without road route constraints (seed ${request.seed})`
-        : `Generated ${objects.length} tiles (seed ${request.seed})`);
+      this.setNotice(`Generated ${objects.length} tiles (seed ${request.seed})`);
     } catch (error) {
-      this.setNotice(error instanceof Error ? error.message : "WFC generation failed");
+      const diagnostic = error instanceof Error ? error.message : "WFC generation failed";
+      this.setNotice(roadScene ? `Road scene infeasible (seed ${request.seed}): ${diagnostic}` : diagnostic);
     } finally {
       this.setWfcProgress(null);
     }

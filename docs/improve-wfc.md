@@ -6,10 +6,10 @@
 | --- | --- | --- |
 | 1. Authoritative road metadata | Complete | Reviewed route-road set is explicit; every route variant has directional `road` edges. |
 | 2. World planning types | Complete | Deterministic macro-region plans, route cycles, paired portals, and corridors are implemented. |
-| 3. Planned concrete WFC | Complete | Concrete WFC receives exact road constraints from the world plan. |
+| 3. Planned concrete WFC | Complete | Real-catalog WFC enforces the route, exact physical seams and an explicit road/terrain palette boundary. |
 | 4. Validation and recovery | In progress | Final-world plan validation is active; the solver provides bounded backtracking, while plan-level retry escalation remains future work. |
 | 5. Retire prototype overlay | Complete | The generation path no longer builds or overlays direct road objects. |
-| 6. Quality corpus | Complete for structural validation | A deterministic 15-scene multi-scale corpus and machine-readable reports are available; rendered screenshots and empirical visual thresholds remain future work. |
+| 6. Quality corpus | Complete for structural validation | 18-scene real-catalog and synthetic corpora pass; screenshot seeds are verified in-browser. Empirical visual thresholds remain future work. |
 
 ## Phase 1: authoritative road-edge metadata
 
@@ -17,7 +17,7 @@
 
 - The user-supplied set of 36 route-road asset IDs is centralized in [reviewedRoadTopology.ts](../src/wfc/metadata/reviewedRoadTopology.ts). It is authoritative: pack-wide visual scanning does not add or remove members without strong evidence.
 - `roadTopology` stores a reviewed shape `kind` and directional `edges`, with `"road"` as the route-edge class.
-- The selected set produces 126 tagged rotated variants.
+- The selected set originally produced 126 tagged rotated variants; corrected socket sampling now deduplicates it to 121 while preserving all 36 reviewed assets.
 - [retagRoadTopology.ts](../scripts/retagRoadTopology.ts) removes route tags from every other road-tile asset and regenerates the reviewed tags.
 - [generateRoadTileWfcMetadata.ts](../scripts/generateRoadTileWfcMetadata.ts) preserves reviewed route metadata when geometric sockets are regenerated.
 - Tests prove that only approved assets have route tags, every variant for those assets is tagged, kind edge counts are valid, and the scene palette consumes the reviewed data.
@@ -95,13 +95,13 @@ Replace direct road realization and overlay with constrained local solving:
 
 **Result:** visible roads are selected by WFC itself and physically match their surroundings.
 
-### Current feasibility blocker
+### Real-catalog feasibility correction
 
-The active real-catalog generation path is not production-ready. A reproducible investigation is recorded in [road-generation-feasibility-investigation.md](road-generation-feasibility-investigation.md).
+**Corrected 2026-09-10.** The [investigation](road-generation-feasibility-investigation.md#resolution--2026-09-10) records the original failure and verified correction. The corner asset was usable; incorrect triangle rasterization, interior-strip comparisons and per-model height normalization made its generated sockets incompatible.
 
-**Required correction before calling Phase 3 complete:** connectable reviewed turn assets, a route-only road palette, a distinct non-route terrain/zone palette, and no unconstrained fallback for a requested road scene.
+Regenerated sockets connect the reviewed road set to explicitly marked flat grass (tile 163). Road scenes admit only reviewed road variants and authored terrain; the plan excludes roads from all non-corridor cells. Partial-footprint models remain manually placeable but are not eligible full-cell WFC tiles. A failed route never falls back to unconstrained fill.
 
-Until these prerequisites exist, a failed constrained route must be reported as infeasible with diagnostics rather than silently converted into an unrelated roadless or all-road-tile layout.
+The current fill is a deliberate grass baseline. Separate park, built and water palettes and zone-specific selection remain unimplemented; Phase 3 completion refers to physically connected road realization, not full biome generation.
 
 ## Phase 4: validate and recover
 
@@ -154,9 +154,9 @@ Create a fixed, multi-scale seed corpus with route-coverage variations. Produce 
 
 **Completed implementation:** planner and policy tests now cover deterministic plans, partition coverage, target route coverage, paired portals, non-route isolation, corridor endpoints, exact planned road constraints, and plan-result validation.
 
-**Completed implementation:** `npm run wfc:world-plan:verify` runs 15 deterministic structural scenes across 16, 24, 32, 50, and 100 tile worlds, using fixed seeds and route-coverage variations. It emits machine-readable reports from [worldPlanReport.ts](../src/wfc/worldPlanReport.ts) with macro-region, route, portal, corridor, and solver metrics.
+**Completed implementation:** `npm run wfc:world-plan:verify` runs 18 deterministic real-catalog scenes across 10, 16, 24, 32, 50, and 100 tile worlds, including screenshot seeds 13, 134 and 1345. Pass `-- --synthetic` to run the structural reference palette instead. It emits machine-readable reports from [worldPlanReport.ts](../src/wfc/worldPlanReport.ts) with macro-region, route, portal, corridor, and solver metrics.
 
-**Remaining:** rendered screenshots, topology overlays, and empirical visual thresholds require an offscreen rendering workflow and should be added when that workflow exists.
+**Verified:** the three screenshot seeds render connected road cycles with terrain fill through the browser worker, with no page errors. See the investigation for screenshots and failure-preservation checks. **Remaining:** topology overlays and empirical visual-diversity thresholds.
 
 **Result:** structural quality is measured across scenes and seeds rather than inferred from a single preview.
 

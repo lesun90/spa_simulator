@@ -50,12 +50,26 @@ function sceneObjectsFromSolvedCells(cells: readonly { column: number; row: numb
 export function previewObjectsFromWfcProgress(cells: readonly { column: number; row: number; variant: PlanarWfcVariant }[], seed: number, request: GenerateWfcLayoutRequest, palette: PlanarWfcPalette) { return sceneObjectsFromSolvedCells(cells, seed, request, palette); }
 function previewObjectsFromCompactCells(cells: readonly CompactCell[], seed: number, request: GenerateWfcLayoutRequest, palette: PlanarWfcPalette) { return sceneObjectsFromSolvedCells(cells.map((cell) => ({ ...cell, variant: palette.variants[cell.variantIndex] })), seed, request, palette); }
 
-/** Builds one solver palette from every compatible asset in the requested category. */
-export function paletteFromAssets(id: string, assets: readonly AssetCatalogEntry[], options: { tileWidth?: number; tileDepth?: number; category?: string } = {}): PlanarWfcPalette {
-  const key = JSON.stringify({ id, tileWidth: options.tileWidth ?? DEFAULT_WFC_TILE_SIZE, tileDepth: options.tileDepth ?? DEFAULT_WFC_TILE_SIZE, category: options.category });
+/** Catalog browsing is unrestricted; road scenes admit only reviewed roads and authored terrain. */
+export function paletteFromAssets(id: string, assets: readonly AssetCatalogEntry[], options: { tileWidth?: number; tileDepth?: number; category?: string; purpose?: "road-scene" } = {}): PlanarWfcPalette {
+  const key = JSON.stringify({ id, tileWidth: options.tileWidth ?? DEFAULT_WFC_TILE_SIZE, tileDepth: options.tileDepth ?? DEFAULT_WFC_TILE_SIZE, category: options.category, purpose: options.purpose });
   const cached = preparedPaletteCache.get(assets)?.get(key);
   if (cached) return cached.palette;
-  const variants = assets.filter((asset) => asset.wfc?.variants.length && asset.wfc.variants.every((variant) => planarSocketsAreComplete(variant.sockets)) && (!options.category || asset.category === options.category)).sort((a, b) => a.id.localeCompare(b.id)).flatMap((asset) => asset.wfc!.variants.map((variant) => ({ id: variant.variantId, assetId: asset.id, rotationDegrees: variant.rotationDegrees, sockets: variant.sockets, weight: resolveVariantWeight(asset.wfc!, variant), roles: asset.semantics?.roles ?? inferredRoadRoles(asset), semanticPorts: rotateSemanticPorts(asset.semantics?.sockets, variant.rotationDegrees) ?? roadTopologyPorts(variant.roadTopology) }))).sort((a, b) => a.id.localeCompare(b.id));
+  const variants = assets
+    .filter((asset) => asset.wfc?.variants.length && asset.wfc.variants.every((variant) => planarSocketsAreComplete(variant.sockets)) && (!options.category || asset.category === options.category))
+    .sort((a, b) => a.id.localeCompare(b.id))
+    .flatMap((asset) => asset.wfc!.variants
+      .filter((variant) => options.purpose !== "road-scene" || variant.roadTopology || asset.semantics?.roles.includes("terrain.ground"))
+      .map((variant) => ({
+        id: variant.variantId,
+        assetId: asset.id,
+        rotationDegrees: variant.rotationDegrees,
+        sockets: variant.sockets,
+        weight: resolveVariantWeight(asset.wfc!, variant),
+        roles: asset.semantics?.roles ?? inferredRoadRoles(asset),
+        semanticPorts: roadTopologyPorts(variant.roadTopology) ?? rotateSemanticPorts(asset.semantics?.sockets, variant.rotationDegrees)
+      })))
+    .sort((a, b) => a.id.localeCompare(b.id));
   const palette = createPlanarPalette(id, options.tileWidth ?? DEFAULT_WFC_TILE_SIZE, options.tileDepth ?? DEFAULT_WFC_TILE_SIZE, variants);
   const prepared = preparePlanarPalette(palette);
   preparedByPalette.set(palette, prepared);
