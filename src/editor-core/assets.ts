@@ -1,4 +1,4 @@
-import type { WfcMetadata } from "../wfc/metadata/socketTypes";
+import type { AssetSemantics, WfcMetadata } from "../wfc/metadata/socketTypes";
 
 export type AssetImplementation = "module" | "glb" | "placeholder";
 export type AssetSource = "shared" | "temporary";
@@ -14,6 +14,7 @@ export interface AssetCatalogEntry {
   modelUrl?: string;
   thumbnailUrl?: string;
   wfc?: WfcMetadata;
+  semantics?: AssetSemantics;
   diagnostics?: string[];
 }
 

@@ -12,6 +12,7 @@ import { applyGridVisibilityColors, gridColorsForGroundColor } from "./gridVisib
 import { PlacementGhost } from "./PlacementGhost";
 import { centerGroundFootprintOnOrigin, scaleToFitGridCell } from "./placementSizing";
 import { SceneObjectsFeature, type TransformMode } from "./SceneObjectsFeature";
+import { WfcPreviewFeature } from "./WfcPreviewFeature";
 import { snapTransformPatchForInspection } from "./transformSnap";
 import { shouldClearSelectionOnGroundClick } from "./worldInteraction";
 import { worldSceneConfig } from "./world.config";
@@ -34,9 +35,11 @@ export class WorldFeature {
   private lastGrid: GridDefinition;
   private readonly ghost: PlacementGhost;
   private readonly objects: SceneObjectsFeature;
+  private readonly wfcPreview: WfcPreviewFeature;
   private readonly unsubscribers: Array<() => void> = [];
   private unregisterGround: (() => void) | null = null;
   private ghostAssetToken = 0;
+  private previewSyncQueued = false;
   private readonly textureLoader = new THREE.TextureLoader();
   private backgroundTexture: THREE.Texture | null = null;
   private backgroundToken = 0;
@@ -61,7 +64,7 @@ export class WorldFeature {
     sun.position.set(worldSceneConfig.sunPosition.x, worldSceneConfig.sunPosition.y, worldSceneConfig.sunPosition.z);
     this.scene.add(sun);
 
-    const grid = state.scene?.grid ?? { cellSize: 1, width: 100, depth: 100 };
+    const grid = state.scene?.grid ?? { cellSize: 1, width: 10, depth: 10 };
     const { grid: gridHelper, ground } = createGround(grid.width, grid.depth, grid.cellSize);
     this.ground = ground;
     this.gridHelper = gridHelper;
@@ -86,6 +89,8 @@ export class WorldFeature {
       }
     });
     this.scene.add(this.objects.root);
+    this.wfcPreview = new WfcPreviewFeature(assetManager);
+    this.scene.add(this.wfcPreview.root);
 
     this.registerGroundInteraction();
     this.applyBackground();
@@ -93,6 +98,7 @@ export class WorldFeature {
 
     this.unsubscribers.push(
       state.on("scene", () => this.resync()),
+      state.on("wfcProgress", () => this.schedulePreviewSync()),
       state.on("assets", () => this.resync()),
       state.on("selection", () => this.objects.setSelected(state.selectedObjectId)),
       state.on("objectsVisible", () => this.objects.setVisible(state.objectsVisible)),
@@ -127,10 +133,25 @@ export class WorldFeature {
 
   private resync() {
     if (!this.state.scene) return;
-    void this.objects.sync(this.state.scene, this.state.assets, this.state.selectedObjectId, this.state.hiddenObjectIds);
+    this.syncSceneObjects();
     this.applyBackground();
     this.applyGround();
     this.syncGrid();
+  }
+
+  private schedulePreviewSync() {
+    if (this.previewSyncQueued) return;
+    this.previewSyncQueued = true;
+    requestAnimationFrame(() => {
+      this.previewSyncQueued = false;
+      this.wfcPreview.sync(this.state.wfcPreviewObjects, this.state.assets);
+    });
+  }
+
+  private syncSceneObjects() {
+    if (!this.state.scene) return;
+    void this.objects.sync(this.state.scene, this.state.assets, this.state.selectedObjectId, this.state.hiddenObjectIds);
+    this.wfcPreview.sync(this.state.wfcPreviewObjects, this.state.assets);
   }
 
   private registerGroundInteraction() {
@@ -403,6 +424,7 @@ export class WorldFeature {
     this.disposeBackgroundTexture();
     this.disposeGroundTexture();
     this.objects.dispose();
+    this.wfcPreview.dispose();
     this.ghost.dispose();
     this.cameraRig.dispose();
   }

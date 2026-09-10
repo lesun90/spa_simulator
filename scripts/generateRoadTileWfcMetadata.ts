@@ -3,7 +3,7 @@ import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import { basename, dirname, extname, join, relative, resolve, sep } from "node:path";
 import { buildAdjacency } from "../src/wfc/metadata/buildAdjacency";
-import { wfcDirections, type WfcDirection, type WfcMetadata, type WfcSocketMap, type WfcVariant } from "../src/wfc/metadata/socketTypes";
+import { wfcDirections, type RoadTopologyTag, type WfcDirection, type WfcMetadata, type WfcSocketMap, type WfcVariant } from "../src/wfc/metadata/socketTypes";
 
 const DEFAULT_ASSET_ROOT = "assets/3d-road-tiles";
 const GRID_SIZE = 16;
@@ -24,6 +24,8 @@ interface AssetFolder {
   metadata: Record<string, unknown>;
   modelFile?: string;
 }
+
+type ExistingRoadTopology = ReadonlyMap<number, RoadTopologyTag>;
 
 interface BoundarySample {
   geometry: string[][];
@@ -89,13 +91,13 @@ function positiveInt(value: string, option: string) {
 
 function printHelp() {
   console.log(`
-Generate WFC socket metadata for road tile GLB assets.
+Generate WFC socket metadata for any single-cell GLB tile pack.
 
 Usage:
   npx vite-node scripts/generateRoadTileWfcMetadata.ts [options]
 
 Options:
-  --asset-root <path>  Road tile asset folder. Defaults to ${DEFAULT_ASSET_ROOT}
+  --asset-root <path>  Tile asset folder. Defaults to ${DEFAULT_ASSET_ROOT}
   --limit <count>      Only process the first N discovered assets.
   --dry-run            Print a summary without writing asset.json or adjacency output.
 `);
@@ -117,7 +119,7 @@ async function main() {
       continue;
     }
 
-    const nextMetadata = { ...asset.metadata, wfc };
+    const nextMetadata = { ...asset.metadata, wfc: { ...wfc, defaultWeight: existingDefaultWeight(asset.metadata.wfc) } };
     await writeJson(asset.assetJsonFile, nextMetadata);
     changed += 1;
   }
@@ -138,6 +140,29 @@ async function main() {
     await writeJson(join(options.assetRoot, "wfc-adjacency.json"), adjacencyFile);
     console.log(`updated ${changed} asset.json files and ${relative(process.cwd(), join(options.assetRoot, "wfc-adjacency.json"))}`);
   }
+}
+
+function existingDefaultWeight(metadata: unknown) {
+  if (!metadata || typeof metadata !== "object") return undefined;
+  const value = (metadata as { defaultWeight?: unknown }).defaultWeight;
+  return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : undefined;
+}
+
+function existingRoadTopologies(metadata: Record<string, unknown>): ExistingRoadTopology {
+  const variants = (metadata.wfc as { variants?: unknown } | undefined)?.variants;
+  if (!Array.isArray(variants)) return new Map();
+  return new Map(variants.flatMap((variant) => {
+    if (!variant || typeof variant !== "object") return [];
+    const value = variant as { rotationDegrees?: unknown; roadTopology?: unknown };
+    if (typeof value.rotationDegrees !== "number" || !isRoadTopologyTag(value.roadTopology)) return [];
+    return [[value.rotationDegrees, value.roadTopology] as const];
+  }));
+}
+
+function isRoadTopologyTag(value: unknown): value is RoadTopologyTag {
+  if (!value || typeof value !== "object") return false;
+  const tag = value as { kind?: unknown; edges?: unknown };
+  return typeof tag.kind === "string" && !!tag.edges && typeof tag.edges === "object";
 }
 
 async function discoverAssetFolders(options: CliOptions): Promise<AssetFolder[]> {
@@ -164,6 +189,7 @@ async function discoverAssetFolders(options: CliOptions): Promise<AssetFolder[]>
 async function generateWfcMetadata(asset: AssetFolder): Promise<{ wfc: WfcMetadata; variants: WfcVariant[] }> {
   const diagnostics: string[] = [];
   const id = assetId(asset);
+  const existingRoadTopology = existingRoadTopologies(asset.metadata);
 
   if (!asset.modelFile) {
     diagnostics.push("missing GLB model file");
@@ -190,7 +216,8 @@ async function generateWfcMetadata(asset: AssetFolder): Promise<{ wfc: WfcMetada
     variants.push({
       variantId: `${id}@r${rotationDegrees}`,
       rotationDegrees,
-      sockets
+      sockets,
+      ...(existingRoadTopology.get(rotationDegrees) ? { roadTopology: existingRoadTopology.get(rotationDegrees) } : {})
     });
   }
 

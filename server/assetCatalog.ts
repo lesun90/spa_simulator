@@ -2,7 +2,8 @@ import { mkdir, readdir, readFile, stat, writeFile } from "node:fs/promises";
 import { basename, extname, join, relative, sep } from "node:path";
 import type { AssetCatalogEntry } from "../src/editor-core/assets";
 import { assetLabelFromId } from "../src/editor-core/assets";
-import type { WfcMetadata } from "../src/wfc/metadata/socketTypes";
+import type { AssetSemantics, WfcMetadata } from "../src/wfc/metadata/socketTypes";
+import { validateWfcWeights } from "../src/wfc/paletteSelection";
 
 interface AssetMetadata {
   id?: string;
@@ -10,6 +11,7 @@ interface AssetMetadata {
   category?: string;
   tags?: string[];
   wfc?: WfcMetadata;
+  semantics?: AssetSemantics;
 }
 
 export interface SharedImportRequest {
@@ -157,6 +159,7 @@ async function normalizeAssetFolder(assetRoot: string, folder: string): Promise<
   if (moduleFile && !(await fileContainsCreateAsset(join(folder, moduleFile)))) {
     diagnostics.push(`${moduleFile} does not export createAsset.`);
   }
+  diagnostics.push(...validateWfcWeights(metadata.wfc));
 
   return {
     id,
@@ -169,6 +172,7 @@ async function normalizeAssetFolder(assetRoot: string, folder: string): Promise<
     modelUrl: glbFile ? `${urlBase}/${encodeURIComponent(glbFile)}` : undefined,
     thumbnailUrl: pngFile ? `${urlBase}/${encodeURIComponent(pngFile)}` : undefined,
     wfc: metadata.wfc,
+    semantics: metadata.semantics,
     diagnostics
   };
 }

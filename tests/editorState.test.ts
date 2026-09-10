@@ -9,6 +9,7 @@ import {
   type SceneSummary
 } from "../src/api/client";
 import type { AssetCatalogEntry } from "../src/editor-core/assets";
+import type { WfcMetadata } from "../src/wfc/metadata/socketTypes";
 
 vi.mock("../src/api/client", () => ({
   createSceneRequest: vi.fn(),
@@ -153,6 +154,26 @@ test("placement preserves a stacked object height", () => {
   expect(state.scene?.objects[0]?.position).toEqual({ x: 1.5, y: 3.25, z: 2.5 });
 });
 
+test("generates a connected WFC layout as one undoable scene operation", async () => {
+  const state = new EditorState();
+  state.history = { scene: createScene("Downtown"), undoStack: [], redoStack: [] };
+  state.assets = [
+    asset({ id: "tiles.a", category: "tiles", wfc: wfc("tiles.a") }),
+    asset({ id: "tiles.b", category: "tiles", wfc: wfc("tiles.b") })
+  ];
+
+  await state.generateWfcLayout({ width: 3, depth: 2, seed: 12, tileWidth: 6, tileDepth: 6 });
+
+  expect(state.scene?.objects).toHaveLength(6);
+  expect(state.scene?.objects.every((object) => object.scale === 2)).toBe(true);
+  expect(state.canUndo()).toBe(true);
+  expect(state.notice).toContain("Generated 6 tiles");
+  state.undo();
+  expect(state.scene?.objects).toHaveLength(0);
+  state.redo();
+  expect(state.scene?.objects).toHaveLength(6);
+});
+
 test("inspection resolution is independent from placement resolution", () => {
   const state = new EditorState();
   const onPlacement = vi.fn();
@@ -176,6 +197,21 @@ function asset(patch: Partial<AssetCatalogEntry>): AssetCatalogEntry {
     category: patch.category ?? "props",
     tags: patch.tags,
     source: patch.source ?? "shared",
-    implementation: patch.implementation ?? "placeholder"
+    implementation: patch.implementation ?? "placeholder",
+    wfc: patch.wfc
+  };
+}
+
+function wfc(assetId: string): WfcMetadata {
+  return {
+    height: 1,
+    diagnostics: [],
+    variants: [
+      {
+        variantId: `${assetId}@r0`,
+        rotationDegrees: 0,
+        sockets: { north: "road", east: "road", south: "road", west: "road", top: "top", bottom: "bottom" }
+      }
+    ]
   };
 }

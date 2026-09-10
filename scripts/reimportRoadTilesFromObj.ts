@@ -69,7 +69,7 @@ if (!("FileReader" in globalThis)) {
 }
 
 export async function reimportRoadTilesFromObj(options: ReimportOptions) {
-  const modelsRoot = join(options.sourceRoot, "Models");
+  const modelsRoot = await modelDirectory(options.sourceRoot);
   const files = (await readdir(modelsRoot))
     .filter((file) => /^roadTile_\d+\.obj$/.test(file))
     .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
@@ -104,6 +104,11 @@ export async function reimportRoadTilesFromObj(options: ReimportOptions) {
   }
 
   return built;
+}
+
+async function modelDirectory(sourceRoot: string) {
+  const nestedModels = join(sourceRoot, "Models");
+  return (await exists(nestedModels)) ? nestedModels : sourceRoot;
 }
 
 async function readObj(file: string): Promise<ObjModel> {
@@ -338,7 +343,7 @@ function labelFromAssetName(assetName: string) {
 
 function parseArgs(argv: string[]): ReimportOptions {
   const options: ReimportOptions = {
-    sourceRoot: "temp_assets/3d-road-tiles",
+    sourceRoot: "tmp_assets/Wave Front Collapse Edge Detection/Assets/3D Road Tiles",
     assetRoot: "assets",
     workRoot: ".tmp/road-tiles-obj-glb"
   };

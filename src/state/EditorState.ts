@@ -5,6 +5,7 @@ import {
   deleteObjectCommand,
   duplicateObjectCommand,
   executeCommand,
+  replaceGeneratedLayoutCommand,
   redo as redoHistory,
   undo as undoHistory,
   updateObjectCommand,
@@ -27,6 +28,17 @@ import {
 } from "../api/client";
 import { createTemporaryAsset, selectedObject } from "./editorHelpers";
 import type { EditorTool } from "./types";
+import { createRoadTopologyPolicies } from "../wfc/roadTopology";
+import {
+  overlayRoadTopology,
+  paletteFromAssets,
+  sceneObjectsFromRoadTopologyPolicies,
+  sceneObjectsFromWfcResult,
+  solvePlanarWfcInWorker,
+  isGeneratedWfcObject,
+  type GenerateWfcLayoutRequest,
+  type WfcGenerationProgress
+} from "../wfc/sceneLayout";
 
 export type EditorTopic =
   | "scene"
@@ -45,7 +57,8 @@ export type EditorTopic =
   | "objectVisibility"
   | "search"
   | "category"
-  | "notice";
+  | "notice"
+  | "wfcProgress";
 
 type Listener = () => void;
 
@@ -68,6 +81,8 @@ export class EditorState {
   category = "all";
   assetsRefreshing = false;
   notice = "Ready";
+  wfcProgress: WfcGenerationProgress | null = null;
+  wfcPreviewObjects: readonly SceneObject[] = [];
 
   private readonly listeners = new Map<EditorTopic, Set<Listener>>();
   /** Session-only, per-scene: objects hidden from the viewport for editing convenience, not persisted. */
@@ -242,6 +257,71 @@ export class EditorState {
     this.activeTool = "select";
     this.emit("scene", "selection", "placement", "tool");
     this.setNotice(`Placed ${assetId}`);
+  }
+
+  async generateWfcLayout(request: GenerateWfcLayoutRequest) {
+    if (!this.history || !this.scene || this.wfcProgress) {
+      if (!this.history || !this.scene) this.setNotice("Open a scene before generating a layout");
+      return;
+    }
+
+    this.setWfcProgress({ status: "building-palette" });
+    const palette = paletteFromAssets("shared-assets", this.assets, {
+      tileWidth: request.tileWidth,
+      tileDepth: request.tileDepth
+    });
+    const roadTopology = this.assets.some((asset) => asset.category === "3d-road-tiles")
+      ? createRoadTopologyPolicies(request, palette.variants)
+      : [];
+    try {
+      // Road topology is a semantic, authored constraint. The generic asset palette cannot yet
+      // realize it using exact geometric sockets, so render the reviewed road network directly
+      // instead of allowing an unrelated whole-grid solve to hide it.
+      const roadObjects = roadTopology.length
+        ? sceneObjectsFromRoadTopologyPolicies(roadTopology, request.seed, request, palette)
+        : [];
+      if (roadTopology.length && !roadObjects.length) {
+        this.setNotice("No reviewed road tile can realize the generated topology");
+        return;
+      }
+      const solved = await solvePlanarWfcInWorker(
+        palette,
+        { ...request, policies: request.policies },
+        { onProgress: (progress) => this.setWfcProgress(progress) }
+      );
+      const result = sceneObjectsFromWfcResult(solved, request, palette);
+      const objects = roadObjects.length && result.status === "solved"
+        ? overlayRoadTopology(result.objects, roadObjects)
+        : roadObjects.length
+          ? roadObjects
+          : result.status === "solved"
+            ? result.objects
+            : [];
+      if (!objects.length) {
+        this.setNotice(result.status === "failed"
+          ? result.diagnostics[0] ?? "WFC generation failed"
+          : "WFC generation failed");
+        return;
+      }
+
+      this.setWfcProgress({ status: "placing", cells: objects.length });
+      this.history = executeCommand(this.history, replaceGeneratedLayoutCommand(objects, isGeneratedWfcObject));
+      this.selectedObjectId = objects[0]?.id ?? null;
+      this.emit("scene", "selection");
+      this.setNotice(result.status === "failed"
+        ? `Generated ${objects.length} road tiles without generic fill (seed ${request.seed})`
+        : `Generated ${objects.length} tiles (seed ${request.seed})`);
+    } catch (error) {
+      this.setNotice(error instanceof Error ? error.message : "WFC generation failed");
+    } finally {
+      this.setWfcProgress(null);
+    }
+  }
+
+  private setWfcProgress(progress: WfcGenerationProgress | null) {
+    this.wfcProgress = progress;
+    this.wfcPreviewObjects = progress?.status === "solving" ? progress.objects : [];
+    this.emit("wfcProgress");
   }
 
   selectObject(objectId: string | null) {

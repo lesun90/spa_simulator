@@ -2,6 +2,7 @@ import { describe, expect, test } from "vitest";
 import {
   addObjectCommand,
   createHistory,
+  replaceGeneratedLayoutCommand,
   duplicateObjectCommand,
   executeCommand,
   redo,
@@ -85,6 +86,21 @@ describe("scene command history", () => {
       { id: "obj_1", name: "Corner cone", position: { x: 3, y: 0, z: 4 }, rotationY: 1, scale: 2 },
       { id: "obj_2", name: "Corner cone copy", position: { x: 4, y: 0, z: 5 }, rotationY: 1, scale: 2 }
     ]);
+  });
+
+  test("replaces and restores a generated layout without touching manual objects", () => {
+    const scene = createScene("Generated Layout");
+    scene.objects = [
+      { id: "manual", assetId: "props.cone", name: "Manual cone", position: { x: 0, y: 0, z: 0 }, rotationY: 0, scale: 1 },
+      { id: "old", assetId: "tiles.old", name: "WFC layout 1 [0, 0]", position: { x: 3, y: 0, z: 0 }, rotationY: 0, scale: 1 }
+    ];
+    const generated = [{ id: "new", assetId: "tiles.new", name: "WFC layout 2 [0, 0]", position: { x: 0, y: 0, z: 0 }, rotationY: 0, scale: 1 }];
+    const command = replaceGeneratedLayoutCommand(generated, (object) => object.name.startsWith("WFC layout"));
+
+    const applied = executeCommand(createHistory(scene), command);
+    expect(applied.scene.objects.map((object) => object.id)).toEqual(["manual", "new"]);
+    expect(undo(applied).scene.objects.map((object) => object.id)).toEqual(["manual", "old"]);
+    expect(redo(undo(applied)).scene.objects.map((object) => object.id)).toEqual(["manual", "new"]);
   });
 
   test("updates preserve stacked object height", () => {

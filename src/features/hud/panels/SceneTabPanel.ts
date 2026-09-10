@@ -36,6 +36,8 @@ const APPEARANCE_BLOCK_HEIGHT = HEADER_HEIGHT + HEADER_GAP + CONTROL_HEIGHT + ST
 // The grid block: header + three labeled rows (cell size, scene size, placement).
 const GRID_BLOCK_HEIGHT = HEADER_HEIGHT + HEADER_GAP + CONTROL_HEIGHT + STACK_GAP + CONTROL_HEIGHT + STACK_GAP + CONTROL_HEIGHT;
 
+const WFC_BLOCK_HEIGHT = HEADER_HEIGHT + HEADER_GAP + CONTROL_HEIGHT + STACK_GAP + CONTROL_HEIGHT;
+
 const FOOTER_HEIGHT =
   SECTION_GAP + // above divider
   DIVIDER_HEIGHT +
@@ -45,6 +47,8 @@ const FOOTER_HEIGHT =
   APPEARANCE_BLOCK_HEIGHT + // ground
   SECTION_GAP +
   GRID_BLOCK_HEIGHT +
+  SECTION_GAP +
+  WFC_BLOCK_HEIGHT +
   PADDING;
 
 const SURFACE_TYPE_LABELS: Record<SurfaceAppearanceType, string> = { color: "Color", texture: "Texture" };
@@ -74,6 +78,9 @@ export class SceneTabPanel {
   private placementLabel: LabelMesh | null = null;
   private readonly placementCellButton: Button;
   private readonly placementFreeButton: Button;
+  private wfcHeader: SectionHeader;
+  private readonly wfcSeedField: TextField;
+  private readonly generateWfcButton: Button;
 
   private rect: Rect;
   private readonly cleanups: Array<() => void> = [];
@@ -128,8 +135,8 @@ export class SceneTabPanel {
     this.sceneSizeField = new TextField(
       this.sceneSizeFieldRect(),
       interaction,
-      { numeric: true, placeholder: "100", onCommit: (value) => this.commitSceneSize(value) },
-      formatGridSize(state.scene?.grid.width ?? 100)
+      { numeric: true, placeholder: "10", onCommit: (value) => this.commitSceneSize(value) },
+      formatGridSize(state.scene?.grid.width ?? 10)
     );
     this.root.add(this.sceneSizeField.root);
 
@@ -145,10 +152,26 @@ export class SceneTabPanel {
     });
     this.root.add(this.placementCellButton.root, this.placementFreeButton.root);
 
+    this.wfcHeader = new SectionHeader(this.wfcHeaderRect());
+    this.root.add(this.wfcHeader.root);
+    this.wfcSeedField = new TextField(
+      this.wfcSeedFieldRect(),
+      interaction,
+      { numeric: true, placeholder: "Seed", onCommit: () => this.normalizeWfcSeed() },
+      "1"
+    );
+    this.generateWfcButton = new Button(this.generateWfcButtonRect(), interaction, {
+      label: "Generate layout",
+      fontSize: 11.5,
+      onClick: () => this.generateWfcLayout()
+    });
+    this.root.add(this.wfcSeedField.root, this.generateWfcButton.root);
+
     this.applyStaticHeaders();
 
     this.cleanups.push(
       state.on("scene", () => this.onSceneChanged()),
+      state.on("wfcProgress", () => this.refreshWfcGeneration()),
       state.on("selection", () => this.refreshSelection()),
       state.on("objectVisibility", () => this.refreshVisibility()),
       state.on("placement", () => this.refreshPlacementControls()),
@@ -164,7 +187,7 @@ export class SceneTabPanel {
     this.backgroundEditor.refresh();
     this.groundEditor.refresh();
     this.gridField.setValue(formatGridSize(this.state.scene?.grid.cellSize ?? 1));
-    this.sceneSizeField.setValue(formatGridSize(this.state.scene?.grid.width ?? 100));
+    this.sceneSizeField.setValue(formatGridSize(this.state.scene?.grid.width ?? 10));
   }
 
   private refreshSelection() {
@@ -270,6 +293,22 @@ export class SceneTabPanel {
     return segmentButtonRect(this.placementControlRect(), 1);
   }
 
+  private wfcHeaderRect(): Rect {
+    const placement = this.placementControlRect();
+    const y = placement.y + CONTROL_HEIGHT + SECTION_GAP;
+    return { x: this.rect.x + PADDING, y, width: this.rect.width - PADDING * 2, height: HEADER_HEIGHT };
+  }
+
+  private wfcSeedFieldRect(): Rect {
+    const header = this.wfcHeaderRect();
+    return { x: header.x, y: header.y + HEADER_HEIGHT + HEADER_GAP, width: header.width, height: CONTROL_HEIGHT };
+  }
+
+  private generateWfcButtonRect(): Rect {
+    const seed = this.wfcSeedFieldRect();
+    return { x: seed.x, y: seed.y + CONTROL_HEIGHT + STACK_GAP, width: seed.width, height: CONTROL_HEIGHT };
+  }
+
   private applyStaticHeaders() {
     this.objectsHeader.setRect(this.objectsHeaderRect());
     this.backgroundHeader.setRect(this.backgroundHeaderRect());
@@ -279,6 +318,8 @@ export class SceneTabPanel {
     this.backgroundHeader.setLabel("Background", "");
     this.groundHeader.setLabel("Ground", "");
     this.gridHeader.setLabel("Grid", "");
+    this.wfcHeader.setLabel("Generate layout", wfcGenerationLabel(this.state));
+    this.refreshWfcGeneration();
     this.renderRowLabel("cellSizeLabel", "Cell size", this.cellSizeLabelRect());
     this.renderRowLabel("sceneSizeLabel", "Scene size", this.sceneSizeLabelRect());
     this.renderRowLabel("placementLabel", "Placement", this.placementLabelRect());
@@ -304,6 +345,14 @@ export class SceneTabPanel {
   private refreshPlacementControls() {
     this.placementCellButton.setActive(this.state.placementResolution === "snap");
     this.placementFreeButton.setActive(this.state.placementResolution === "free");
+  }
+
+  private refreshWfcGeneration() {
+    const generating = this.state.wfcProgress !== null;
+    this.wfcSeedField.root.visible = !generating;
+    this.generateWfcButton.setDisabled(generating);
+    this.generateWfcButton.setLabel(generating ? "Generating layout…" : "Generate layout");
+    this.wfcHeader.setLabel("Generate layout", wfcGenerationLabel(this.state));
   }
 
   // --- object list --------------------------------------------------------
@@ -376,7 +425,21 @@ export class SceneTabPanel {
       this.state.setSceneSize(parsed);
       return;
     }
-    this.sceneSizeField.setValue(formatGridSize(this.state.scene?.grid.width ?? 100));
+    this.sceneSizeField.setValue(formatGridSize(this.state.scene?.grid.width ?? 10));
+  }
+
+  private normalizeWfcSeed() {
+    this.wfcSeedField.setValue(String(integer(this.wfcSeedField.getValue(), 1)));
+  }
+
+  private generateWfcLayout() {
+    this.normalizeWfcSeed();
+    const grid = this.state.scene?.grid;
+    if (!grid) return;
+    const width = Math.floor(grid.width / grid.cellSize);
+    const depth = Math.floor(grid.depth / grid.cellSize);
+    const seed = integer(this.wfcSeedField.getValue(), 1);
+    this.state.generateWfcLayout({ width, depth, seed, tileWidth: grid.cellSize, tileDepth: grid.cellSize });
   }
 
   // --- lifecycle --------------------------------------------------------
@@ -401,6 +464,8 @@ export class SceneTabPanel {
     this.sceneSizeField.setRect(this.sceneSizeFieldRect());
     this.placementCellButton.setRect(this.placementCellButtonRect());
     this.placementFreeButton.setRect(this.placementFreeButtonRect());
+    this.wfcSeedField.setRect(this.wfcSeedFieldRect());
+    this.generateWfcButton.setRect(this.generateWfcButtonRect());
     this.applyStaticHeaders();
     this.rebuildRows();
   }
@@ -417,6 +482,7 @@ export class SceneTabPanel {
     this.groundHeader.dispose();
     this.groundEditor.dispose();
     this.gridHeader.dispose();
+    this.wfcHeader.dispose();
     this.cellSizeLabel?.material.dispose();
     this.gridField.dispose();
     this.sceneSizeLabel?.material.dispose();
@@ -424,6 +490,8 @@ export class SceneTabPanel {
     this.placementLabel?.material.dispose();
     this.placementCellButton.dispose();
     this.placementFreeButton.dispose();
+    this.wfcSeedField.dispose();
+    this.generateWfcButton.dispose();
   }
 }
 
@@ -952,6 +1020,19 @@ function hexToNumber(css: string): number {
 
 function formatGridSize(cellSize: number): string {
   return String(cellSize);
+}
+
+function integer(value: string, fallback: number) {
+  const parsed = Number.parseInt(value, 10);
+  return Number.isInteger(parsed) ? parsed : fallback;
+}
+
+function wfcGenerationLabel(state: EditorState) {
+  const progress = state.wfcProgress;
+  if (!progress) return "Scene size / cell size";
+  if (progress.status === "building-palette") return "Preparing tile palette";
+  if (progress.status === "solving") return `Solving ${progress.collapsedCells}/${progress.cells} cells · ${progress.backtracks} backtracks`;
+  return `Placing ${progress.cells} tiles`;
 }
 
 function countSuffix(count: number): string {

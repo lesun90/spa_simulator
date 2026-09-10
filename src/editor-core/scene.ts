@@ -23,6 +23,11 @@ export interface SurfaceAppearance {
   textureUrl: string | null;
 }
 
+export interface GeneratedObjectProvenance {
+  pipeline: "wfc" | "environment";
+  stage: string;
+}
+
 export interface SceneObject {
   id: string;
   assetId: string;
@@ -30,6 +35,7 @@ export interface SceneObject {
   position: Vector3Data;
   rotationY: number;
   scale: number;
+  generated?: GeneratedObjectProvenance;
 }
 
 export interface Scene {
@@ -59,7 +65,7 @@ export function createScene(name: string): Scene {
     id: createId("scene"),
     name,
     description: "",
-    grid: { cellSize: 1, width: 100, depth: 100 },
+    grid: { cellSize: 1, width: 10, depth: 10 },
     background: defaultSurfaceAppearance(DEFAULT_BACKGROUND_COLOR),
     ground: defaultSurfaceAppearance(DEFAULT_GROUND_COLOR),
     objects: []

@@ -51,6 +51,25 @@ export function redo(history: HistoryState): HistoryState {
   };
 }
 
+/** Replaces only a prior generated layout while retaining all manually authored scene objects. */
+export function replaceGeneratedLayoutCommand(generatedObjects: readonly SceneObject[], isGenerated: (object: SceneObject) => boolean): SceneCommand {
+  let previousObjects: SceneObject[] | undefined;
+
+  return {
+    label: "Generate WFC layout",
+    execute(scene) {
+      previousObjects ??= scene.objects.map(cloneObject);
+      return {
+        ...cloneScene(scene),
+        objects: [...scene.objects.filter((object) => !isGenerated(object)).map(cloneObject), ...generatedObjects.map(cloneObject)]
+      };
+    },
+    undo(scene) {
+      return { ...cloneScene(scene), objects: (previousObjects ?? scene.objects).map(cloneObject) };
+    }
+  };
+}
+
 export function addObjectCommand(object: SceneObject): SceneCommand {
   return {
     label: "Place object",

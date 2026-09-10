@@ -1,0 +1,108 @@
+import type { AssetCatalogEntry } from "../editor-core/assets";
+import type { AssetSemantics, RoadTopologyTag } from "./metadata/socketTypes";
+import type { SceneObject } from "../editor-core/scene";
+import { preparePlanarPalette, cloneCompactPalette, type CompactPlanarPalette, type PreparedPlanarPalette } from "./compactPlanarWfc";
+import { resolveVariantWeight } from "./paletteSelection";
+import { createPlanarPalette, solvePlanarWfc, type PlanarDirection, type PlanarPolicySpec, type PlanarWfcPalette, type PlanarWfcProgress, type PlanarWfcResult, type PlanarWfcVariant } from "./planarWfc";
+
+export const GENERATED_WFC_NAME_PREFIX = "WFC layout";
+export const DEFAULT_WFC_TILE_SIZE = 3;
+export interface GenerateWfcLayoutRequest { width: number; depth: number; seed: number; tileWidth?: number; tileDepth?: number; maxBacktracks?: number; policies?: readonly PlanarPolicySpec[]; }
+export type GenerateWfcLayoutResult = | { status: "solved"; seed: number; objects: readonly SceneObject[]; palette: PlanarWfcPalette; decisions: number; backtracks: number } | Exclude<PlanarWfcResult, { status: "solved" }>;
+export type WfcGenerationProgress = | { status: "building-palette" } | { status: "solving"; cells: number; variants: number; decisions: number; backtracks: number; collapsedCells: number; objects: readonly SceneObject[]; checkpoint?: string } | { status: "placing"; cells: number };
+type CompactCell = { column: number; row: number; variantIndex: number };
+type WorkerMessage = | { type: "progress"; decisions: number; backtracks: number; collapsedCells: number; cells: readonly CompactCell[]; checkpoint: string } | { type: "result"; result: PlanarWfcResult | { status: "solved"; seed: number; cells: readonly CompactCell[]; decisions: number; backtracks: number } };
+type WfcWorker = Pick<Worker, "postMessage" | "terminate"> & { onmessage: ((event: MessageEvent<WorkerMessage>) => void) | null; onerror: ((event: ErrorEvent) => void) | null; };
+export type WfcWorkerFactory = () => WfcWorker;
+const createWfcWorker: WfcWorkerFactory = () => new Worker(new URL("./planarWfcWorker.ts", import.meta.url), { type: "module" });
+const preparedPaletteCache = new WeakMap<readonly AssetCatalogEntry[], Map<string, PreparedPlanarPalette>>();
+const preparedByPalette = new WeakMap<PlanarWfcPalette, PreparedPlanarPalette>();
+
+export function solvePlanarWfcInWorker(palette: PlanarWfcPalette, request: GenerateWfcLayoutRequest, options: { onProgress?(progress: WfcGenerationProgress): void; workerFactory?: WfcWorkerFactory; signal?: AbortSignal } = {}): Promise<PlanarWfcResult> {
+  options.onProgress?.({ status: "solving", cells: request.width * request.depth, variants: palette.variants.length, decisions: 0, backtracks: 0, collapsedCells: 0, objects: [] });
+  if (typeof Worker === "undefined" && !options.workerFactory) return Promise.resolve(solvePlanarWfc(palette, request, { policies: request.policies }));
+  const prepared = preparedByPalette.get(palette) ?? preparePlanarPalette(palette);
+  preparedByPalette.set(palette, prepared);
+  const worker = (options.workerFactory ?? createWfcWorker)();
+  return new Promise((resolve, reject) => {
+    const cancel = () => { worker.terminate(); reject(new DOMException("WFC generation cancelled", "AbortError")); };
+    options.signal?.addEventListener("abort", cancel, { once: true });
+    worker.onmessage = ({ data }) => {
+      if (data.type === "progress") {
+        options.onProgress?.({ status: "solving", cells: request.width * request.depth, variants: palette.variants.length, decisions: data.decisions, backtracks: data.backtracks, collapsedCells: data.collapsedCells, checkpoint: data.checkpoint, objects: previewObjectsFromCompactCells(data.cells, request.seed, request, palette) });
+        return;
+      }
+      worker.terminate(); options.signal?.removeEventListener("abort", cancel);
+      if (data.result.status === "failed") resolve(data.result);
+      else {
+        const compactResult = data.result as { status: "solved"; seed: number; cells: readonly CompactCell[]; decisions: number; backtracks: number };
+        resolve({ ...compactResult, cells: compactResult.cells.map((cell) => ({ column: cell.column, row: cell.row, variant: palette.variants[cell.variantIndex] })) });
+      }
+    };
+    worker.onerror = (event) => { worker.terminate(); options.signal?.removeEventListener("abort", cancel); reject(new Error(event.message || "WFC worker failed")); };
+    const compact = cloneCompactPalette(prepared.compact);
+    worker.postMessage({ type: "solve", compact, request: { width: request.width, depth: request.depth, seed: request.seed, maxBacktracks: request.maxBacktracks, policies: request.policies } }, [compact.socketIds.buffer, compact.weights.buffer, compact.compatibility.buffer]);
+  });
+}
+
+export function sceneObjectsFromWfcResult(result: PlanarWfcResult, request: GenerateWfcLayoutRequest, palette: PlanarWfcPalette): GenerateWfcLayoutResult { if (result.status === "failed") return result; return { status: "solved", seed: result.seed, palette, decisions: result.decisions, backtracks: result.backtracks, objects: sceneObjectsFromSolvedCells(result.cells, result.seed, request, palette) }; }
+function sceneObjectsFromSolvedCells(cells: readonly { column: number; row: number; variant: PlanarWfcVariant }[], seed: number, request: GenerateWfcLayoutRequest, palette: PlanarWfcPalette): SceneObject[] { return cells.map((cell) => ({ id: `wfc-preview-${cell.column}-${cell.row}`, assetId: cell.variant.assetId, name: `${GENERATED_WFC_NAME_PREFIX} ${seed} [${cell.column}, ${cell.row}]`, position: { x: (cell.column - (request.width - 1) / 2) * palette.tileWidth, y: 0, z: (cell.row - (request.depth - 1) / 2) * palette.tileDepth }, rotationY: (cell.variant.rotationDegrees * Math.PI) / 180, scale: palette.tileWidth / DEFAULT_WFC_TILE_SIZE, generated: { pipeline: "wfc", stage: "structural" } })); }
+export function previewObjectsFromWfcProgress(cells: readonly { column: number; row: number; variant: PlanarWfcVariant }[], seed: number, request: GenerateWfcLayoutRequest, palette: PlanarWfcPalette) { return sceneObjectsFromSolvedCells(cells, seed, request, palette); }
+function previewObjectsFromCompactCells(cells: readonly CompactCell[], seed: number, request: GenerateWfcLayoutRequest, palette: PlanarWfcPalette) { return sceneObjectsFromSolvedCells(cells.map((cell) => ({ ...cell, variant: palette.variants[cell.variantIndex] })), seed, request, palette); }
+
+/**
+ * Realizes a solved abstract road network with reviewed road variants. Exact geometric socket
+ * matching is deliberately not applied here: the road tags are the authored connectivity contract.
+ * The generic concrete WFC palette remains available for assets with compatible physical sockets.
+ */
+export function sceneObjectsFromRoadTopologyPolicies(policies: readonly PlanarPolicySpec[], seed: number, request: GenerateWfcLayoutRequest, palette: PlanarWfcPalette): readonly SceneObject[] {
+  return policies.flatMap((policy) => {
+    if (policy.type !== "exact-cell-ports") return [];
+    const directions = policy.ports.filter((port) => port.channel === "road").map((port) => port.direction);
+    const candidates = palette.variants.filter((variant) => roadDirections(variant).length === directions.length && directions.every((direction) => roadDirections(variant).includes(direction)));
+    if (!candidates.length) return [];
+    const variant = candidates[stableIndex(seed, policy.column, policy.row, candidates.length)]!;
+    return sceneObjectsFromSolvedCells([{ column: policy.column, row: policy.row, variant }], seed, request, palette);
+  });
+}
+
+/** Replaces generic fill cells with the semantic road cells at the same grid positions. */
+export function overlayRoadTopology(fill: readonly SceneObject[], roads: readonly SceneObject[]): readonly SceneObject[] {
+  const roadsById = new Map(roads.map((object) => [object.id, object]));
+  const combined = fill.map((object) => roadsById.get(object.id) ?? object);
+  const filledIds = new Set(fill.map((object) => object.id));
+  return [...combined, ...roads.filter((object) => !filledIds.has(object.id))];
+}
+
+function roadDirections(variant: PlanarWfcVariant) {
+  return planarDirections.filter((direction) => variant.semanticPorts?.[direction]?.includes("road"));
+}
+
+function stableIndex(seed: number, column: number, row: number, length: number) {
+  let value = (seed ^ Math.imul(column + 1, 0x9e3779b9) ^ Math.imul(row + 1, 0x85ebca6b)) >>> 0;
+  value ^= value >>> 16;
+  value = Math.imul(value, 0x7feb352d) >>> 0;
+  value ^= value >>> 15;
+  return (value >>> 0) % length;
+}
+
+/** Builds one solver palette from every compatible asset in the requested category. */
+export function paletteFromAssets(id: string, assets: readonly AssetCatalogEntry[], options: { tileWidth?: number; tileDepth?: number; category?: string } = {}): PlanarWfcPalette {
+  const key = JSON.stringify({ id, tileWidth: options.tileWidth ?? DEFAULT_WFC_TILE_SIZE, tileDepth: options.tileDepth ?? DEFAULT_WFC_TILE_SIZE, category: options.category });
+  const cached = preparedPaletteCache.get(assets)?.get(key);
+  if (cached) return cached.palette;
+  const variants = assets.filter((asset) => asset.wfc?.variants.length && asset.wfc.variants.every((variant) => planarSocketsAreComplete(variant.sockets)) && (!options.category || asset.category === options.category)).sort((a, b) => a.id.localeCompare(b.id)).flatMap((asset) => asset.wfc!.variants.map((variant) => ({ id: variant.variantId, assetId: asset.id, rotationDegrees: variant.rotationDegrees, sockets: variant.sockets, weight: resolveVariantWeight(asset.wfc!, variant), roles: asset.semantics?.roles ?? inferredRoadRoles(asset), semanticPorts: rotateSemanticPorts(asset.semantics?.sockets, variant.rotationDegrees) ?? roadTopologyPorts(variant.roadTopology) }))).sort((a, b) => a.id.localeCompare(b.id));
+  const palette = createPlanarPalette(id, options.tileWidth ?? DEFAULT_WFC_TILE_SIZE, options.tileDepth ?? DEFAULT_WFC_TILE_SIZE, variants);
+  const prepared = preparePlanarPalette(palette);
+  preparedByPalette.set(palette, prepared);
+  let entries = preparedPaletteCache.get(assets); if (!entries) { entries = new Map(); preparedPaletteCache.set(assets, entries); } entries.set(key, prepared);
+  return palette;
+}
+export function generateWfcLayout(assets: readonly AssetCatalogEntry[], request: GenerateWfcLayoutRequest, options: { category?: string } = {}): GenerateWfcLayoutResult { const palette = paletteFromAssets("catalog", assets, { tileWidth: request.tileWidth, tileDepth: request.tileDepth, category: options.category }); return sceneObjectsFromWfcResult(solvePlanarWfc(palette, request, { policies: request.policies }), request, palette); }
+export function isGeneratedWfcObject(object: SceneObject): boolean { return object.generated?.pipeline === "wfc" || object.name.startsWith(GENERATED_WFC_NAME_PREFIX); }
+export function compactPaletteMetrics(palette: PlanarWfcPalette) { const prepared = preparePlanarPalette(palette); return { bytes: prepared.byteLength, distinctSocketIds: new Set(prepared.compact.socketIds).size }; }
+function planarSocketsAreComplete(sockets: PlanarWfcVariant["sockets"]) { return planarDirections.every((direction) => typeof sockets[direction] === "string" && sockets[direction].length > 0); }
+const planarDirections = ["north", "east", "south", "west"] as const;
+function rotateSemanticPorts(sockets: AssetSemantics["sockets"] | undefined, rotationDegrees: number): Partial<Record<PlanarDirection, readonly string[]>> | undefined { if (!sockets) return undefined; const turns = ((rotationDegrees / 90) % 4 + 4) % 4; const directions: PlanarDirection[] = ["north", "east", "south", "west"]; const output: Partial<Record<PlanarDirection, readonly string[]>> = {}; for (const direction of directions) { const socket = sockets[direction]; if (socket?.type) output[directions[(directions.indexOf(direction) + turns) % 4]] = [socket.type]; } return output; }
+function inferredRoadRoles(asset: AssetCatalogEntry) { return asset.category === "3d-road-tiles" ? ["road.surface"] : undefined; }
+function roadTopologyPorts(topology: RoadTopologyTag | undefined): Partial<Record<PlanarDirection, readonly string[]>> | undefined { if (!topology) return undefined; return Object.fromEntries(Object.entries(topology.edges).map(([direction]) => [direction, ["road"]])) as Partial<Record<PlanarDirection, readonly string[]>>; }

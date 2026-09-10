@@ -74,6 +74,30 @@ describe("asset catalog discovery", () => {
     expect(files.sort()).toEqual(["asset.json", "delivery-van.glb"]);
   });
 
+  test("preserves WFC weights and semantic ports", async () => {
+    const root = await mkdtemp(join(tmpdir(), "steerlab-assets-"));
+    await mkdir(join(root, "tiles", "road"), { recursive: true });
+    await writeFile(join(root, "tiles", "road", "road.glb"), "glb");
+    await writeFile(join(root, "tiles", "road", "asset.json"), JSON.stringify({
+      id: "tiles.road", wfc: { height: 1, defaultWeight: 8, variants: [], diagnostics: [] },
+      semantics: { roles: ["road.surface"], sockets: { north: { type: "road" } } }
+    }));
+
+    const [entry] = await discoverAssetCatalog(root);
+    expect(entry.wfc).toMatchObject({ defaultWeight: 8 });
+    expect(entry.semantics).toEqual({ roles: ["road.surface"], sockets: { north: { type: "road" } } });
+  });
+
+  test("reports malformed WFC palette weights without hiding the asset", async () => {
+    const root = await mkdtemp(join(tmpdir(), "steerlab-assets-"));
+    await mkdir(join(root, "tiles", "road"), { recursive: true });
+    await writeFile(join(root, "tiles", "road", "road.glb"), "glb");
+    await writeFile(join(root, "tiles", "road", "asset.json"), JSON.stringify({ id: "tiles.road", wfc: { height: 1, defaultWeight: 0, variants: [], diagnostics: [] } }));
+
+    const [entry] = await discoverAssetCatalog(root);
+    expect(entry.diagnostics).toContain("WFC default weight must be a positive finite number.");
+  });
+
   test("includes the low-poly sports car in the shared vehicle catalog", async () => {
     const catalog = await discoverAssetCatalog(join(process.cwd(), "assets"));
 
