@@ -27,11 +27,11 @@ class ScenicPlan {
   build(): WorldPlan {
     if (!this.ground) throw new Error("Scenic road generation requires reviewed ground tile 163.");
     this.addStreets(1);
-    const waterway = planLake(this.plan.bounds, this.roads, this.palette, this.random);
-    if (!waterway.length) throw new Error("Could not fit an enclosed lake and high bridge in this road plan. Try a larger scene or another seed.");
-    for (const cell of waterway) {
+    const lake = planLake(this.plan.bounds, this.roads, this.palette, this.random);
+    if (!lake.length) throw new Error("Could not fit an enclosed lake and high bridge in this road plan. Try a larger scene or another seed.");
+    for (const cell of lake) {
       // Ordinary flat cells can still receive streets; reserve every actual
-      // shoreline, river, bank, slope and elevated road before adding chords.
+      // shoreline, bank, slope and elevated road before adding chords.
       if (["163", "162", "153"].some((id) => cell.variant.assetId === tileId(id))) continue;
       this.pin(cell, [cell.variant]);
       this.occupied.add(key(cell));
@@ -39,6 +39,7 @@ class ScenicPlan {
     this.addStreets();
     this.junctions();
     this.overpasses();
+    this.bendRoads();
     const featureCount = Math.max(1, Math.min(12, Math.floor(this.plan.bounds.width * this.plan.bounds.depth / 180)));
 
     this.terrainFeatures(featureCount);
@@ -72,6 +73,9 @@ class ScenicPlan {
   private addStreets(limit = 6) {
     let placed = 0;
     const axes = this.shuffled(["east", "north"] as const);
+    const roadCells = [...this.roads.values()];
+    const minColumn = Math.min(...roadCells.map((cell) => cell.column)), maxColumn = Math.max(...roadCells.map((cell) => cell.column));
+    const minRow = Math.min(...roadCells.map((cell) => cell.row)), maxRow = Math.max(...roadCells.map((cell) => cell.row));
     for (const axis of [...axes, ...axes, ...axes]) {
       const perpendicular = axis === "east" ? ["north", "south"] as const : ["east", "west"] as const;
       const candidates: GridCell[][] = [];
@@ -91,7 +95,7 @@ class ScenicPlan {
           // Continue through a perpendicular street to allow a four-way crossing.
         }
       }
-      const clearance = (path: GridCell[]) => axis === "east" ? Math.min(path[0].row, this.plan.bounds.depth - 1 - path[0].row) : Math.min(path[0].column, this.plan.bounds.width - 1 - path[0].column);
+      const clearance = (path: GridCell[]) => axis === "east" ? Math.min(path[0].row - minRow, maxRow - path[0].row) : Math.min(path[0].column - minColumn, maxColumn - path[0].column);
       const path = this.shuffled(candidates).sort((a, b) => b.length - a.length || (limit === 1 ? clearance(b) - clearance(a) : 0))[0];
       if (!path) continue;
       for (let index = 0; index < path.length; index++) {
@@ -142,6 +146,40 @@ class ScenicPlan {
       });
       if (success) return;
       for (const cell of removed) this.tiles.set(key(cell), cell);
+    }
+  }
+
+  private bendRoads() {
+    const portalPorts = new Map<string, Set<PlanarDirection>>();
+    for (const portal of this.plan.route.portals) for (const cell of [portal.from, portal.to]) {
+      const required = portalPorts.get(key(cell)) ?? new Set<PlanarDirection>();
+      required.add(cell.direction);
+      portalPorts.set(key(cell), required);
+    }
+    const target = Math.max(1, Math.min(28, Math.floor(this.plan.bounds.width * this.plan.bounds.depth / 110)));
+    let placed = 0;
+    for (const start of this.shuffled([...this.roads.values()])) for (const axis of this.shuffled(["north", "east"] as const)) {
+      if (placed >= target) return;
+      const original = [start, move(start, axis), move(move(start, axis), axis)];
+      if (!original.every((cell) => samePorts(this.roads.get(key(cell))?.directions ?? [], [axis, oppositeDirection[axis]]) && !this.tiles.has(key(cell)))) continue;
+      if (portalPorts.has(key(original[1]))) continue;
+      const sides = axis === "north" ? ["east", "west"] as const : ["north", "south"] as const;
+      for (const side of this.shuffled(sides)) {
+        const detour = original.map((cell) => move(cell, side));
+        if (detour.some((cell) => !this.inside(cell) || this.roads.has(key(cell)) || this.tiles.has(key(cell)))) continue;
+        const first = [oppositeDirection[axis], side], last = [axis, side];
+        if ([...portalPorts.get(key(original[0])) ?? []].some((direction) => !first.includes(direction)) || [...portalPorts.get(key(original[2])) ?? []].some((direction) => !last.includes(direction))) continue;
+        // Replace one straight segment with a four-bend offset. Its two outside
+        // connections (including primary-route portals) remain unchanged.
+        this.roads.delete(key(original[1]));
+        this.roads.set(key(original[0]), { ...original[0], directions: first });
+        this.roads.set(key(original[2]), { ...original[2], directions: last });
+        this.roads.set(key(detour[0]), { ...detour[0], directions: [oppositeDirection[side], axis] });
+        this.roads.set(key(detour[1]), { ...detour[1], directions: [axis, oppositeDirection[axis]] });
+        this.roads.set(key(detour[2]), { ...detour[2], directions: [oppositeDirection[axis], oppositeDirection[side]] });
+        placed++;
+        break;
+      }
     }
   }
 

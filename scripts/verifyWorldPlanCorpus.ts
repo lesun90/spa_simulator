@@ -55,8 +55,12 @@ function verify(request: { width: number; depth: number; roadCoverage: number; s
     throw new Error(`seed ${request.seed}: non-route cell is not reviewed terrain`);
   }
   const count = (...numbers: string[]) => result.cells.filter((cell) => numbers.some((number) => cell.variant.assetId === `3d-road-tiles.road-tile-${number}`)).length;
-  const scenery = { tJunctions: count("027"), fourWayJunctions: count("034"), crosswalks: count("025"), ramps: count("154", "161", "165", "171", "180"), bridges: count("197", "207"), overpasses: count("194"), water: result.cells.filter((cell) => cell.variant.roles?.includes("terrain.water")).length, elevatedTerrain: result.cells.filter((cell) => cell.variant.roles?.includes("terrain.elevated")).length };
+  const scenery = { bends: count("153"), shore: result.cells.filter((cell) => cell.variant.roles?.includes("terrain.shore")).length, plainWater: count("001"), tJunctions: count("027"), fourWayJunctions: count("034"), crosswalks: count("025"), ramps: count("154", "161", "165", "171", "180"), bridges: count("197", "207"), overpasses: count("194"), water: result.cells.filter((cell) => cell.variant.roles?.includes("terrain.water")).length, elevatedTerrain: result.cells.filter((cell) => cell.variant.roles?.includes("terrain.elevated")).length };
   if (!synthetic && (!scenery.water || !scenery.elevatedTerrain || !scenery.ramps || !scenery.bridges)) throw new Error(`seed ${request.seed}: missing scenic feature ${JSON.stringify(scenery)}`);
+  if (!synthetic && scenery.shore <= scenery.plainWater) throw new Error(`seed ${request.seed}: lake should favor shore tiles`);
+  if (!synthetic && request.width === 24 && request.depth === 24 && request.seed === 3 && !scenery.overpasses) throw new Error("Known-feasible 24x24 overpass scene lost tile 194");
+  const initialBends = primaryPlan.corridors.flatMap((corridor) => corridor.cells).filter((cell) => cell.directions.length === 2 && !cell.directions.includes(oppositeDirection[cell.directions[0]])).length;
+  if (!synthetic && scenery.bends <= initialBends) throw new Error(`seed ${request.seed}: road layout did not gain any bends`);
   return { catalog: synthetic ? "synthetic" : "real", variants: palette.variants.length, roadCells: roadCells.length, scenery, ...reportWorldPlan(plan, result) };
 }
 
@@ -77,6 +81,7 @@ function routeVariant(id: string, roadDirections: readonly (typeof directions)[n
 
 /** Integration assertions over the real authored catalog, not mocked tiles. */
 function verifyScenicConnections(cells: readonly SolvedPlanarCell[], bounds: { width: number; depth: number; seed: number }) {
+  if (cells.some((cell) => /road-tile-(168|264)$/.test(cell.variant.assetId))) throw new Error(`seed ${bounds.seed}: excluded tiles 168/264 must not be generated`);
   const key = (cell: { column: number; row: number }) => `${cell.column},${cell.row}`;
   const byCell = new Map(cells.map((cell) => [key(cell), cell]));
   const water = cells.filter((cell) => directions.some((direction) => cell.variant.semanticPorts?.[direction]?.includes("water")));
@@ -96,7 +101,7 @@ function verifyScenicConnections(cells: readonly SolvedPlanarCell[], bounds: { w
       if (!seen.has(key(next))) queue.push(next);
     }
   }
-  if (water.length <= 8 || seen.size !== water.length || !water.some((cell) => cell.variant.assetId.endsWith("tile-001"))) throw new Error(`seed ${bounds.seed}: missing large connected lake/river`);
+  if (water.length <= 8 || seen.size !== water.length) throw new Error(`seed ${bounds.seed}: missing large connected enclosed lake`);
   const elevated = new Map(cells.filter((cell) => cell.variant.roles?.includes("road.elevated")).map((cell) => [key(cell), cell]));
   while (elevated.size) {
     const component = [elevated.values().next().value!];

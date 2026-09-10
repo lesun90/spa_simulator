@@ -7,7 +7,8 @@ const ports = (variant: PlanarWfcVariant, channel: string) => planarDirections.f
 const equal = (a: readonly PlanarDirection[], b: readonly PlanarDirection[]) => a.length === b.length && a.every((direction) => b.includes(direction));
 const ramps = new Set(["154", "161", "165", "171", "180"]);
 const terrain = new Set(["163", "036", "037", "140", "151", "152", "012"]);
-const rivers = new Set(["176", "215", "242", "244"]);
+// Compare asset numbers, so exclusions cover every rotated variant.
+const excludedWaterTiles = new Set(["168", "176", "215", "242", "244", "264"]);
 const banks = new Set(["195", "196", "205", "206"]);
 
 /** A bounded, enclosed lake crossed by a multi-tile high bridge. There are no
@@ -62,7 +63,7 @@ export function planLake(bounds: WorldBounds, roads: ReadonlyMap<string, Planned
           else if (crosswalk) { if (id !== "025") return false; }
           else if (id !== "162" && id !== "153") return false;
         } else {
-          if (!(terrain.has(id) || variant.roles?.includes("terrain.water")) || rivers.has(id)) return false;
+          if (!(terrain.has(id) || variant.roles?.includes("terrain.water")) || excludedWaterTiles.has(id)) return false;
           // Raised bank pieces belong only immediately beside the bridge, not
           // in long canal-like chains across the landscape.
           if (banks.has(id) && (Math.abs(x - sx) !== 1 || y < sy || y >= sy + span)) return false;
@@ -82,11 +83,11 @@ export function planLake(bounds: WorldBounds, roads: ReadonlyMap<string, Planned
     }
     if (!valid) continue;
     for (let attempt = 0; attempt < 6; attempt++) {
-    const result = solvePlanarWfc(localPalette, { width, depth, seed: random.nextInt(0xffffffff), maxBacktracks: 16, policies });
-    if (result.status !== "solved") continue;
-    const cells = result.cells.map((cell) => ({ ...cell, column: cell.column + origin.column, row: cell.row + origin.row }));
-    const lake = retainBridgedLake(cells, palette, ground);
-    if (lake) return lake;
+      const result = solvePlanarWfc(localPalette, { width, depth, seed: random.nextInt(0xffffffff), maxBacktracks: 16, policies });
+      if (result.status !== "solved") continue;
+      const cells = result.cells.map((cell) => ({ ...cell, column: cell.column + origin.column, row: cell.row + origin.row }));
+      const lake = retainBridgedLake(cells, palette, ground);
+      if (lake) return lake;
     }
   }
   return [];
