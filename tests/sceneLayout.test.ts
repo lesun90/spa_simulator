@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
 import type { AssetCatalogEntry } from "../src/editor-core/assets";
-import { compactPaletteMetrics, paletteFromAssets } from "../src/wfc/sceneLayout";
+import { compactPaletteMetrics, paletteFromAssets, generateWfcLayout } from "../src/wfc/sceneLayout";
 
 const sockets = { north: "x", east: "x", south: "x", west: "x", top: "top", bottom: "bottom" };
 function asset(id: string, defaultWeight: number, variantWeight?: number): AssetCatalogEntry {
@@ -45,5 +45,20 @@ describe("WFC palette construction", () => {
     const palette = paletteFromAssets("catalog", [untagged]);
 
     expect(palette.variants[0].semanticPorts).toBeUndefined();
+  });
+});
+
+describe("WFC scene object provenance", () => {
+  test("records the solved cell coordinate, variant, and seed for later environment export", () => {
+    const tile = asset("tile", 1);
+
+    const result = generateWfcLayout([tile], { width: 2, depth: 1, seed: 7, tileWidth: 3, tileDepth: 3 });
+
+    expect(result.status).toBe("solved");
+    if (result.status !== "solved") throw new Error("expected a solved result");
+    expect(result.objects.map((object) => object.generated)).toEqual([
+      { pipeline: "wfc", stage: "structural", column: 0, row: 0, variantId: "tile@r0", seed: 7 },
+      { pipeline: "wfc", stage: "structural", column: 1, row: 0, variantId: "tile@r0", seed: 7 }
+    ]);
   });
 });

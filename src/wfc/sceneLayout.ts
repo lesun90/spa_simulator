@@ -59,7 +59,17 @@ export function solvePlanarWfcInWorker(palette: PlanarWfcPalette, request: Gener
 }
 
 export function sceneObjectsFromWfcResult(result: PlanarWfcResult, request: GenerateWfcLayoutRequest, palette: PlanarWfcPalette): GenerateWfcLayoutResult { if (result.status === "failed") return result; return { status: "solved", seed: result.seed, palette, decisions: result.decisions, backtracks: result.backtracks, objects: sceneObjectsFromSolvedCells(result.cells, result.seed, request, palette) }; }
-function sceneObjectsFromSolvedCells(cells: readonly { column: number; row: number; variant: PlanarWfcVariant }[], seed: number, request: GenerateWfcLayoutRequest, palette: PlanarWfcPalette): SceneObject[] { return cells.map((cell) => ({ id: `wfc-preview-${cell.column}-${cell.row}`, assetId: cell.variant.assetId, name: `${GENERATED_WFC_NAME_PREFIX} ${seed} [${cell.column}, ${cell.row}]`, position: { x: (cell.column - (request.width - 1) / 2) * palette.tileWidth, y: 0, z: (cell.row - (request.depth - 1) / 2) * palette.tileDepth }, rotationY: (cell.variant.rotationDegrees * Math.PI) / 180, scale: palette.tileWidth / DEFAULT_WFC_TILE_SIZE, generated: { pipeline: "wfc", stage: "structural" } })); }
+function sceneObjectsFromSolvedCells(cells: readonly { column: number; row: number; variant: PlanarWfcVariant }[], seed: number, request: GenerateWfcLayoutRequest, palette: PlanarWfcPalette): SceneObject[] {
+  return cells.map((cell) => ({
+    id: `wfc-preview-${cell.column}-${cell.row}`,
+    assetId: cell.variant.assetId,
+    name: `${GENERATED_WFC_NAME_PREFIX} ${seed} [${cell.column}, ${cell.row}]`,
+    position: { x: (cell.column - (request.width - 1) / 2) * palette.tileWidth, y: 0, z: (cell.row - (request.depth - 1) / 2) * palette.tileDepth },
+    rotationY: (cell.variant.rotationDegrees * Math.PI) / 180,
+    scale: palette.tileWidth / DEFAULT_WFC_TILE_SIZE,
+    generated: { pipeline: "wfc", stage: "structural", column: cell.column, row: cell.row, variantId: cell.variant.id, seed }
+  }));
+}
 export function previewObjectsFromWfcProgress(cells: readonly { column: number; row: number; variant: PlanarWfcVariant }[], seed: number, request: GenerateWfcLayoutRequest, palette: PlanarWfcPalette) { return sceneObjectsFromSolvedCells(cells, seed, request, palette); }
 function previewObjectsFromCompactCells(cells: readonly CompactCell[], seed: number, request: GenerateWfcLayoutRequest, palette: PlanarWfcPalette) { return sceneObjectsFromSolvedCells(cells.map((cell) => ({ ...cell, variant: palette.variants[cell.variantIndex] })), seed, request, palette); }
 

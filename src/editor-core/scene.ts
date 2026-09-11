@@ -26,6 +26,11 @@ export interface SurfaceAppearance {
 export interface GeneratedObjectProvenance {
   pipeline: "wfc" | "environment";
   stage: string;
+  /** WFC-only: the solved grid coordinate, variant, and seed, so environment export can read cell identity directly instead of recovering it from the transform. */
+  column?: number;
+  row?: number;
+  variantId?: string;
+  seed?: number;
 }
 
 export interface SceneObject {
