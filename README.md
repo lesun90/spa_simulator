@@ -73,3 +73,11 @@ docker compose up --build
 - If port `5173` is already in use, stop the process using it or change the host port in `compose.yaml`.
 - If edits do not refresh the browser, verify Docker is allowed to access the repository directory, then restart with `docker compose down` followed by `docker compose up`.
 - If Docker reports a permission error on Linux, ensure the current account can run Docker commands.
+
+
+update scene design (generator)
+- use tile 150 for 3 way intersection (dont use tile 027)
+- use tile 141 for 4 way intersection (dont use tile 034)
+- in addition to high bridge, also use tile 187 and 188 for low bride over water
+- use tile 049 043 039 to add roundabout, support 1 way, 2 way , 3 way, 4 way roundabout. 
+- use tile 231 to create mountain pass.

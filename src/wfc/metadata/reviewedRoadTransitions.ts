@@ -14,9 +14,9 @@ export function withReviewedRoadTransitions(palette: PlanarWfcPalette): PlanarWf
   // Solid abutments may meet hollow bridge/ramp sides below the surface. Only
   // these reviewed structural pieces can use this rule, and the complete top
   // profile (geometry, materials AND absolute heights) must still match exactly.
-  // The four parts of the broad curve have different buried curb geometry,
-  // too. Their visible profiles must match, including every sampled height.
-  const structures = new Set(["041", "144", "147", "156", "154", "161", "164", "165", "170", "171", "180", "184", "191", "194", "197", "207", "231"].map((id) => `3d-road-tiles.road-tile-${id}`));
+  // Broad curves, roundabouts and junctions also have different buried curb
+  // geometry. Their visible profiles must match at every sampled height.
+  const structures = new Set(["041", "043", "048", "049", "141", "144", "147", "150", "154", "156", "161", "164", "165", "170", "171", "180", "184", "187", "188", "191", "194", "197", "207", "231"].map((id) => `3d-road-tiles.road-tile-${id}`));
   for (const source of palette.variants.filter((variant) => structures.has(variant.assetId))) {
     for (const direction of planarDirections) {
       const profile = source.sockets[direction].split("|e:")[1];

@@ -28,5 +28,11 @@
       "west boundary contains empty sample cells",
       "top boundary contains empty sample cells"
     ]
+  },
+  "semantics": {
+    "roles": [
+      "terrain.ground",
+      "road.roundabout-island"
+    ]
   }
 }

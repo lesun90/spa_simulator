@@ -72,7 +72,7 @@ export function paletteFromAssets(id: string, assets: readonly AssetCatalogEntry
     .filter((asset) => asset.wfc?.variants.length && asset.wfc.variants.every((variant) => planarSocketsAreComplete(variant.sockets)) && (!options.category || asset.category === options.category))
     .sort((a, b) => a.id.localeCompare(b.id))
     .flatMap((asset) => asset.wfc!.variants
-      .filter((variant) => options.purpose !== "road-scene" || variant.roadTopology || asset.semantics?.roles.includes("terrain.ground"))
+      .filter((variant) => options.purpose !== "road-scene" || !/\.road-tile-(027|034)$/.test(asset.id) && (variant.roadTopology || asset.semantics?.roles.includes("terrain.ground")))
       .map((variant) => ({
         id: variant.variantId,
         assetId: asset.id,

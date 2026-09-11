@@ -10,34 +10,44 @@ const terrain = new Set(["163", "036", "037", "140", "151", "152", "012"]);
 // Compare asset numbers, so exclusions cover every rotated variant.
 const excludedWaterTiles = new Set(["168", "176", "215", "242", "244", "264"]);
 const banks = new Set(["195", "196", "205", "206"]);
+const flatApproaches = new Set(["162"]);
+const bridgeStyles = [
+  { id: "197", approaches: ramps, clearance: 4, coreDistance: 3, minimumSpan: 2, raisedBanks: true },
+  { id: "207", approaches: ramps, clearance: 4, coreDistance: 3, minimumSpan: 2, raisedBanks: true },
+  { id: "187", approaches: flatApproaches, clearance: 3, coreDistance: 2, minimumSpan: 1, raisedBanks: false },
+  { id: "188", approaches: flatApproaches, clearance: 3, coreDistance: 2, minimumSpan: 1, raisedBanks: false }
+] as const;
 
-/** A bounded, enclosed lake crossed by a multi-tile high bridge. There are no
+/** A bounded, enclosed lake crossed by a high or low bridge. There are no
  * river corridors or boundary outlets. WFC assembles the rotated shoreline;
  * its perimeter must meet ordinary ground/roads on every side of the patch.
  */
-export function planLake(bounds: WorldBounds, roads: ReadonlyMap<string, PlannedRoadCell>, palette: PlanarWfcPalette, random: SeededRandom, occupied: ReadonlySet<string> = new Set()): readonly SolvedPlanarCell[] {
+export function planLake(bounds: WorldBounds, roads: ReadonlyMap<string, PlannedRoadCell>, palette: PlanarWfcPalette, random: SeededRandom, occupied: ReadonlySet<string> = new Set(), elevation: "high" | "low" = "high"): readonly SolvedPlanarCell[] {
   const ground = palette.variants.find((v) => number(v) === "163")!;
   const variants = palette.variants.map((variant) => ({ ...variant, weight: variant.weight * (number(variant) === "001" ? 2 : 1) }));
   const localPalette = { ...palette, variants };
+  const styles = bridgeStyles.filter((style) => style.raisedBanks === (elevation === "high"));
+  const { minimumSpan, clearance } = styles[0];
   const candidates: { start: PlannedRoadCell; transpose: boolean; span: number }[] = [];
-  for (const start of roads.values()) for (const transpose of [false, true]) for (const span of [2, 3, 4]) {
+  for (const start of roads.values()) for (const transpose of [false, true]) for (const span of [1, 2, 3, 4].filter((span) => span >= minimumSpan)) {
     const along: readonly PlanarDirection[] = transpose ? ["east", "west"] : ["north", "south"];
     const cell = (offset: number) => ({ column: start.column + (transpose ? offset : 0), row: start.row + (transpose ? 0 : offset) });
     if (!Array.from({ length: span + 2 }, (_, index) => roads.get(key(cell(index - 1)))).every((road) => road && equal(road.directions, along))) continue;
     // Abutments need a bank transition and shore on BOTH sides of the deck.
     const across = transpose ? start.row : start.column;
     const acrossSize = transpose ? bounds.depth : bounds.width;
-    if (across < 4 || across >= acrossSize - 4) continue;
+    if (across < clearance || across >= acrossSize - clearance) continue;
     if (Array.from({ length: span + 2 }, (_, index) => cell(index - 1)).some((position) => occupied.has(key(position)))) continue;
     candidates.push({ start, transpose, span });
   }
   for (let i = candidates.length - 1; i > 0; i--) { const j = random.nextInt(i + 1); [candidates[i], candidates[j]] = [candidates[j], candidates[i]]; }
-  for (const { start, transpose, span } of candidates.slice(0, 96)) for (const bridgeType of (random.nextInt(2) ? ["197", "207"] : ["207", "197"])) {
+  for (const { start, transpose, span } of candidates.slice(0, 96)) for (const style of (random.nextInt(2) ? styles : [...styles].reverse())) {
     const sx = transpose ? start.row : start.column;
     const sy = transpose ? start.column : start.row;
     const acrossSize = transpose ? bounds.depth : bounds.width;
     const alongSize = transpose ? bounds.width : bounds.depth;
-    const left = Math.max(0, sx - 4), right = Math.min(acrossSize - 1, sx + 4);
+    if (span < style.minimumSpan || sx < style.clearance || sx >= acrossSize - style.clearance) continue;
+    const left = sx - style.clearance, right = sx + style.clearance;
     const bottom = Math.max(0, sy - 2), top = Math.min(alongSize - 1, sy + span + 1);
     const position = (x: number, y: number): GridCell => transpose ? { column: y, row: x } : { column: x, row: y };
     const origin = position(left, bottom);
@@ -59,19 +69,19 @@ export function planLake(bounds: WorldBounds, roads: ReadonlyMap<string, Planned
         const id = number(variant);
         if (!equal(ports(variant, "road"), road?.directions ?? [])) return false;
         if (road) {
-          if (deck) { if (id !== bridgeType) return false; }
-          else if (approach) { if (!ramps.has(id) || crosswalk) return false; }
-          else if (road.directions.length >= 3) { if (id !== (road.directions.length === 4 ? "034" : "027")) return false; }
+          if (deck) { if (id !== style.id) return false; }
+          else if (approach) { if (!style.approaches.has(id) || crosswalk) return false; }
+          else if (road.directions.length >= 3) { if (id !== (road.directions.length === 4 ? "141" : "150")) return false; }
           else if (crosswalk) { if (id !== "025") return false; }
           else if (id !== "162" && id !== "153") return false;
         } else {
           if (!(terrain.has(id) || variant.roles?.includes("terrain.water")) || excludedWaterTiles.has(id)) return false;
           // Raised bank pieces belong only immediately beside the bridge, not
           // in long canal-like chains across the landscape.
-          if (banks.has(id) && (Math.abs(x - sx) !== 1 || y < sy || y >= sy + span)) return false;
+          if (banks.has(id) && (!style.raisedBanks || Math.abs(x - sx) !== 1 || y < sy || y >= sy + span)) return false;
           // An open-water core on both sides of the span makes this a lake,
           // not a chain of bank and shoreline tiles masquerading as one.
-          if (Math.abs(x - sx) === 3 && y === sy + Math.floor(span / 2) && id !== "001") return false;
+          if (Math.abs(x - sx) === style.coreDistance && y === sy + Math.floor(span / 2) && id !== "001") return false;
         }
         for (const direction of planarDirections) {
           const delta = directionOffset[direction];

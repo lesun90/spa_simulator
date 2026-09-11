@@ -1,5 +1,6 @@
 import { directionOffset, oppositeDirection, planarDirections, SeededRandom, solvePlanarWfc, type PlanarDirection, type PlanarPolicySpec, type PlanarWfcPalette, type PlanarWfcVariant } from "./planarWfc";
 import { planLake, planStandaloneLake } from "./scenicWaterPlan";
+import { planRoundabout } from "./scenicRoundaboutPlan";
 import type { GridCell, PlannedRoadCell, WorldPlan } from "./worldPlan";
 
 const tileId = (number: string) => `3d-road-tiles.road-tile-${number}`;
@@ -7,6 +8,7 @@ const key = (cell: GridCell) => `${cell.column},${cell.row}`;
 const move = (cell: GridCell, direction: PlanarDirection): GridCell => ({ column: cell.column + directionOffset[direction].column, row: cell.row + directionOffset[direction].row });
 const ports = (variant: PlanarWfcVariant) => planarDirections.filter((direction) => variant.semanticPorts?.[direction]?.includes("road"));
 const samePorts = (a: readonly PlanarDirection[], b: readonly PlanarDirection[]) => a.length === b.length && a.every((direction) => b.includes(direction));
+const terrainTiles = ["163", "036", "037", "140", "151", "152", "012"] as const;
 
 /** Enrich the accepted primary cycle without relaxing its road or seam constraints. */
 export function planScenicWorld(plan: WorldPlan, palette: PlanarWfcPalette, seed: number): WorldPlan {
@@ -33,9 +35,12 @@ class ScenicPlan {
     this.addStreets(Math.max(2, Math.round(area / 180)));
     this.junctions();
     this.overpasses(Math.max(1, Math.round(area / 500)));
-    this.bridgeLakes(Math.max(1, Math.round(area / 450)) - earlyBridges);
+    this.bridgeLakes(Math.max(1, Math.round(area / 450)) - earlyBridges, "low");
+    this.roundabouts(Math.max(1, Math.round(area / 350)));
+    this.junctions();
     this.bendRoads();
     this.smoothCorners();
+    this.mountainPasses(Math.max(1, Math.round(area / 600)));
     for (let index = 0; index < Math.max(1, Math.round(area / 600)); index++) {
       const lake = planStandaloneLake(this.plan.bounds, this.roads, this.palette, this.random, this.occupied);
       if (!lake.length) break;
@@ -73,15 +78,17 @@ class ScenicPlan {
     return output;
   }
 
-  private bridgeLakes(target: number) {
+  private bridgeLakes(target: number, firstElevation: "high" | "low" = "high") {
     let placed = 0;
     while (placed < target) {
-      const lake = planLake(this.plan.bounds, this.roads, this.palette, this.random, this.occupied);
+      const elevation = placed % 2 === 0 ? firstElevation : firstElevation === "high" ? "low" : "high";
+      let lake = planLake(this.plan.bounds, this.roads, this.palette, this.random, this.occupied, elevation);
+      if (!lake.length) lake = planLake(this.plan.bounds, this.roads, this.palette, this.random, this.occupied, elevation === "high" ? "low" : "high");
       if (!lake.length) break;
       for (const cell of lake) {
         // Flat margins may receive streets later; protect shore, banks, ramps
         // and decks before extending the network through the remaining land.
-        if (["163", "162", "153", "025", "027", "034"].some((id) => cell.variant.assetId === tileId(id))) continue;
+        if (["163", "162", "153", "025", "150", "141"].some((id) => cell.variant.assetId === tileId(id))) continue;
         this.pin(cell, [cell.variant]); this.occupied.add(key(cell));
       }
       placed++;
@@ -210,12 +217,90 @@ class ScenicPlan {
 
   private junctions() {
     for (const cell of this.roads.values()) {
-      if (cell.directions.length < 3) continue;
-      this.pin(cell, this.palette.variants.filter((variant) => variant.assetId === tileId(cell.directions.length === 4 ? "034" : "027") && samePorts(ports(variant), cell.directions)));
+      if (cell.directions.length < 3 || this.occupied.has(key(cell))) continue;
+      this.pin(cell, this.palette.variants.filter((variant) => variant.assetId === tileId(cell.directions.length === 4 ? "141" : "150") && samePorts(ports(variant), cell.directions)));
       for (const direction of cell.directions) {
         const neighbor = move(cell, direction);
         this.pin(neighbor, this.palette.variants.filter((variant) => variant.assetId === tileId("025") && samePorts(ports(variant), [direction, oppositeDirection[direction]])));
       }
+    }
+  }
+
+  private roundabouts(target: number) {
+    const exitCounts = this.shuffled([1, 2, 3, 4]);
+    let placed = 0;
+    for (let attempt = 0; attempt < Math.max(4, target * 2) && placed < target; attempt++) {
+      const exitCount = exitCounts[attempt % exitCounts.length];
+      for (const road of this.shuffled([...this.roads.values()])) {
+        if (exitCount !== 1) {
+          if (road.directions.length === exitCount && this.placeRoundabout(road, road.directions)) { placed++; break; }
+          continue;
+        }
+        // A single entrance is a connected turning circle at the end of a
+        // short spur. Keep one straight approach between it and its T junction.
+        if (road.directions.length !== 2 || !road.directions.includes(oppositeDirection[road.directions[0]]) || !this.canJunction(road, road.directions)) continue;
+        let success = false;
+        for (const direction of this.shuffled(planarDirections.filter((d) => !road.directions.includes(d)))) {
+          const approach = move(road, direction);
+          const center = move(move(approach, direction), direction);
+          if (!this.inside(approach) || this.roads.has(key(approach)) || this.tiles.has(key(approach))) continue;
+          if (!this.placeRoundabout(center, [oppositeDirection[direction]], true)) continue;
+          this.roads.set(key(approach), { ...approach, directions: [direction, oppositeDirection[direction]] });
+          this.roads.set(key(road), { ...road, directions: [...road.directions, direction] });
+          success = true; placed++; break;
+        }
+        if (success) break;
+      }
+    }
+  }
+
+  private placeRoundabout(center: GridCell, exits: readonly PlanarDirection[], spur = false) {
+    if (!spur && exits.some((direction) => !samePorts(this.roads.get(key(move(move(center, direction), direction)))?.directions ?? [], [direction, oppositeDirection[direction]]))) return false;
+    const positions = Array.from({ length: 9 }, (_, index) => ({ column: center.column - 1 + index % 3, row: center.row - 1 + Math.floor(index / 3) }));
+    if (positions.some((cell) => {
+      if (!this.inside(cell) || this.occupied.has(key(cell))) return true;
+      const outward = exits.find((d) => key(move(center, d)) === key(cell));
+      const expected = spur ? [] : key(cell) === key(center) ? exits : outward ? [outward, oppositeDirection[outward]] : [];
+      return !samePorts(this.roads.get(key(cell))?.directions ?? [], expected);
+    })) return false;
+    const assembly = planRoundabout(exits, this.palette, this.random.nextInt(0xffffffff));
+    if (!assembly.length) return false;
+    const cells = assembly.map((cell) => ({ ...cell, column: center.column - 1 + cell.column, row: center.row - 1 + cell.row }));
+    if (cells.some((cell) => planarDirections.some((direction) => {
+      const neighbor = move(cell, direction);
+      if (positions.some((position) => key(position) === key(neighbor))) return false;
+      const pinned = this.tiles.get(key(neighbor));
+      return pinned && !pinned.variantIds.some((id) => this.palette.adjacency[cell.variant.id][direction].includes(id));
+    }))) return false;
+    // Macro-route portals are still commitments after expanding the junction.
+    if (this.plan.route.portals.some((portal) => [portal.from, portal.to].some((endpoint) => {
+      const cell = cells.find((cell) => key(cell) === key(endpoint));
+      return cell && !ports(cell.variant).includes(endpoint.direction);
+    }))) return false;
+    for (const cell of cells) {
+      this.tiles.delete(key(cell));
+      this.pin(cell, [cell.variant]); this.occupied.add(key(cell));
+      const directions = ports(cell.variant);
+      if (directions.length) this.roads.set(key(cell), { column: cell.column, row: cell.row, directions });
+      else this.roads.delete(key(cell));
+    }
+    return true;
+  }
+
+  private mountainPasses(target: number) {
+    let placed = 0;
+    for (const start of this.shuffled([...this.roads.values()])) {
+      if (placed >= target) return;
+      if (start.directions.length !== 2 || !start.directions.includes(oppositeDirection[start.directions[0]])) continue;
+      const vertical = start.directions.includes("north");
+      const end = move(start, vertical ? "north" : "east");
+      if (!samePorts(this.roads.get(key(end))?.directions ?? [], start.directions)) continue;
+      // Two opposing road cuts meet at their high ends; surrounding slopes
+      // close the ridge back down to grass on both sides of the roadway.
+      const origin = { column: start.column - (vertical ? 2 : 0), row: start.row - (vertical ? 0 : 2) };
+      if (this.patch(origin, vertical ? 5 : 2, vertical ? 2 : 5, [...terrainTiles, "231"], { cell: start, ids: ["231"] }, (cell, variant) =>
+        variant.assetId === tileId("231") ? key(cell) === key(start) || key(cell) === key(end) : !this.roads.has(key(cell))
+      )) placed++;
     }
   }
 
@@ -229,7 +314,7 @@ class ScenicPlan {
       const origin = { column: center.column - Math.floor(width / 2), row: center.row - Math.floor(depth / 2) };
       const removed = [center, ...planarDirections.map((direction) => move(center, direction))].map((cell) => this.tiles.get(key(cell))).filter((cell) => cell !== undefined);
       for (const cell of removed) this.tiles.delete(key(cell));
-      const success = this.patch(origin, width, depth, ["025", "162", "154", "161", "165", "171", "180", "164", "170", "191", "231", "194", "163", "036", "037", "140", "151", "152", "012"], { cell: center, ids: ["194"] }, (cell, variant) => {
+      const success = this.patch(origin, width, depth, ["025", "162", "154", "161", "165", "171", "180", "164", "170", "191", "231", "194", ...terrainTiles], { cell: center, ids: ["194"] }, (cell, variant) => {
         const along = transpose ? cell.column - center.column : cell.row - center.row;
         const across = transpose ? cell.row - center.row : cell.column - center.column;
         const id = variant.assetId.split("road-tile-")[1];
@@ -315,7 +400,7 @@ class ScenicPlan {
   }
 
   private terrainFeatures(count: number) {
-    const ids = ["163", "036", "037", "140", "151", "152", "012"];
+    const ids = terrainTiles;
     // Sample corner elevations once per shared vertex, rather than filling a
     // square core. The authored slopes then agree on both sides of every edge.
     // Reviewed NW, NE, SW, SE elevations. Do not parse geometric socket
