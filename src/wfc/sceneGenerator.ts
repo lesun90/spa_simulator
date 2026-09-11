@@ -36,16 +36,16 @@ export async function generateWfcScene(
   options: GenerateWfcSceneOptions = {}
 ): Promise<GenerateWfcSceneResult> {
   const roadScene = assets.some((asset) => asset.category === "3d-road-tiles");
-  let worldPlan: WorldPlan | undefined = roadScene
-    ? createWorldPlan({ width: request.width, depth: request.depth, seed: request.seed, roadCoverage: 0.5, scenic: true })
-    : undefined;
-  const palette = paletteFromAssets("shared-assets", assets, {
-    tileWidth: request.tileWidth,
-    tileDepth: request.tileDepth,
-    purpose: roadScene ? "road-scene" : undefined
-  });
 
   try {
+    let worldPlan: WorldPlan | undefined = roadScene
+      ? createWorldPlan({ width: request.width, depth: request.depth, seed: request.seed, roadCoverage: 0.5, scenic: true })
+      : undefined;
+    const palette = paletteFromAssets("shared-assets", assets, {
+      tileWidth: request.tileWidth,
+      tileDepth: request.tileDepth,
+      purpose: roadScene ? "road-scene" : undefined
+    });
     const solved = await solvePlanarWfcInWorker(palette, request, {
       worldPlan,
       onWorldPlan: (plan) => { worldPlan = plan; },

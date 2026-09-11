@@ -31,6 +31,21 @@ describe("generateWfcScene", () => {
     expect(result.roadScene).toBe(true);
     expect(result.diagnostics[0]).toBeTruthy();
   });
+
+  test("resolves to a failed result instead of rejecting when world-plan creation throws synchronously", async () => {
+    const assets: AssetCatalogEntry[] = [
+      asset({ id: "roads.only", category: "3d-road-tiles", wfc: wfc("roads.only"), semantics: { roles: ["terrain.ground"], sockets: {} } })
+    ];
+
+    // width/depth below createWorldPlan's minimum of 4 tiles makes it throw synchronously
+    // before the WFC solve ever starts.
+    const result = await generateWfcScene(assets, { width: 3, depth: 3, seed: 12, tileWidth: 3, tileDepth: 3 });
+
+    expect(result.status).toBe("failed");
+    if (result.status !== "failed") throw new Error("expected a failed result");
+    expect(result.roadScene).toBe(true);
+    expect(result.diagnostics[0]).toBe("World width and depth must be integers of at least 4 tiles.");
+  });
 });
 
 function asset(patch: Partial<AssetCatalogEntry>): AssetCatalogEntry {
