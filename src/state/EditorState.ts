@@ -28,12 +28,8 @@ import {
 } from "../api/client";
 import { createTemporaryAsset, selectedObject } from "./editorHelpers";
 import type { EditorTool } from "./types";
-import { validateWorldPlanResult } from "../wfc/worldPlanPolicies";
-import { createWorldPlan } from "../wfc/worldPlanner";
+import { generateWfcScene } from "../wfc/sceneGenerator";
 import {
-  paletteFromAssets,
-  sceneObjectsFromWfcResult,
-  solvePlanarWfcInWorker,
   isGeneratedWfcObject,
   type GenerateWfcLayoutRequest,
   type WfcGenerationProgress
@@ -265,38 +261,20 @@ export class EditorState {
     }
 
     this.setWfcProgress({ status: "building-palette" });
-    const roadScene = this.assets.some((asset) => asset.category === "3d-road-tiles");
     try {
-      let worldPlan = roadScene
-        ? createWorldPlan({ width: request.width, depth: request.depth, seed: request.seed, roadCoverage: 0.5, scenic: true })
-        : undefined;
-      const palette = paletteFromAssets("shared-assets", this.assets, {
-        tileWidth: request.tileWidth,
-        tileDepth: request.tileDepth,
-        purpose: roadScene ? "road-scene" : undefined
+      const result = await generateWfcScene(this.assets, request, {
+        onProgress: (progress) => this.setWfcProgress(progress)
       });
-      const solved = await solvePlanarWfcInWorker(
-        palette,
-        request,
-        { worldPlan, onWorldPlan: (plan) => { worldPlan = plan; }, onProgress: (progress) => this.setWfcProgress(progress) }
-      );
-      const validationDiagnostics = worldPlan ? validateWorldPlanResult(worldPlan, palette, solved) : [];
-      const result = sceneObjectsFromWfcResult(solved, request, palette);
-      const objects = result.status === "solved" && !validationDiagnostics.length ? result.objects : [];
-      if (!objects.length) {
-        throw new Error(validationDiagnostics[0] ?? (result.status === "failed"
-          ? result.diagnostics[0] ?? "WFC generation failed"
-          : "WFC generation failed"));
+      if (result.status === "failed") {
+        const diagnostic = result.diagnostics[0] ?? "WFC generation failed";
+        this.setNotice(result.roadScene ? `Road scene infeasible (seed ${result.seed}): ${diagnostic}` : diagnostic);
+        return;
       }
-
-      this.setWfcProgress({ status: "placing", cells: objects.length });
-      this.history = executeCommand(this.history, replaceGeneratedLayoutCommand(objects, isGeneratedWfcObject));
-      this.selectedObjectId = objects[0]?.id ?? null;
+      this.setWfcProgress({ status: "placing", cells: result.objects.length });
+      this.history = executeCommand(this.history, replaceGeneratedLayoutCommand(result.objects, isGeneratedWfcObject));
+      this.selectedObjectId = result.objects[0]?.id ?? null;
       this.emit("scene", "selection");
-      this.setNotice(`Generated ${objects.length} tiles (seed ${request.seed})`);
-    } catch (error) {
-      const diagnostic = error instanceof Error ? error.message : "WFC generation failed";
-      this.setNotice(roadScene ? `Road scene infeasible (seed ${request.seed}): ${diagnostic}` : diagnostic);
+      this.setNotice(`Generated ${result.objects.length} tiles (seed ${result.seed})`);
     } finally {
       this.setWfcProgress(null);
     }
