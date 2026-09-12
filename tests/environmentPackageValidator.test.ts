@@ -117,6 +117,48 @@ describe("validateEnvironmentPackage", () => {
     expect(result.diagnostics).toContain("Navigation edge edge-1 channel road is not compatible with node node-2's channels.");
   });
 
+  test("rejects, without throwing, a navigation edge whose endpoint node has a missing or malformed channels field", () => {
+    const glb = buildGlb({ nodes: [{ name: "SteerlabEnvironment" }] });
+    const manifest = fixtureManifest(sha256Hex(glb));
+    const invalid = {
+      ...manifest,
+      navigation: {
+        nodes: [
+          { id: "node-1", cellId: "cell-1", position: { x: 0, y: 0, z: 0 }, featureTags: [] },
+          { id: "node-2", cellId: "cell-1", position: { x: 1, y: 0, z: 0 }, channels: "road", featureTags: [] }
+        ],
+        edges: [{ id: "edge-1", fromNodeId: "node-1", toNodeId: "node-2", direction: "north", channel: "road", cost: 1, bidirectional: true }]
+      }
+    };
+
+    expect(() => validateEnvironmentPackage(invalid, glb)).not.toThrow();
+    const result = validateEnvironmentPackage(invalid, glb);
+
+    expect(result.valid).toBe(false);
+    expect(result.diagnostics).toEqual(
+      expect.arrayContaining([
+        "Navigation edge edge-1 channel road is not compatible with node node-1's channels.",
+        "Navigation edge edge-1 channel road is not compatible with node node-2's channels."
+      ])
+    );
+  });
+
+  test("does not duplicate the channel-incompatibility diagnostic for a self-loop edge", () => {
+    const glb = buildGlb({ nodes: [{ name: "SteerlabEnvironment" }] });
+    const manifest = fixtureManifest(sha256Hex(glb));
+    manifest.navigation = {
+      nodes: [{ id: "node-1", cellId: "cell-1", position: { x: 0, y: 0, z: 0 }, channels: ["sidewalk"], featureTags: [] }],
+      edges: [{ id: "edge-1", fromNodeId: "node-1", toNodeId: "node-1", direction: "north", channel: "road", cost: 1, bidirectional: true }]
+    };
+
+    const result = validateEnvironmentPackage(manifest, glb);
+
+    const occurrences = result.diagnostics.filter(
+      (message) => message === "Navigation edge edge-1 channel road is not compatible with node node-1's channels."
+    );
+    expect(occurrences).toHaveLength(1);
+  });
+
   test("rejects a manifest with duplicate navigation edge IDs", () => {
     const glb = buildGlb({ nodes: [{ name: "SteerlabEnvironment" }] });
     const manifest = fixtureManifest(sha256Hex(glb));

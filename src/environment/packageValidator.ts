@@ -63,9 +63,9 @@ export function validateEnvironmentPackage(manifestJson: unknown, glbBytes: Uint
     if (!isFiniteNumber(edge.cost) || edge.cost < 0) diagnostics.push(`Navigation edge ${edge.id} must have a non-negative finite cost.`);
     if (typeof edge.channel !== "string" || !edge.channel) diagnostics.push(`Navigation edge ${edge.id} requires a channel.`);
 
-    for (const endpointId of [edge.fromNodeId, edge.toNodeId]) {
+    for (const endpointId of new Set([edge.fromNodeId, edge.toNodeId])) {
       const node = nodesById.get(endpointId);
-      if (node && !node.channels.includes(edge.channel)) {
+      if (node && (!Array.isArray(node.channels) || !node.channels.includes(edge.channel))) {
         diagnostics.push(`Navigation edge ${edge.id} channel ${edge.channel} is not compatible with node ${node.id}'s channels.`);
       }
     }
