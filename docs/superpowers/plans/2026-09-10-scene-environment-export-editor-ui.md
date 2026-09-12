@@ -613,7 +613,8 @@ private importEnvironmentButtonRect(): Rect {
 
 ```typescript
 private exportEnvironment() {
-  const chunkSize = Math.max(0, Math.trunc(Number.parseFloat(this.environmentChunkSizeField.getValue()) || 10));
+  const parsed = Number.parseFloat(this.environmentChunkSizeField.getValue());
+  const chunkSize = Math.max(0, Math.trunc(Number.isNaN(parsed) ? 10 : parsed));
   void this.state.exportEnvironment({ chunkSize, removeSeamFaces: this.environmentSeamCheckbox.isChecked() });
 }
 ```
