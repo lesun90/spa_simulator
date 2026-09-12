@@ -317,8 +317,8 @@ function isIntegerInRange(value: number | undefined, min: number, max: number): 
 
 function printExportHelp() {
   console.log(`Usage:
-  npm run scene:export -- --width 100 --depth 100 --cell-size 1 --seed 12345 --output ./exports/city-12345 [--chunk-size 10] [--remove-seam-faces] [--asset-root ./assets] [--force]
-  npm run scene:export -- --size 100 --cell-size 1 --seed 12345 --output ./exports/city-12345
+  npm run scene:export -- --width 100 --depth 100 --cell-size 3 --seed 12345 --output ./exports/city-12345 [--chunk-size 10] [--remove-seam-faces] [--asset-root ./assets] [--force]
+  npm run scene:export -- --size 100 --cell-size 3 --seed 12345 --output ./exports/city-12345
 `);
 }
 ```
@@ -662,7 +662,7 @@ In `package.json`, add to `"scripts"` (alongside the other `assets:*`/`wfc:*` en
 
 - [ ] **Step 3: Manually verify the CLI end-to-end against the real asset catalog**
 
-Run: `npm run scene:export -- --width 4 --depth 4 --cell-size 1 --seed 1 --output /tmp/steerlab-export-check --force`
+Run: `npm run scene:export -- --width 4 --depth 4 --cell-size 3 --seed 1 --output /tmp/steerlab-export-check --force` (use `--cell-size 3` to match the real road-tile catalog's native tile size — `DEFAULT_WFC_TILE_SIZE` in `src/wfc/sceneLayout.ts` — otherwise placements are scaled but not respaced, leaving visible gaps between tiles)
 Expected: exits 0, prints a metrics line, and `/tmp/steerlab-export-check/environment.glb` + `environment.json` exist. (If the real catalog has no non-road assets that solve a plain 4x4 grid, add `--asset-root` pointing at a small fixture directory instead — the point of this step is confirming the wired-together CLI runs against real `discoverAssetCatalog` output, not synthetic fixtures.)
 
 - [ ] **Step 4: Run the full suite and build check**
