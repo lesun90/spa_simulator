@@ -5,8 +5,8 @@ import { afterEach, describe, expect, test } from "vitest";
 import * as THREE from "three";
 import type { AssetCatalogEntry } from "../src/editor-core/assets";
 import { assignChunks } from "../src/environment/chunking";
-import { compileGeometry } from "../src/environment/geometryCompiler";
-import type { SceneRecipe } from "../src/environment/types";
+import { compileGeometry, flattenRecords } from "../src/environment/geometryCompiler";
+import type { RecipeCell, SceneRecipe } from "../src/environment/types";
 
 describe("compileGeometry", () => {
   let assetRoot: string;
@@ -172,6 +172,63 @@ describe("compileGeometry", () => {
     expect(transparentMeshCount).toBe(3);
   });
 });
+
+describe("flattenRecords", () => {
+  let assetRoot: string;
+
+  afterEach(async () => {
+    if (assetRoot) await rm(assetRoot, { recursive: true, force: true });
+  });
+
+  test("gives each cell its own geometry instance when cloneCellGeometry is set, instead of sharing one BufferGeometry across same-asset placements", async () => {
+    // template.clone(true) makes Mesh.copy assign geometry BY REFERENCE, so without cloning, two
+    // cell placements of the same asset share one BufferGeometry object — seam removal mutating one
+    // cell's geometry in place would silently corrupt every other placement of that asset. This is
+    // the regression guard for that: it fails on the pre-fix flattenRecord (no cloneGeometry
+    // parameter existed, so geometry was always shared) and passes once cloning is threaded through.
+    assetRoot = await mkdtemp(join(tmpdir(), "steerlab-assets-"));
+    const assets: AssetCatalogEntry[] = [{ id: "tiles.a", label: "Tile A", category: "tiles", source: "shared", implementation: "placeholder" }];
+    const recipe = recipeWithCells([
+      { id: "c-0-0", column: 0, row: 0 },
+      { id: "c-1-0", column: 1, row: 0 }
+    ]);
+    const chunkAssignment = assignChunks(recipe, 0);
+
+    const cloned = await flattenRecords(recipe, assets, chunkAssignment, assetRoot, { cloneCellGeometry: true });
+    const notCloned = await flattenRecords(recipe, assets, chunkAssignment, assetRoot, { cloneCellGeometry: false });
+
+    const [meshA] = cloned.cellMeshesByCellId.get("c-0-0")!;
+    const [meshB] = cloned.cellMeshesByCellId.get("c-1-0")!;
+    expect(meshA.geometry).not.toBe(meshB.geometry);
+
+    // Confirms the default (seam removal disabled) keeps the full-instancing behavior intact —
+    // cloning is opt-in, not a blanket change to flattenRecord's normal geometry-sharing contract.
+    const [sharedA] = notCloned.cellMeshesByCellId.get("c-0-0")!;
+    const [sharedB] = notCloned.cellMeshesByCellId.get("c-1-0")!;
+    expect(sharedA.geometry).toBe(sharedB.geometry);
+  });
+});
+
+function recipeWithCells(cells: { id: string; column: number; row: number }[]): SceneRecipe {
+  const recipeCells: RecipeCell[] = cells.map((cell) => ({
+    id: cell.id,
+    column: cell.column,
+    row: cell.row,
+    transform: { position: { x: cell.column, y: 0, z: cell.row }, rotationY: 0, scale: 1 },
+    sourceAssetId: "tiles.a",
+    semanticRoles: [],
+    sourceLayer: "scene",
+    recovered: false
+  }));
+  return {
+    grid: { width: 10, depth: 10, cellSize: 1, origin: { x: 0, y: 0, z: 0 } },
+    generationRuns: [],
+    cells: recipeCells,
+    objects: [],
+    ground: { appearance: { type: "color", color: "#050608", textureUrl: null } },
+    diagnostics: []
+  };
+}
 
 function recipeWithObjects(objects: { id: string; x: number; z: number; assetId?: string }[]): SceneRecipe {
   return {

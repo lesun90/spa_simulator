@@ -16,6 +16,11 @@ const EPSILON = 1e-3;
  */
 export function removeInternalSeamFaces(cellMeshesByCellId: ReadonlyMap<string, THREE.Mesh[]>, recipe: SceneRecipe): SeamRemovalResult {
   const cellsByCoordinate = new Map(recipe.cells.map((cell) => [`${cell.column},${cell.row}`, cell]));
+  // Defensive hardening: flattenRecords is expected to give every cell an independent geometry
+  // before this pass runs, making cross-cell geometry sharing structurally impossible here. This
+  // set is a backstop in case that invariant is ever violated elsewhere — mutating the same
+  // BufferGeometry twice in one pass would silently corrupt whichever cell is processed second.
+  const processedGeometries = new WeakSet<THREE.BufferGeometry>();
   let removedTriangleCount = 0;
   let removedVertexCount = 0;
 
@@ -31,7 +36,7 @@ export function removeInternalSeamFaces(cellMeshesByCellId: ReadonlyMap<string, 
 
       for (const cellMesh of cellMeshes) {
         for (const neighborMesh of neighborMeshes) {
-          const result = removeMatchingTrianglePairs(cellMesh, neighborMesh, boundaryX, boundaryZ, recipe.grid.cellSize);
+          const result = removeMatchingTrianglePairs(cellMesh, neighborMesh, boundaryX, boundaryZ, recipe.grid.cellSize, processedGeometries);
           removedTriangleCount += result.removedTriangleCount;
           removedVertexCount += result.removedVertexCount;
         }
@@ -60,7 +65,8 @@ function removeMatchingTrianglePairs(
   meshB: THREE.Mesh,
   boundaryX: number | null,
   boundaryZ: number | null,
-  cellSize: number
+  cellSize: number,
+  processedGeometries: WeakSet<THREE.BufferGeometry>
 ): SeamRemovalResult {
   const trianglesA = boundaryTriangles(meshA, boundaryX, boundaryZ, cellSize);
   const trianglesB = boundaryTriangles(meshB, boundaryX, boundaryZ, cellSize);
@@ -78,8 +84,8 @@ function removeMatchingTrianglePairs(
     }
   }
 
-  const removedFromA = removeTriangles(meshA, removeA);
-  const removedFromB = removeTriangles(meshB, removeB);
+  const removedFromA = removeTriangles(meshA, removeA, processedGeometries);
+  const removedFromB = removeTriangles(meshB, removeB, processedGeometries);
   return {
     removedTriangleCount: removeA.size + removeB.size,
     removedVertexCount: removedFromA + removedFromB
@@ -132,11 +138,22 @@ function trianglesMatch(a: BoundaryTriangle, b: BoundaryTriangle, cellSize: numb
   return unmatched.length === 0;
 }
 
-function removeTriangles(mesh: THREE.Mesh, triangleIndices: Set<number>): number {
+function removeTriangles(mesh: THREE.Mesh, triangleIndices: Set<number>, processedGeometries: WeakSet<THREE.BufferGeometry>): number {
   if (!triangleIndices.size) return 0;
   const geometry = mesh.geometry;
   const index = geometry.index;
   if (!index) return 0;
+
+  if (processedGeometries.has(geometry)) {
+    // A geometry should be independent per cell by the time seam removal runs (flattenRecords
+    // clones cell geometry whenever this pass is enabled). Seeing the same BufferGeometry twice
+    // means that invariant broke upstream — mutating it again would silently strip triangles that
+    // were computed against a numbering the first mutation already invalidated. Skip rather than
+    // corrupt whichever cell this second call belongs to.
+    console.warn("removeInternalSeamFaces: skipping a geometry already mutated once in this pass; cell geometry sharing invariant may be broken.");
+    return 0;
+  }
+  processedGeometries.add(geometry);
 
   const keptIndices: number[] = [];
   const totalTriangles = index.count / 3;

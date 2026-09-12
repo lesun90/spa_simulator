@@ -41,7 +41,7 @@ export async function compileEnvironmentPackage(
   const startedAt = Date.now();
   const chunkAssignment = assignChunks(recipe, options.chunkSize);
 
-  const flattened = await flattenRecords(recipe, assets, chunkAssignment, options.assetRoot);
+  const flattened = await flattenRecords(recipe, assets, chunkAssignment, options.assetRoot, { cloneCellGeometry: options.removeInternalSeamFaces });
   if (flattened.diagnostics.length) return { status: "failed", diagnostics: flattened.diagnostics };
 
   const seamResult = options.removeInternalSeamFaces

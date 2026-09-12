@@ -46,7 +46,8 @@ export async function flattenRecords(
   recipe: SceneRecipe,
   assets: readonly AssetCatalogEntry[],
   chunkAssignment: ChunkAssignment,
-  assetRoot: string
+  assetRoot: string,
+  options: { cloneCellGeometry?: boolean } = {}
 ): Promise<FlattenedRecords> {
   const assetsById = new Map(assets.map((asset) => [asset.id, asset]));
   const referencedAssetIds = new Set([...recipe.cells.map((cell) => cell.sourceAssetId), ...recipe.objects.map((object) => object.sourceAssetId)]);
@@ -64,12 +65,12 @@ export async function flattenRecords(
   const itemsByRecordId = new Map<string, FlattenedItem[]>();
 
   for (const cell of recipe.cells) {
-    const { meshes, items } = flattenRecord(cell, chunkAssignment.cellChunkIds.get(cell.id)!, templates.get(cell.sourceAssetId)!);
+    const { meshes, items } = flattenRecord(cell, chunkAssignment.cellChunkIds.get(cell.id)!, templates.get(cell.sourceAssetId)!, options.cloneCellGeometry ?? false);
     cellMeshesByCellId.set(cell.id, meshes);
     itemsByRecordId.set(cell.id, items);
   }
   for (const object of recipe.objects) {
-    const { items } = flattenRecord(object, chunkAssignment.objectChunkIds.get(object.id)!, templates.get(object.sourceAssetId)!);
+    const { items } = flattenRecord(object, chunkAssignment.objectChunkIds.get(object.id)!, templates.get(object.sourceAssetId)!, false);
     itemsByRecordId.set(object.id, items);
   }
 
@@ -154,7 +155,7 @@ export async function compileGeometry(
   return groupPrimitives(flattened.itemsByRecordId);
 }
 
-function flattenRecord(record: RecipeCell | RecipeObject, chunkId: string, template: THREE.Object3D): { meshes: THREE.Mesh[]; items: FlattenedItem[] } {
+function flattenRecord(record: RecipeCell | RecipeObject, chunkId: string, template: THREE.Object3D, cloneGeometry: boolean): { meshes: THREE.Mesh[]; items: FlattenedItem[] } {
   const instance = template.clone(true);
   instance.position.set(record.transform.position.x, record.transform.position.y, record.transform.position.z);
   instance.rotation.set(0, record.transform.rotationY, 0);
@@ -165,17 +166,27 @@ function flattenRecord(record: RecipeCell | RecipeObject, chunkId: string, templ
   const items: FlattenedItem[] = [];
   instance.traverse((node) => {
     if (!(node instanceof THREE.Mesh)) return;
-    meshes.push(node);
 
     if (Array.isArray(node.material)) {
       // Per-material face groups on geometry.groups: splitting this into one primitive per
       // material would make every one of them reference the same full geometry, so bake it
       // straight into a standalone mesh instead of feeding it into geometry+material grouping.
+      // An opaque node's geometry is left shared even when cloneGeometry is set: it never gets
+      // merged with anything else, and is not expected to be a seam-removal target.
       const mesh = new THREE.Mesh(node.geometry, node.material);
       mesh.applyMatrix4(node.matrixWorld);
+      meshes.push(node);
       items.push({ kind: "opaque", chunkId, mesh });
       return;
     }
+
+    // Per-cell placements of the same asset otherwise share one BufferGeometry instance (Mesh.copy
+    // assigns geometry by reference in template.clone(true)) — necessary for groupPrimitives to
+    // instance same-asset cells together. But seam removal mutates a mesh's geometry index buffer
+    // in place, so when it's about to run, each cell needs its own independent geometry first;
+    // otherwise mutating one cell's mesh corrupts every other cell placement of that asset.
+    if (cloneGeometry) node.geometry = node.geometry.clone();
+    meshes.push(node);
 
     items.push({
       kind: "groupable",
