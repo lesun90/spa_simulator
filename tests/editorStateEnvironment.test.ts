@@ -65,4 +65,33 @@ describe("EditorState.importEnvironment", () => {
 
     expect(uploadManifest).not.toHaveBeenCalled();
   });
+
+  test("asks for confirmation before replacing an existing environment, and does nothing when declined", async () => {
+    const state = new EditorState();
+    const scene = { ...createScene("Test"), environment: { sha256: "a".repeat(64), manifestVersion: 1 } };
+    state["history"] = createHistory(scene);
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+    const pickFiles = vi.spyOn(fileSystemAccess, "pickEnvironmentPackageFiles");
+    const uploadManifest = vi.spyOn(client, "uploadEnvironmentManifestRequest");
+
+    await state.importEnvironment();
+
+    expect(confirm).toHaveBeenCalled();
+    expect(pickFiles).not.toHaveBeenCalled();
+    expect(uploadManifest).not.toHaveBeenCalled();
+    confirm.mockRestore();
+  });
+
+  test("does not ask for confirmation when the scene has no existing environment", async () => {
+    const state = new EditorState();
+    const scene = createScene("Test");
+    state["history"] = createHistory(scene);
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+    vi.spyOn(fileSystemAccess, "pickEnvironmentPackageFiles").mockResolvedValue(null);
+
+    await state.importEnvironment();
+
+    expect(confirm).not.toHaveBeenCalled();
+    confirm.mockRestore();
+  });
 });
