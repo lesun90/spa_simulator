@@ -35,13 +35,19 @@ interface OpaqueMeshPrimitive {
 
 type FlattenedItem = FlattenedPrimitive | OpaqueMeshPrimitive;
 
-/** Resolves each referenced asset once, bakes every record's world transform, then instances/merges per chunk. */
-export async function compileGeometry(
+export interface FlattenedRecords {
+  cellMeshesByCellId: Map<string, THREE.Mesh[]>;
+  itemsByRecordId: Map<string, FlattenedItem[]>;
+  diagnostics: readonly string[];
+}
+
+/** Stage 1-2: resolve every referenced asset once, then bake each record's world transform into standalone meshes. */
+export async function flattenRecords(
   recipe: SceneRecipe,
   assets: readonly AssetCatalogEntry[],
   chunkAssignment: ChunkAssignment,
   assetRoot: string
-): Promise<CompiledGeometry> {
+): Promise<FlattenedRecords> {
   const assetsById = new Map(assets.map((asset) => [asset.id, asset]));
   const referencedAssetIds = new Set([...recipe.cells.map((cell) => cell.sourceAssetId), ...recipe.objects.map((object) => object.sourceAssetId)]);
 
@@ -49,18 +55,30 @@ export async function compileGeometry(
   const diagnostics: string[] = [];
   for (const assetId of referencedAssetIds) {
     const result = await resolveAssetGeometry(assetsById.get(assetId), assetId, assetRoot);
-    if (result.status === "error") {
-      diagnostics.push(...result.diagnostics);
-      continue;
-    }
-    templates.set(assetId, result.object);
+    if (result.status === "error") diagnostics.push(...result.diagnostics);
+    else templates.set(assetId, result.object);
   }
-  if (diagnostics.length) return { root: new THREE.Group(), diagnostics, stats: { meshCount: 0, instancedMeshCount: 0, triangleCount: 0 } };
+  if (diagnostics.length) return { cellMeshesByCellId: new Map(), itemsByRecordId: new Map(), diagnostics };
 
-  const items: FlattenedItem[] = [
-    ...recipe.cells.flatMap((cell) => flattenRecord(cell, chunkAssignment.cellChunkIds.get(cell.id)!, templates.get(cell.sourceAssetId)!)),
-    ...recipe.objects.flatMap((object) => flattenRecord(object, chunkAssignment.objectChunkIds.get(object.id)!, templates.get(object.sourceAssetId)!))
-  ];
+  const cellMeshesByCellId = new Map<string, THREE.Mesh[]>();
+  const itemsByRecordId = new Map<string, FlattenedItem[]>();
+
+  for (const cell of recipe.cells) {
+    const { meshes, items } = flattenRecord(cell, chunkAssignment.cellChunkIds.get(cell.id)!, templates.get(cell.sourceAssetId)!);
+    cellMeshesByCellId.set(cell.id, meshes);
+    itemsByRecordId.set(cell.id, items);
+  }
+  for (const object of recipe.objects) {
+    const { items } = flattenRecord(object, chunkAssignment.objectChunkIds.get(object.id)!, templates.get(object.sourceAssetId)!);
+    itemsByRecordId.set(object.id, items);
+  }
+
+  return { cellMeshesByCellId, itemsByRecordId, diagnostics: [] };
+}
+
+/** Stage 3-4 (post seam-removal): instances/merges already-flattened items into render nodes, scoped per chunk. */
+export function groupPrimitives(itemsByRecordId: ReadonlyMap<string, FlattenedItem[]>): CompiledGeometry {
+  const items = [...itemsByRecordId.values()].flat();
   const primitives = items.filter((item): item is FlattenedPrimitive => item.kind === "groupable");
   const opaqueMeshes = items.filter((item): item is OpaqueMeshPrimitive => item.kind === "opaque");
 
@@ -97,7 +115,7 @@ export async function compileGeometry(
         chunkGroup.add(instanced);
         instancedMeshCount += 1;
         triangleCount += triangles * group.length;
-      } else if (group.length > 1) {
+      } else {
         for (const primitive of group) {
           const mesh = new THREE.Mesh(primitive.geometry, primitive.material);
           mesh.applyMatrix4(primitive.matrix);
@@ -105,13 +123,6 @@ export async function compileGeometry(
           meshCount += 1;
           triangleCount += triangles;
         }
-      } else {
-        const primitive = group[0];
-        const mesh = new THREE.Mesh(primitive.geometry, primitive.material);
-        mesh.applyMatrix4(primitive.matrix);
-        chunkGroup.add(mesh);
-        meshCount += 1;
-        triangleCount += triangles;
       }
     }
   }
@@ -128,20 +139,33 @@ export async function compileGeometry(
   }
 
   mergeCompatibleSingletons(root);
-
   return { root, diagnostics: [], stats: { meshCount, instancedMeshCount, triangleCount } };
 }
 
-function flattenRecord(record: RecipeCell | RecipeObject, chunkId: string, template: THREE.Object3D): FlattenedItem[] {
+/** Convenience wrapper kept for Task 3's existing tests: resolves, flattens, and groups in one call, with no seam-removal step in between. */
+export async function compileGeometry(
+  recipe: SceneRecipe,
+  assets: readonly AssetCatalogEntry[],
+  chunkAssignment: ChunkAssignment,
+  assetRoot: string
+): Promise<CompiledGeometry> {
+  const flattened = await flattenRecords(recipe, assets, chunkAssignment, assetRoot);
+  if (flattened.diagnostics.length) return { root: new THREE.Group(), diagnostics: flattened.diagnostics, stats: { meshCount: 0, instancedMeshCount: 0, triangleCount: 0 } };
+  return groupPrimitives(flattened.itemsByRecordId);
+}
+
+function flattenRecord(record: RecipeCell | RecipeObject, chunkId: string, template: THREE.Object3D): { meshes: THREE.Mesh[]; items: FlattenedItem[] } {
   const instance = template.clone(true);
   instance.position.set(record.transform.position.x, record.transform.position.y, record.transform.position.z);
   instance.rotation.set(0, record.transform.rotationY, 0);
   instance.scale.setScalar(record.transform.scale);
   instance.updateMatrixWorld(true);
 
+  const meshes: THREE.Mesh[] = [];
   const items: FlattenedItem[] = [];
   instance.traverse((node) => {
     if (!(node instanceof THREE.Mesh)) return;
+    meshes.push(node);
 
     if (Array.isArray(node.material)) {
       // Per-material face groups on geometry.groups: splitting this into one primitive per
@@ -162,7 +186,7 @@ function flattenRecord(record: RecipeCell | RecipeObject, chunkId: string, templ
       transparent: node.material.transparent
     });
   });
-  return items;
+  return { meshes, items };
 }
 
 /**
