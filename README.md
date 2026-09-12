@@ -48,6 +48,8 @@ Set `STEERLAB_USER_DATA_DIR` to use a different scene location. Shared source-co
 
 Scenario Studio is available at http://localhost:5173/scenario_studio as a blank placeholder page.
 
+Planned functionality is documented in the [Scenario Studio design](docs/2026-09-12-scenario-studio-design.md) and [implementation plan](docs/2026-09-12-scenario-studio-implementation-plan.md). Each implementation step delivers a feature that can be reviewed in the running application.
+
 ## Run Checks
 
 Run project checks inside the Compose service:
