@@ -870,9 +870,23 @@ import type { SceneRecipe } from "../src/environment/types";
 
 describe("removeInternalSeamFaces", () => {
   test("removes a matching pair of opposite triangles on the shared boundary between north/east-adjacent cells", () => {
+    // Deliberately NOT using THREE.BoxGeometry here: two independently-constructed boxes' opposite
+    // faces (+X vs -X) use different diagonal splits by default (verified empirically — e.g. a unit
+    // BoxGeometry's +X face triangulates as {B,C,D}/{A,B,C} while its -X face triangulates as
+    // {A,C,D}/{A,B,D} for the same 4 corners), so their triangles never share an exact vertex set even
+    // though the faces geometrically coincide. quadFaceMesh below builds each side's boundary face from
+    // the SAME 4 corners with the SAME diagonal, differing only in winding (so the normals come out
+    // opposite) — a fixture that actually exercises exact-vertex-set matching, the case this pass is
+    // designed to handle.
     const recipe = recipeWithAdjacentCells();
-    const westMesh = boxMesh({ x: 0, z: 0 });
-    const eastMesh = boxMesh({ x: 1, z: 0 });
+    const corners: [number, number, number][] = [
+      [0.5, 0, -0.5],
+      [0.5, 0, 0.5],
+      [0.5, 1, 0.5],
+      [0.5, 1, -0.5]
+    ];
+    const westMesh = quadFaceMesh(corners, true); // outward +X, facing into the seam from the west cell
+    const eastMesh = quadFaceMesh(corners, false); // outward -X, facing into the seam from the east cell
     const cellMeshesByCellId = new Map([
       ["c-0-0", [westMesh]],
       ["c-1-0", [eastMesh]]
@@ -881,8 +895,9 @@ describe("removeInternalSeamFaces", () => {
 
     const result = removeInternalSeamFaces(cellMeshesByCellId, recipe);
 
-    expect(result.removedTriangleCount).toBeGreaterThan(0);
-    expect(triangleCount(westMesh) + triangleCount(eastMesh)).toBeLessThan(trianglesBefore);
+    expect(result.removedTriangleCount).toBe(4);
+    expect(triangleCount(westMesh) + triangleCount(eastMesh)).toBe(0);
+    expect(trianglesBefore).toBe(4);
   });
 
   test("leaves triangles alone when cells are not grid-adjacent", () => {
@@ -920,6 +935,17 @@ function boxMesh(center: { x: number; z: number }, materialOptions: THREE.MeshSt
   const geometry = new THREE.BoxGeometry(1, 1, 1);
   geometry.translate(center.x, 0.5, center.z);
   const mesh = new THREE.Mesh(geometry, new THREE.MeshStandardMaterial(materialOptions));
+  mesh.updateMatrixWorld(true);
+  return mesh;
+}
+
+/** Builds a single quad face (2 triangles, indexed) from 4 corners in loop order, split on the same diagonal regardless of winding — reversing `flipWinding` only reverses the face's normal direction, keeping the underlying triangle vertex sets identical to a face built from the same corners with the opposite flag. */
+function quadFaceMesh(corners: readonly [number, number, number][], flipWinding: boolean): THREE.Mesh {
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute("position", new THREE.Float32BufferAttribute(corners.flat(), 3));
+  geometry.setIndex(flipWinding ? [0, 2, 1, 0, 3, 2] : [0, 1, 2, 0, 2, 3]);
+  geometry.computeVertexNormals();
+  const mesh = new THREE.Mesh(geometry, new THREE.MeshStandardMaterial());
   mesh.updateMatrixWorld(true);
   return mesh;
 }
