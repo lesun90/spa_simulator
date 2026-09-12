@@ -1,5 +1,8 @@
-import { describe, expect, test } from "vitest";
-import { parseExportArgs } from "../scripts/exportEnvironmentCli";
+import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { afterEach, describe, expect, test } from "vitest";
+import { parseExportArgs, writePackageFiles } from "../scripts/exportEnvironmentCli";
 
 describe("parseExportArgs", () => {
   test("parses required arguments with documented defaults", () => {
@@ -70,5 +73,55 @@ describe("parseExportArgs", () => {
 
   test("rejects an unknown option", () => {
     expect(() => parseExportArgs(["--bogus"])).toThrow("Unknown option: --bogus");
+  });
+});
+
+describe("writePackageFiles", () => {
+  let outputDir: string;
+
+  afterEach(async () => {
+    if (outputDir) await rm(outputDir, { recursive: true, force: true });
+  });
+
+  test("writes both fixed-name files into a fresh output directory, leaving no staging directory behind", async () => {
+    outputDir = await mkdtemp(join(tmpdir(), "steerlab-export-"));
+    await rm(outputDir, { recursive: true, force: true });
+
+    await writePackageFiles(outputDir, '{"format":"steerlab-environment"}', new Uint8Array([1, 2, 3]), false);
+
+    expect(await readFile(join(outputDir, "environment.json"), "utf8")).toBe('{"format":"steerlab-environment"}');
+    expect(await readFile(join(outputDir, "environment.glb"))).toEqual(Buffer.from([1, 2, 3]));
+    const remaining = await readdir(outputDir);
+    expect(remaining.sort()).toEqual(["environment.glb", "environment.json"]);
+  });
+
+  test("rejects an existing package without --force, and leaves the existing files untouched", async () => {
+    outputDir = await mkdtemp(join(tmpdir(), "steerlab-export-"));
+    await writeFile(join(outputDir, "environment.json"), "old-manifest");
+
+    await expect(writePackageFiles(outputDir, "new-manifest", new Uint8Array(), false)).rejects.toThrow(
+      "Output directory already contains an environment package; pass --force to replace it."
+    );
+    expect(await readFile(join(outputDir, "environment.json"), "utf8")).toBe("old-manifest");
+  });
+
+  test("replaces an existing package when --force is set", async () => {
+    outputDir = await mkdtemp(join(tmpdir(), "steerlab-export-"));
+    await writeFile(join(outputDir, "environment.json"), "old-manifest");
+    await writeFile(join(outputDir, "environment.glb"), "old-glb");
+
+    await writePackageFiles(outputDir, "new-manifest", new Uint8Array([9]), true);
+
+    expect(await readFile(join(outputDir, "environment.json"), "utf8")).toBe("new-manifest");
+    expect(await readFile(join(outputDir, "environment.glb"))).toEqual(Buffer.from([9]));
+  });
+
+  test("does not remove unrelated files already in the output directory", async () => {
+    outputDir = await mkdtemp(join(tmpdir(), "steerlab-export-"));
+    await writeFile(join(outputDir, "notes.txt"), "keep me");
+
+    await writePackageFiles(outputDir, "manifest", new Uint8Array(), false);
+
+    expect(await readFile(join(outputDir, "notes.txt"), "utf8")).toBe("keep me");
   });
 });

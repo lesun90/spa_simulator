@@ -1,3 +1,6 @@
+import { mkdir, mkdtemp, readdir, rename, rm, writeFile } from "node:fs/promises";
+import { join } from "node:path";
+
 export interface ExportCliOptions {
   width: number;
   depth: number;
@@ -93,4 +96,27 @@ function printExportHelp() {
   npm run scene:export -- --width 100 --depth 100 --cell-size 1 --seed 12345 --output ./exports/city-12345 [--chunk-size 10] [--remove-seam-faces] [--asset-root ./assets] [--force]
   npm run scene:export -- --size 100 --cell-size 1 --seed 12345 --output ./exports/city-12345
 `);
+}
+
+export async function writePackageFiles(outputDir: string, manifestJson: string, glb: Uint8Array, force: boolean): Promise<void> {
+  await mkdir(outputDir, { recursive: true });
+  const manifestPath = join(outputDir, "environment.json");
+  const glbPath = join(outputDir, "environment.glb");
+
+  if (!force) {
+    const existing = await readdir(outputDir);
+    if (existing.includes("environment.json") || existing.includes("environment.glb")) {
+      throw new Error("Output directory already contains an environment package; pass --force to replace it.");
+    }
+  }
+
+  const stagingDir = await mkdtemp(join(outputDir, ".environment-export-"));
+  try {
+    await writeFile(join(stagingDir, "environment.json"), manifestJson, "utf8");
+    await writeFile(join(stagingDir, "environment.glb"), glb);
+    await rename(join(stagingDir, "environment.json"), manifestPath);
+    await rename(join(stagingDir, "environment.glb"), glbPath);
+  } finally {
+    await rm(stagingDir, { recursive: true, force: true });
+  }
 }
