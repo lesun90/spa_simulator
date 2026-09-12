@@ -275,6 +275,8 @@ export class EditorState {
       this.selectedObjectId = result.objects[0]?.id ?? null;
       this.emit("scene", "selection");
       this.setNotice(`Generated ${result.objects.length} tiles (seed ${result.seed})`);
+    } catch (error) {
+      this.setNotice(error instanceof Error ? error.message : "WFC generation failed");
     } finally {
       this.setWfcProgress(null);
     }
