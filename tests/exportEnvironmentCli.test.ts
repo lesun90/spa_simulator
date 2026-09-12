@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promis
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, test } from "vitest";
-import { parseExportArgs, writePackageFiles } from "../scripts/exportEnvironmentCli";
+import { parseExportArgs, runExportCli, writePackageFiles } from "../scripts/exportEnvironmentCli";
 
 describe("parseExportArgs", () => {
   test("parses required arguments with documented defaults", () => {
@@ -123,5 +123,68 @@ describe("writePackageFiles", () => {
     await writePackageFiles(outputDir, "manifest", new Uint8Array(), false);
 
     expect(await readFile(join(outputDir, "notes.txt"), "utf8")).toBe("keep me");
+  });
+});
+
+describe("runExportCli", () => {
+  let outputDir: string;
+  let assetRoot: string;
+
+  afterEach(async () => {
+    if (outputDir) await rm(outputDir, { recursive: true, force: true });
+    if (assetRoot) await rm(assetRoot, { recursive: true, force: true });
+  });
+
+  test("generates a small scene and writes a valid package, printing metrics", async () => {
+    assetRoot = await mkdtemp(join(tmpdir(), "steerlab-cli-assets-"));
+    await mkdir(join(assetRoot, "props", "cone"), { recursive: true });
+    // A companion non-metadata file (here a thumbnail) is required for discoverAssetCatalog's
+    // folder scan to pick up this directory at all, and a self-matching wfc.variants entry (all
+    // four sides share one socket type) is required for paletteFromAssets to produce a
+    // non-empty, solvable palette — without both, generateWfcScene always reports failure.
+    await writeFile(join(assetRoot, "props", "cone", "cone.png"), "");
+    await writeFile(
+      join(assetRoot, "props", "cone", "asset.json"),
+      JSON.stringify({
+        id: "props.cone",
+        label: "Cone",
+        category: "props",
+        wfc: {
+          height: 1,
+          diagnostics: [],
+          variants: [
+            {
+              variantId: "props.cone@r0",
+              rotationDegrees: 0,
+              sockets: { north: "road", east: "road", south: "road", west: "road", top: "top", bottom: "bottom" }
+            }
+          ]
+        }
+      })
+    );
+    outputDir = join(await mkdtemp(join(tmpdir(), "steerlab-cli-out-")), "package");
+
+    const logs: string[] = [];
+    const originalLog = console.log;
+    console.log = (message: string) => logs.push(message);
+    try {
+      await runExportCli(["--width", "2", "--depth", "1", "--cell-size", "3", "--seed", "7", "--output", outputDir, "--asset-root", assetRoot]);
+    } finally {
+      console.log = originalLog;
+    }
+
+    const manifest = JSON.parse(await readFile(join(outputDir, "environment.json"), "utf8"));
+    expect(manifest.format).toBe("steerlab-environment");
+    expect(logs.some((line) => line.includes("seed 7"))).toBe(true);
+  });
+
+  test("throws a specific diagnostic and leaves no output when generation fails", async () => {
+    assetRoot = await mkdtemp(join(tmpdir(), "steerlab-cli-assets-"));
+    outputDir = join(await mkdtemp(join(tmpdir(), "steerlab-cli-out-")), "package");
+
+    await expect(
+      runExportCli(["--width", "2", "--depth", "1", "--cell-size", "3", "--seed", "7", "--output", outputDir, "--asset-root", assetRoot])
+    ).rejects.toThrow();
+    await expect(readFile(join(outputDir, "environment.json"), "utf8")).rejects.toThrow();
   });
 });

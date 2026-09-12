@@ -1,5 +1,11 @@
 import { mkdir, mkdtemp, readdir, rename, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import { discoverAssetCatalog } from "../server/assetCatalog";
+import { compileEnvironmentPackage } from "../src/environment/compiler";
+import { canonicalJson } from "../src/environment/manifestEncoder";
+import { buildSceneRecipe } from "../src/environment/sceneRecipe";
+import { sceneFromGeneration } from "../src/environment/sceneFromGeneration";
+import { generateWfcScene } from "../src/wfc/sceneGenerator";
 
 export interface ExportCliOptions {
   width: number;
@@ -119,4 +125,47 @@ export async function writePackageFiles(outputDir: string, manifestJson: string,
   } finally {
     await rm(stagingDir, { recursive: true, force: true });
   }
+}
+
+const GENERATOR_VERSION = "0.1.0";
+
+export async function runExportCli(argv: string[]): Promise<void> {
+  const options = parseExportArgs(argv);
+  const assets = await discoverAssetCatalog(options.assetRoot);
+
+  const request = { width: options.width, depth: options.depth, seed: options.seed, tileWidth: options.cellSize, tileDepth: options.cellSize };
+  const generation = await generateWfcScene(assets, request);
+  if (generation.status === "failed") {
+    throw new Error(generation.roadScene ? `Road scene infeasible (seed ${options.seed}): ${generation.diagnostics[0]}` : generation.diagnostics[0]);
+  }
+
+  const scene = sceneFromGeneration(generation, request);
+  const recipe = buildSceneRecipe(scene, assets);
+
+  const compiled = await compileEnvironmentPackage(recipe, assets, {
+    chunkSize: options.chunkSize,
+    removeInternalSeamFaces: options.removeSeamFaces,
+    assetRoot: options.assetRoot,
+    source: "cli",
+    generatorVersion: GENERATOR_VERSION
+  });
+  if ("status" in compiled) throw new Error(compiled.diagnostics[0]);
+
+  await writePackageFiles(options.output, canonicalJson(compiled.manifest), compiled.glb, options.force);
+
+  console.log(
+    [
+      `cells=${compiled.metrics.cellCount}`,
+      `objects=${compiled.metrics.objectCount}`,
+      `chunks=${compiled.metrics.chunkCount}`,
+      `meshes=${compiled.metrics.meshCount}`,
+      `instancedMeshes=${compiled.metrics.instancedMeshCount}`,
+      `drawCallEstimate=${compiled.metrics.meshCount + compiled.metrics.instancedMeshCount}`,
+      `triangles=${compiled.metrics.triangleCount}`,
+      `removedSeamTriangles=${compiled.metrics.removedSeamTriangleCount}`,
+      `glbBytes=${compiled.metrics.glbByteLength}`,
+      `seed ${options.seed}`,
+      `elapsedMs=${compiled.metrics.elapsedMs}`
+    ].join(" ")
+  );
 }
