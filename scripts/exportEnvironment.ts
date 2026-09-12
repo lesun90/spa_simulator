@@ -1,6 +1,6 @@
 import { runExportCli } from "./exportEnvironmentCli";
 
 runExportCli(process.argv.slice(2)).catch((error: unknown) => {
-  console.error(error instanceof Error ? error.message : String(error));
+  console.error(error instanceof Error ? error.message : JSON.stringify(error));
   process.exitCode = 1;
 });

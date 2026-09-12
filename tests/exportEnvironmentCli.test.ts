@@ -1,8 +1,14 @@
 import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, describe, expect, test } from "vitest";
-import { parseExportArgs, runExportCli, writePackageFiles } from "../scripts/exportEnvironmentCli";
+import { afterEach, describe, expect, test, vi } from "vitest";
+import { compileEnvironmentPackage } from "../src/environment/compiler";
+import { HelpRequested, parseExportArgs, runExportCli, writePackageFiles } from "../scripts/exportEnvironmentCli";
+
+vi.mock("../src/environment/compiler", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../src/environment/compiler")>();
+  return { ...actual, compileEnvironmentPackage: vi.fn(actual.compileEnvironmentPackage) };
+});
 
 describe("parseExportArgs", () => {
   test("parses required arguments with documented defaults", () => {
@@ -73,6 +79,22 @@ describe("parseExportArgs", () => {
 
   test("rejects an unknown option", () => {
     expect(() => parseExportArgs(["--bogus"])).toThrow("Unknown option: --bogus");
+  });
+
+  test("rejects a malformed --seed instead of silently truncating it (e.g. parseInt('1e10', 10) === 1)", () => {
+    expect(() =>
+      parseExportArgs(["--width", "10", "--depth", "10", "--cell-size", "1", "--seed", "1e10", "--output", "./out"])
+    ).toThrow("--seed must be an unsigned 32-bit integer");
+  });
+
+  test("rejects a malformed --width instead of silently truncating it (e.g. parseInt('10abc', 10) === 10)", () => {
+    expect(() =>
+      parseExportArgs(["--width", "10abc", "--depth", "10", "--cell-size", "1", "--seed", "1", "--output", "./out"])
+    ).toThrow("--width must be an integer from 1 through 100");
+  });
+
+  test("throws HelpRequested for --help instead of calling process.exit", () => {
+    expect(() => parseExportArgs(["--help"])).toThrow(HelpRequested);
   });
 });
 
@@ -178,13 +200,51 @@ describe("runExportCli", () => {
     expect(logs.some((line) => line.includes("seed 7"))).toBe(true);
   });
 
-  test("throws a specific diagnostic and leaves no output when generation fails", async () => {
+  test("rejects a nonexistent/empty --asset-root with a clear message instead of a misleading WFC diagnostic", async () => {
     assetRoot = await mkdtemp(join(tmpdir(), "steerlab-cli-assets-"));
     outputDir = join(await mkdtemp(join(tmpdir(), "steerlab-cli-out-")), "package");
 
     await expect(
       runExportCli(["--width", "2", "--depth", "1", "--cell-size", "3", "--seed", "7", "--output", outputDir, "--asset-root", assetRoot])
-    ).rejects.toThrow();
+    ).rejects.toThrow(`No assets found under ${assetRoot}`);
     await expect(readFile(join(outputDir, "environment.json"), "utf8")).rejects.toThrow();
+  });
+
+  test("resolves cleanly for --help without touching the asset catalog", async () => {
+    await expect(runExportCli(["--help"])).resolves.toBeUndefined();
+  });
+
+  test("joins ALL compile diagnostics into the thrown error, not just the first", async () => {
+    assetRoot = await mkdtemp(join(tmpdir(), "steerlab-cli-assets-"));
+    await mkdir(join(assetRoot, "props", "cone"), { recursive: true });
+    await writeFile(join(assetRoot, "props", "cone", "cone.png"), "");
+    await writeFile(
+      join(assetRoot, "props", "cone", "asset.json"),
+      JSON.stringify({
+        id: "props.cone",
+        label: "Cone",
+        category: "props",
+        wfc: {
+          height: 1,
+          diagnostics: [],
+          variants: [
+            {
+              variantId: "props.cone@r0",
+              rotationDegrees: 0,
+              sockets: { north: "road", east: "road", south: "road", west: "road", top: "top", bottom: "bottom" }
+            }
+          ]
+        }
+      })
+    );
+    outputDir = join(await mkdtemp(join(tmpdir(), "steerlab-cli-out-")), "package");
+    vi.mocked(compileEnvironmentPackage).mockResolvedValueOnce({
+      status: "failed",
+      diagnostics: ["first diagnostic", "second diagnostic"]
+    });
+
+    await expect(
+      runExportCli(["--width", "2", "--depth", "1", "--cell-size", "3", "--seed", "7", "--output", outputDir, "--asset-root", assetRoot])
+    ).rejects.toThrow("first diagnostic; second diagnostic");
   });
 });

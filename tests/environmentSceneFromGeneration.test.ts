@@ -24,4 +24,23 @@ describe("sceneFromGeneration", () => {
     expect(scene.objects).toBe(result.objects);
     expect(scene.name).toBe("cli-42");
   });
+
+  test("defaults tileWidth/tileDepth to DEFAULT_WFC_TILE_SIZE instead of producing NaN when the request omits them", () => {
+    const result: Extract<GenerateWfcSceneResult, { status: "solved" }> = {
+      status: "solved",
+      seed: 1,
+      roadScene: false,
+      objects: [],
+      palette: { tileWidth: 3, tileDepth: 3 } as never,
+      decisions: 0,
+      backtracks: 0
+    };
+
+    const scene = sceneFromGeneration(result, { width: 4, depth: 5, seed: 1 });
+
+    expect(scene.grid.cellSize).toBe(3);
+    expect(Number.isFinite(scene.grid.width)).toBe(true);
+    expect(Number.isFinite(scene.grid.depth)).toBe(true);
+    expect(scene.grid).toEqual({ cellSize: 3, width: 12, depth: 15 });
+  });
 });

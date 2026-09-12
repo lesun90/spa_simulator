@@ -20,8 +20,10 @@ if (typeof (globalThis as { Image?: unknown }).Image === "undefined") {
 /**
  * GLTFExporter reads embedded texture images via FileReader.readAsArrayBuffer/readAsDataURL
  * (see processBufferViewImage in three's GLTFExporter). Real Node has no FileReader — only
- * Vitest's jsdom test environment does — so placeholder-only test fixtures never exercise this
- * path; it only surfaces when exporting a scene with real image textures.
+ * Vitest's jsdom test environment does. This is called unconditionally on every binary (GLB)
+ * export, not just ones with real image textures — placeholder-only test fixtures happen to
+ * never trigger the specific code path that constructs a FileReader, but any real GLB export
+ * does.
  */
 class NodeFileReader {
   result: string | ArrayBuffer | null = null;

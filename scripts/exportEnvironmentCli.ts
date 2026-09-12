@@ -7,6 +7,8 @@ import { buildSceneRecipe } from "../src/environment/sceneRecipe";
 import { sceneFromGeneration } from "../src/environment/sceneFromGeneration";
 import { generateWfcScene } from "../src/wfc/sceneGenerator";
 
+export class HelpRequested extends Error {}
+
 export interface ExportCliOptions {
   width: number;
   depth: number;
@@ -41,22 +43,22 @@ export function parseExportArgs(argv: string[]): ExportCliOptions {
 
     switch (arg) {
       case "--width":
-        width = Number.parseInt(next(), 10);
+        width = parseStrictInt(next());
         break;
       case "--depth":
-        depth = Number.parseInt(next(), 10);
+        depth = parseStrictInt(next());
         break;
       case "--size":
-        size = Number.parseInt(next(), 10);
+        size = parseStrictInt(next());
         break;
       case "--cell-size":
-        cellSize = Number.parseFloat(next());
+        cellSize = parseStrictFloat(next());
         break;
       case "--seed":
-        seed = Number.parseInt(next(), 10);
+        seed = parseStrictInt(next());
         break;
       case "--chunk-size":
-        chunkSize = Number.parseInt(next(), 10);
+        chunkSize = parseStrictInt(next()) ?? Number.NaN;
         break;
       case "--output":
         output = next();
@@ -72,7 +74,7 @@ export function parseExportArgs(argv: string[]): ExportCliOptions {
         break;
       case "--help":
         printExportHelp();
-        process.exit(0);
+        throw new HelpRequested();
       default:
         throw new Error(`Unknown option: ${arg}`);
     }
@@ -95,6 +97,14 @@ export function parseExportArgs(argv: string[]): ExportCliOptions {
 
 function isIntegerInRange(value: number | undefined, min: number, max: number): value is number {
   return typeof value === "number" && Number.isInteger(value) && value >= min && value <= max;
+}
+
+function parseStrictInt(raw: string): number | undefined {
+  return /^\d+$/.test(raw) ? Number.parseInt(raw, 10) : undefined;
+}
+
+function parseStrictFloat(raw: string): number | undefined {
+  return /^\d+(\.\d+)?$/.test(raw) ? Number.parseFloat(raw) : undefined;
 }
 
 function printExportHelp() {
@@ -130,8 +140,15 @@ export async function writePackageFiles(outputDir: string, manifestJson: string,
 const GENERATOR_VERSION = "0.1.0";
 
 export async function runExportCli(argv: string[]): Promise<void> {
-  const options = parseExportArgs(argv);
+  let options: ExportCliOptions;
+  try {
+    options = parseExportArgs(argv);
+  } catch (error) {
+    if (error instanceof HelpRequested) return;
+    throw error;
+  }
   const assets = await discoverAssetCatalog(options.assetRoot);
+  if (assets.length === 0) throw new Error(`No assets found under ${options.assetRoot}`);
 
   const request = { width: options.width, depth: options.depth, seed: options.seed, tileWidth: options.cellSize, tileDepth: options.cellSize };
   const generation = await generateWfcScene(assets, request);
@@ -149,7 +166,7 @@ export async function runExportCli(argv: string[]): Promise<void> {
     source: "cli",
     generatorVersion: GENERATOR_VERSION
   });
-  if ("status" in compiled) throw new Error(compiled.diagnostics[0]);
+  if ("status" in compiled) throw new Error(compiled.diagnostics.join("; "));
 
   await writePackageFiles(options.output, canonicalJson(compiled.manifest), compiled.glb, options.force);
 
