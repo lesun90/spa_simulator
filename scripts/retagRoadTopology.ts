@@ -3,7 +3,7 @@ import { join } from "node:path";
 import type { RoadTopologyKind, RoadTopologyTag, WfcPlanarDirection } from "../src/wfc/metadata/socketTypes";
 import { reviewedRoadTopologyKinds } from "../src/wfc/metadata/reviewedRoadTopology";
 
-const assetRoot = "assets/3d-road-tiles";
+const assetRoot = "assets/scene_element/3d-road-tiles";
 const directionOrder: readonly WfcPlanarDirection[] = ["north", "east", "south", "west"];
 const reviewedKinds = reviewedRoadTopologyKinds;
 

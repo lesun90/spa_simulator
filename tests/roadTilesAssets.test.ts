@@ -9,7 +9,7 @@ import { findRoadBoundsSeamMismatches } from "./support/roadWfcSeamHarness";
 
 describe("3d-road-tiles assets", () => {
   test("road tile 148 is centered on the X/Z origin", async () => {
-    const bounds = await readGlbPositionBounds("assets/3d-road-tiles/road-tile-148/road-tile-148.glb");
+    const bounds = await readGlbPositionBounds("assets/scene_element/3d-road-tiles/road-tile-148/road-tile-148.glb");
 
     expect(bounds.min.x).toBeCloseTo(-1.5, 5);
     expect(bounds.max.x).toBeCloseTo(1.5, 5);
@@ -24,12 +24,12 @@ describe("3d-road-tiles assets", () => {
   });
 
   test("only the reviewed route assets carry valid road-edge metadata", async () => {
-    const folders = (await readdir("assets/3d-road-tiles", { withFileTypes: true })).filter((entry) => entry.isDirectory()).sort((a, b) => a.name.localeCompare(b.name));
+    const folders = (await readdir("assets/scene_element/3d-road-tiles", { withFileTypes: true })).filter((entry) => entry.isDirectory()).sort((a, b) => a.name.localeCompare(b.name));
     const observed: Record<string, RoadTopologyKind | undefined> = {};
 
     for (const folder of folders) {
       const id = folder.name.slice(-3);
-      const metadata = JSON.parse(await readFile(join("assets/3d-road-tiles", folder.name, "asset.json"), "utf8")) as { wfc?: WfcMetadata };
+      const metadata = JSON.parse(await readFile(join("assets/scene_element/3d-road-tiles", folder.name, "asset.json"), "utf8")) as { wfc?: WfcMetadata };
       const tags = (metadata.wfc?.variants ?? []).flatMap((variant) => variant.roadTopology ? [variant.roadTopology] : []);
       if (!tags.length) continue;
       observed[id] = tags[0]!.kind;
@@ -79,9 +79,9 @@ describe("3d-road-tiles assets", () => {
   }, 30_000);
 
   async function readRoadVariants() {
-    const folders = (await readdir("assets/3d-road-tiles", { withFileTypes: true })).filter((entry) => entry.isDirectory());
+    const folders = (await readdir("assets/scene_element/3d-road-tiles", { withFileTypes: true })).filter((entry) => entry.isDirectory());
     const assets = await Promise.all(
-      folders.map(async (folder) => JSON.parse(await readFile(join("assets/3d-road-tiles", folder.name, "asset.json"), "utf8")) as { id: string; wfc?: WfcMetadata })
+      folders.map(async (folder) => JSON.parse(await readFile(join("assets/scene_element/3d-road-tiles", folder.name, "asset.json"), "utf8")) as { id: string; wfc?: WfcMetadata })
     );
     const completeAssets = assets.filter((asset) => asset.wfc?.variants.length && asset.wfc.variants.every((variant) => ["north", "east", "south", "west"].every((direction) => typeof variant.sockets[direction as "north"] === "string" && variant.sockets[direction as "north"].length > 0))).length;
     const variants = assets.flatMap((asset) => {

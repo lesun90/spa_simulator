@@ -80,7 +80,7 @@ describe("buildNavigationGraph", () => {
   });
 
   test("creates an edge from roadTopology.edges alone, matching real road-tile assets which have no semantics field", () => {
-    // Real assets in this repo's catalog (e.g. assets/3d-road-tiles/road-tile-034/asset.json) encode
+    // Real assets in this repo's catalog (e.g. assets/scene_element/3d-road-tiles/road-tile-034/asset.json) encode
     // road connectivity entirely via wfc.variants[].roadTopology.edges and have no `semantics` field
     // at all. A prior implementation that only read asset.semantics?.sockets produced zero edges for
     // every real road scene; this fixture reproduces that shape to guard against regressing to it.

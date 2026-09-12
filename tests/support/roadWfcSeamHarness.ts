@@ -27,7 +27,7 @@ const sceneCache = new Map<string, Promise<THREE.Object3D>>();
  * Loads the same GLBs used by the viewport, applies the production centring and scene-object
  * transforms, then verifies that each solved internal seam shares a world-space boundary plane.
  */
-export async function findRoadBoundsSeamMismatches(cells: readonly SolvedRoadCell[], objects: readonly SceneObject[], root = "assets/3d-road-tiles"): Promise<RoadSeamMismatch[]> {
+export async function findRoadBoundsSeamMismatches(cells: readonly SolvedRoadCell[], objects: readonly SceneObject[], root = "assets/scene_element/3d-road-tiles"): Promise<RoadSeamMismatch[]> {
   const objectByPosition = new Map(objects.map((object) => [positionKey(object), object]));
   const cellByPosition = new Map(cells.map((cell) => [`${cell.column},${cell.row}`, cell]));
   const bounds = new Map<string, Promise<THREE.Box3>>();

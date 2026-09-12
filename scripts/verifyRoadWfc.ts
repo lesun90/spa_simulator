@@ -8,7 +8,7 @@ interface AssetMetadata {
   wfc?: WfcMetadata;
 }
 
-const root = "assets/3d-road-tiles";
+const root = "assets/scene_element/3d-road-tiles";
 const folders = (await readdir(root, { withFileTypes: true }))
   .filter((entry) => entry.isDirectory())
   .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));

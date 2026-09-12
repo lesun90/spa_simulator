@@ -74,7 +74,7 @@ export async function reimportRoadTilesFromObj(options: ReimportOptions) {
     .filter((file) => /^roadTile_\d+\.obj$/.test(file))
     .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
 
-  await rm(join(options.assetRoot, "3d-road-tiles"), { recursive: true, force: true });
+  await rm(join(options.assetRoot, "scene_element", "3d-road-tiles"), { recursive: true, force: true });
   await rm(options.workRoot, { recursive: true, force: true });
   await mkdir(options.workRoot, { recursive: true });
 
@@ -93,7 +93,7 @@ export async function reimportRoadTilesFromObj(options: ReimportOptions) {
 
     built.push(
       await buildAssetFolder({
-        assetRoot: options.assetRoot,
+        assetRoot: join(options.assetRoot, "scene_element"),
         category: "3d-road-tiles",
         glbFile,
         assetName,

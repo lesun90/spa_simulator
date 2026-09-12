@@ -6,7 +6,7 @@ import { buildAdjacency } from "../src/wfc/metadata/buildAdjacency";
 import { DEFAULT_WFC_TILE_SIZE } from "../src/wfc/sceneLayout";
 import { wfcDirections, type RoadTopologyTag, type WfcDirection, type WfcMetadata, type WfcSocketMap, type WfcVariant } from "../src/wfc/metadata/socketTypes";
 
-const DEFAULT_ASSET_ROOT = "assets/3d-road-tiles";
+const DEFAULT_ASSET_ROOT = "assets/scene_element/3d-road-tiles";
 const GRID_SIZE = 16;
 const EMPTY_CELL = "empty";
 const POSITION_EPSILON_RATIO = 1 / 1000;
