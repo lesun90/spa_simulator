@@ -15,17 +15,24 @@ import type { PlacementResolution } from "../editor-core/grid";
 import { createId, objectDisplayNames, type Scene, type SceneObject, type SurfaceAppearanceType, type Vector3Data } from "../editor-core/scene";
 import { validateSceneForSave } from "../editor-core/validation";
 import {
+  commitEnvironmentImportRequest,
   createSceneRequest,
   deleteSceneRequest,
   duplicateSceneRequest,
+  exportEnvironmentRequest,
+  fetchExportedEnvironmentModel,
   importSharedAssetRequest,
   listAssets,
   listScenes,
   openSceneRequest,
   renameSceneRequest,
   saveSceneRequest,
+  uploadEnvironmentManifestRequest,
+  uploadEnvironmentModelRequest,
   type SceneSummary
 } from "../api/client";
+import { pickEnvironmentPackageFiles, saveEnvironmentPackage } from "../features/hud/kit/fileSystemAccess";
+import type { EnvironmentManifest } from "../environment/types";
 import { createTemporaryAsset, selectedObject } from "./editorHelpers";
 import type { EditorTool } from "./types";
 import { generateWfcScene } from "../wfc/sceneGenerator";
@@ -53,7 +60,8 @@ export type EditorTopic =
   | "search"
   | "category"
   | "notice"
-  | "wfcProgress";
+  | "wfcProgress"
+  | "sceneEnvironment";
 
 type Listener = () => void;
 
@@ -233,6 +241,52 @@ export class EditorState {
     this.emit("scene", "selection");
     await this.refreshScenes();
     this.setNotice("Deleted scene");
+  }
+
+  async exportEnvironment(options: { chunkSize: number; removeSeamFaces: boolean }) {
+    if (!this.scene) {
+      this.setNotice("Open a scene before exporting an environment");
+      return;
+    }
+    try {
+      const { exportId, manifest, manifestJson } = await exportEnvironmentRequest(this.scene, options);
+      const glb = await fetchExportedEnvironmentModel(this.scene.id, exportId);
+      await saveEnvironmentPackage(manifestJson, glb);
+      this.setNotice(`Exported environment (${manifest.cells.length} cells)`);
+    } catch (error) {
+      this.setNotice(error instanceof Error ? error.message : "Environment export failed");
+    }
+  }
+
+  async importEnvironment() {
+    if (!this.history || !this.scene) {
+      this.setNotice("Open a scene before importing an environment");
+      return;
+    }
+    if (this.scene.environment && !window.confirm("Replace the current environment package?")) return;
+
+    const picked = await pickEnvironmentPackageFiles();
+    if (!picked) return;
+
+    try {
+      await uploadEnvironmentManifestRequest(this.scene.id, picked.manifestJson);
+      await uploadEnvironmentModelRequest(this.scene.id, picked.glb);
+      const updated = await commitEnvironmentImportRequest(this.scene.id);
+      const manifest = JSON.parse(picked.manifestJson) as EnvironmentManifest;
+
+      this.history = {
+        ...this.history,
+        scene: {
+          ...this.history.scene,
+          environment: updated.environment,
+          grid: { cellSize: manifest.grid.cellSize, width: manifest.grid.width * manifest.grid.cellSize, depth: manifest.grid.depth * manifest.grid.cellSize }
+        }
+      };
+      this.emit("scene", "sceneGrid", "sceneEnvironment");
+      this.setNotice(`Imported environment (${manifest.cells.length} cells)`);
+    } catch (error) {
+      this.setNotice(error instanceof Error ? error.message : "Environment import failed");
+    }
   }
 
   placeAsset(assetId: string, position: Vector3Data, options: { scale?: number } = {}) {
