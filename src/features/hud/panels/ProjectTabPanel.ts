@@ -2,6 +2,8 @@ import * as THREE from "three";
 import { theme } from "../../../app/theme";
 import type { InteractionSystem } from "../../../engine/InteractionSystem";
 import type { EditorState } from "../../../state/EditorState";
+import { Button } from "../kit/Button";
+import { CheckboxControl } from "../kit/Checkbox";
 import type { Rect } from "../kit/layout";
 import { hudBasicMaterial } from "../kit/materials";
 import { unitPlane } from "../kit/Panel";
@@ -23,10 +25,15 @@ export class ProjectTabPanel {
 
   private readonly nameField: TextField;
   private readonly descriptionField: TextField;
+  private readonly environmentChunkSizeField: TextField;
+  private readonly environmentSeamCheckbox: CheckboxControl;
+  private readonly exportEnvironmentButton: Button;
+  private readonly importEnvironmentButton: Button;
   private nameLabel: LabelMesh | null = null;
   private descriptionLabel: LabelMesh | null = null;
+  private environmentStatusLabel: LabelMesh | null = null;
   private rect: Rect;
-  private readonly cleanup: () => void;
+  private readonly cleanupFns: Array<() => void>;
 
   constructor(
     rect: Rect,
@@ -51,9 +58,36 @@ export class ProjectTabPanel {
     );
     this.root.add(this.descriptionField.root);
 
+    this.environmentChunkSizeField = new TextField(this.environmentChunkSizeFieldRect(), interaction, { numeric: true, placeholder: "10" }, "10");
+    this.root.add(this.environmentChunkSizeField.root);
+
+    this.environmentSeamCheckbox = new CheckboxControl(this.environmentSeamCheckboxRect(), interaction, "Remove internal seam faces", () => {});
+    this.root.add(this.environmentSeamCheckbox.root);
+
+    this.exportEnvironmentButton = new Button(this.exportEnvironmentButtonRect(), interaction, {
+      label: "Export Environment",
+      fontSize: 11.5,
+      onClick: () => this.exportEnvironment()
+    });
+    this.root.add(this.exportEnvironmentButton.root);
+
+    this.importEnvironmentButton = new Button(this.importEnvironmentButtonRect(), interaction, {
+      label: "Import Environment",
+      fontSize: 11.5,
+      onClick: () => void this.state.importEnvironment()
+    });
+    this.root.add(this.importEnvironmentButton.root);
+
     this.layoutLabels();
 
-    this.cleanup = state.on("scene", () => this.refreshFromScene());
+    this.cleanupFns = [state.on("scene", () => this.refreshFromScene()), state.on("sceneEnvironment", () => this.refreshEnvironmentStatus())];
+
+    this.refreshEnvironmentStatus();
+  }
+
+  private exportEnvironment() {
+    const chunkSize = Math.max(0, Math.trunc(Number.parseFloat(this.environmentChunkSizeField.getValue()) || 10));
+    void this.state.exportEnvironment({ chunkSize, removeSeamFaces: this.environmentSeamCheckbox.isChecked() });
   }
 
   private commitName(value: string) {
@@ -68,6 +102,17 @@ export class ProjectTabPanel {
   private refreshFromScene() {
     this.nameField.setValue(this.state.scene?.name ?? "");
     this.descriptionField.setValue(this.state.scene?.description ?? "");
+    this.refreshEnvironmentStatus();
+  }
+
+  private refreshEnvironmentStatus() {
+    if (this.environmentStatusLabel) {
+      this.root.remove(this.environmentStatusLabel);
+      this.environmentStatusLabel.material.dispose();
+    }
+    const text = this.state.scene?.environment ? "Environment: attached" : "Environment: none";
+    this.environmentStatusLabel = createFieldLabel(text, this.environmentLabelRect());
+    this.root.add(this.environmentStatusLabel);
   }
 
   private nameLabelRect(): Rect {
@@ -89,6 +134,31 @@ export class ProjectTabPanel {
     return { x: label.x, y: label.y + LABEL_HEIGHT + LABEL_GAP, width: label.width, height: FIELD_HEIGHT };
   }
 
+  private environmentLabelRect(): Rect {
+    const field = this.descriptionFieldRect();
+    return { x: field.x, y: field.y + FIELD_HEIGHT + SECTION_GAP, width: field.width, height: LABEL_HEIGHT };
+  }
+
+  private environmentChunkSizeFieldRect(): Rect {
+    const label = this.environmentLabelRect();
+    return { x: label.x, y: label.y + LABEL_HEIGHT + LABEL_GAP, width: label.width, height: FIELD_HEIGHT };
+  }
+
+  private environmentSeamCheckboxRect(): Rect {
+    const field = this.environmentChunkSizeFieldRect();
+    return { x: field.x, y: field.y + FIELD_HEIGHT + LABEL_GAP, width: field.width, height: 24 };
+  }
+
+  private exportEnvironmentButtonRect(): Rect {
+    const checkbox = this.environmentSeamCheckboxRect();
+    return { x: checkbox.x, y: checkbox.y + checkbox.height + LABEL_GAP, width: checkbox.width, height: FIELD_HEIGHT };
+  }
+
+  private importEnvironmentButtonRect(): Rect {
+    const exportButton = this.exportEnvironmentButtonRect();
+    return { x: exportButton.x, y: exportButton.y + FIELD_HEIGHT + LABEL_GAP, width: exportButton.width, height: FIELD_HEIGHT };
+  }
+
   private layoutLabels() {
     if (this.nameLabel) {
       this.root.remove(this.nameLabel);
@@ -107,6 +177,7 @@ export class ProjectTabPanel {
     if (!this.root.visible) return;
     this.nameField.update(dt);
     this.descriptionField.update(dt);
+    this.environmentChunkSizeField.update(dt);
   }
 
   setVisible(visible: boolean) {
@@ -117,15 +188,25 @@ export class ProjectTabPanel {
     this.rect = rect;
     this.nameField.setRect(this.nameFieldRect());
     this.descriptionField.setRect(this.descriptionFieldRect());
+    this.environmentChunkSizeField.setRect(this.environmentChunkSizeFieldRect());
+    this.environmentSeamCheckbox.setRect(this.environmentSeamCheckboxRect());
+    this.exportEnvironmentButton.setRect(this.exportEnvironmentButtonRect());
+    this.importEnvironmentButton.setRect(this.importEnvironmentButtonRect());
     this.layoutLabels();
+    this.refreshEnvironmentStatus();
   }
 
   dispose() {
-    this.cleanup();
+    for (const cleanup of this.cleanupFns) cleanup();
     this.nameField.dispose();
     this.descriptionField.dispose();
+    this.environmentChunkSizeField.dispose();
+    this.environmentSeamCheckbox.dispose();
+    this.exportEnvironmentButton.dispose();
+    this.importEnvironmentButton.dispose();
     this.nameLabel?.material.dispose();
     this.descriptionLabel?.material.dispose();
+    this.environmentStatusLabel?.material.dispose();
   }
 }
 
