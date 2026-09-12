@@ -1,0 +1,96 @@
+export interface ExportCliOptions {
+  width: number;
+  depth: number;
+  cellSize: number;
+  seed: number;
+  chunkSize: number;
+  output: string;
+  removeSeamFaces: boolean;
+  assetRoot: string;
+  force: boolean;
+}
+
+export function parseExportArgs(argv: string[]): ExportCliOptions {
+  let width: number | undefined;
+  let depth: number | undefined;
+  let size: number | undefined;
+  let cellSize: number | undefined;
+  let seed: number | undefined;
+  let output: string | undefined;
+  let chunkSize = 10;
+  let removeSeamFaces = false;
+  let assetRoot = "./assets";
+  let force = false;
+
+  for (let index = 0; index < argv.length; index += 1) {
+    const arg = argv[index];
+    const next = () => {
+      const value = argv[++index];
+      if (value === undefined) throw new Error(`${arg} needs a value`);
+      return value;
+    };
+
+    switch (arg) {
+      case "--width":
+        width = Number.parseInt(next(), 10);
+        break;
+      case "--depth":
+        depth = Number.parseInt(next(), 10);
+        break;
+      case "--size":
+        size = Number.parseInt(next(), 10);
+        break;
+      case "--cell-size":
+        cellSize = Number.parseFloat(next());
+        break;
+      case "--seed":
+        seed = Number.parseInt(next(), 10);
+        break;
+      case "--chunk-size":
+        chunkSize = Number.parseInt(next(), 10);
+        break;
+      case "--output":
+        output = next();
+        break;
+      case "--asset-root":
+        assetRoot = next();
+        break;
+      case "--remove-seam-faces":
+        removeSeamFaces = true;
+        break;
+      case "--force":
+        force = true;
+        break;
+      case "--help":
+        printExportHelp();
+        process.exit(0);
+      default:
+        throw new Error(`Unknown option: ${arg}`);
+    }
+  }
+
+  if (size !== undefined && (width !== undefined || depth !== undefined)) {
+    throw new Error("--size cannot be combined with --width or --depth");
+  }
+  const resolvedWidth = size ?? width;
+  const resolvedDepth = size ?? depth;
+  if (!isIntegerInRange(resolvedWidth, 1, 100)) throw new Error("--width must be an integer from 1 through 100");
+  if (!isIntegerInRange(resolvedDepth, 1, 100)) throw new Error("--depth must be an integer from 1 through 100");
+  if (!(typeof cellSize === "number" && Number.isFinite(cellSize) && cellSize > 0)) throw new Error("--cell-size must be greater than zero");
+  if (!isIntegerInRange(seed, 0, 0xffffffff)) throw new Error("--seed must be an unsigned 32-bit integer");
+  if (!isIntegerInRange(chunkSize, 0, Number.MAX_SAFE_INTEGER)) throw new Error("--chunk-size must be zero or a positive integer");
+  if (!output) throw new Error("--output is required");
+
+  return { width: resolvedWidth, depth: resolvedDepth, cellSize, seed: seed!, chunkSize, output, removeSeamFaces, assetRoot, force };
+}
+
+function isIntegerInRange(value: number | undefined, min: number, max: number): value is number {
+  return typeof value === "number" && Number.isInteger(value) && value >= min && value <= max;
+}
+
+function printExportHelp() {
+  console.log(`Usage:
+  npm run scene:export -- --width 100 --depth 100 --cell-size 1 --seed 12345 --output ./exports/city-12345 [--chunk-size 10] [--remove-seam-faces] [--asset-root ./assets] [--force]
+  npm run scene:export -- --size 100 --cell-size 1 --seed 12345 --output ./exports/city-12345
+`);
+}
