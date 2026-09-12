@@ -86,6 +86,6 @@ export function createSceneStore(root: string) {
   };
 }
 
-function safeId(id: string) {
+export function safeId(id: string) {
   return id.replace(/[^a-zA-Z0-9_-]/g, "_");
 }

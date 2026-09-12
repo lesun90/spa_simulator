@@ -3,6 +3,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import type { Plugin } from "vite";
 import { discoverAssetCatalog, importSharedAsset, type SharedImportRequest } from "./assetCatalog";
+import { createEnvironmentPackageStore } from "./environmentPackageStore";
 import { createSceneStore } from "./sceneStore";
 import type { Scene } from "../src/editor-core/scene";
 import type { AssetCatalogEntry } from "../src/editor-core/assets";
@@ -12,6 +13,7 @@ export function steerlabApiPlugin(): Plugin {
   const assetRoot = join(process.cwd(), "assets");
   const sceneRoot = process.env.STEERLAB_USER_DATA_DIR ?? join(homedir(), ".steerlab", "scenes");
   const store = createSceneStore(sceneRoot);
+  const environmentStore = createEnvironmentPackageStore(sceneRoot);
 
   return {
     name: "steerlab-api",
@@ -65,6 +67,7 @@ export function steerlabApiPlugin(): Plugin {
             if (method === "PATCH") return sendJson(response, { scene: await store.rename(id, (await readJson<{ name: string }>(request)).name) });
             if (method === "DELETE") {
               await store.delete(id);
+              await environmentStore.remove(id);
               response.statusCode = 204;
               response.end();
               return;
@@ -73,7 +76,10 @@ export function steerlabApiPlugin(): Plugin {
 
           const duplicateMatch = url.pathname.match(/^\/api\/scenes\/([^/]+)\/duplicate$/);
           if (duplicateMatch && method === "POST") {
-            return sendJson(response, { scene: await store.duplicate(decodeURIComponent(duplicateMatch[1])) }, 201);
+            const sourceId = decodeURIComponent(duplicateMatch[1]);
+            const duplicated = await store.duplicate(sourceId);
+            await environmentStore.copy(sourceId, duplicated.id);
+            return sendJson(response, { scene: duplicated }, 201);
           }
 
           sendJson(response, { error: "Not found" }, 404);
