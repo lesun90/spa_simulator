@@ -37,6 +37,26 @@ describe("createEnvironmentImportStaging", () => {
     expect(await environmentStore.read("scene-1")).toBeNull();
   });
 
+  test("commit clears staging after rejecting an invalid pair, so a later re-upload isn't paired with stale files", async () => {
+    root = await mkdtemp(join(tmpdir(), "steerlab-import-"));
+    const staging = createEnvironmentImportStaging(root);
+    const environmentStore = createEnvironmentPackageStore(root);
+    await staging.stageManifest("scene-1", JSON.stringify({ format: "wrong-format" }));
+    await staging.stageModel("scene-1", Buffer.from([1, 2, 3]));
+    const rejected = await staging.commit("scene-1", environmentStore);
+    expect(rejected.status).toBe("error");
+
+    // Only re-stage the manifest — if the stale rejected model were still on disk, this commit
+    // would silently pair the new manifest with that stale model instead of failing outright.
+    const glb = buildMinimalGlb();
+    const manifest = minimalManifest(sha256Hex(glb));
+    await staging.stageManifest("scene-1", JSON.stringify(manifest));
+
+    const result = await staging.commit("scene-1", environmentStore);
+
+    expect(result).toEqual({ status: "error", diagnostics: ["Both environment.json and environment.glb must be uploaded before committing."] });
+  });
+
   test("commit accepts a valid pair, replaces the store, and clears staging", async () => {
     root = await mkdtemp(join(tmpdir(), "steerlab-import-"));
     const staging = createEnvironmentImportStaging(root);

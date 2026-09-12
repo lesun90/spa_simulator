@@ -91,11 +91,15 @@ export function createEnvironmentImportStaging(sceneRoot: string) {
       try {
         manifestValue = JSON.parse(manifestJson);
       } catch {
+        await rm(dir, { recursive: true, force: true });
         return { status: "error", diagnostics: ["environment.json is not valid JSON."] };
       }
 
       const validation = validateEnvironmentPackage(manifestValue, glb);
-      if (!validation.valid) return { status: "error", diagnostics: validation.diagnostics };
+      if (!validation.valid) {
+        await rm(dir, { recursive: true, force: true });
+        return { status: "error", diagnostics: validation.diagnostics };
+      }
 
       await environmentStore.replace(sceneId, manifestJson, glb);
       await rm(dir, { recursive: true, force: true });
