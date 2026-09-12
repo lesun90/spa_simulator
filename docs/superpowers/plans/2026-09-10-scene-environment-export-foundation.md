@@ -728,7 +728,7 @@ import type { EnvironmentManifest } from "../src/environment/types";
 
 describe("sha256Hex", () => {
   test("matches the known SHA-256 of the empty buffer", () => {
-    expect(sha256Hex(new Uint8Array())).toBe("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b85");
+    expect(sha256Hex(new Uint8Array())).toBe("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855");
   });
 });
 
