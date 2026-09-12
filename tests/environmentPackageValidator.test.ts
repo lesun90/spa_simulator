@@ -315,6 +315,85 @@ describe("validateEnvironmentPackage", () => {
     expect(result.diagnostics).toContain("GLB magic bytes are missing.");
   });
 
+  test("rejects, without throwing, a manifest whose chunks field is an object instead of an array", () => {
+    const glb = buildGlb({ nodes: [{ name: "SteerlabEnvironment" }] });
+    const manifest = fixtureManifest(sha256Hex(glb));
+    const invalid = { ...manifest, chunks: { "chunk-0": { id: "chunk-0", bounds: manifest.grid.bounds } } };
+
+    expect(() => validateEnvironmentPackage(invalid, glb)).not.toThrow();
+    const result = validateEnvironmentPackage(invalid, glb);
+
+    expect(result.valid).toBe(false);
+    expect(result.diagnostics).toContain("Manifest chunks must be an array.");
+  });
+
+  test("rejects, without throwing, a manifest whose cells array contains a null entry", () => {
+    const glb = buildGlb({ nodes: [{ name: "SteerlabEnvironment" }] });
+    const manifest = fixtureManifest(sha256Hex(glb));
+    const invalid = { ...manifest, cells: [null] };
+
+    expect(() => validateEnvironmentPackage(invalid, glb)).not.toThrow();
+    const result = validateEnvironmentPackage(invalid, glb);
+
+    expect(result.valid).toBe(false);
+    expect(result.diagnostics).toContain("Manifest cells contains a non-object entry.");
+  });
+
+  test("rejects, without throwing, a manifest whose objects field is not an array", () => {
+    const glb = buildGlb({ nodes: [{ name: "SteerlabEnvironment" }] });
+    const manifest = fixtureManifest(sha256Hex(glb));
+    const invalid = { ...manifest, objects: 42 };
+
+    expect(() => validateEnvironmentPackage(invalid, glb)).not.toThrow();
+    const result = validateEnvironmentPackage(invalid, glb);
+
+    expect(result.valid).toBe(false);
+    expect(result.diagnostics).toContain("Manifest objects must be an array.");
+  });
+
+  test("rejects, without throwing, a manifest whose navigation.nodes array contains a null entry", () => {
+    const glb = buildGlb({ nodes: [{ name: "SteerlabEnvironment" }] });
+    const manifest = fixtureManifest(sha256Hex(glb));
+    const invalid = { ...manifest, navigation: { nodes: [null], edges: [] } };
+
+    expect(() => validateEnvironmentPackage(invalid, glb)).not.toThrow();
+    const result = validateEnvironmentPackage(invalid, glb);
+
+    expect(result.valid).toBe(false);
+    expect(result.diagnostics).toContain("Manifest navigation.nodes contains a non-object entry.");
+  });
+
+  test("rejects, without throwing, a GLB whose JSON chunk is literal null", () => {
+    const glb = buildGlb(null);
+    const manifest = fixtureManifest(sha256Hex(glb));
+
+    expect(() => validateEnvironmentPackage(manifest, glb)).not.toThrow();
+    const result = validateEnvironmentPackage(manifest, glb);
+
+    expect(result.valid).toBe(false);
+  });
+
+  test("rejects, without throwing, a GLB whose nodes field is an object instead of an array", () => {
+    const glb = buildGlb({ nodes: { "0": { name: "SteerlabEnvironment" } } });
+    const manifest = fixtureManifest(sha256Hex(glb));
+
+    expect(() => validateEnvironmentPackage(manifest, glb)).not.toThrow();
+    const result = validateEnvironmentPackage(manifest, glb);
+
+    expect(result.valid).toBe(false);
+    expect(result.diagnostics).toContain("environment.glb does not contain the root node named in the manifest.");
+  });
+
+  test("rejects, without throwing, a GLB whose nodes array contains a null entry", () => {
+    const glb = buildGlb({ nodes: [null, { name: "SteerlabEnvironment" }] });
+    const manifest = fixtureManifest(sha256Hex(glb));
+
+    expect(() => validateEnvironmentPackage(manifest, glb)).not.toThrow();
+    const result = validateEnvironmentPackage(manifest, glb);
+
+    expect(result.valid).toBe(true);
+  });
+
   test("rejects a GLB whose chunk length exceeds the file size", () => {
     const glb = buildGlb({ nodes: [{ name: "SteerlabEnvironment" }] });
     const corrupt = Buffer.from(glb);

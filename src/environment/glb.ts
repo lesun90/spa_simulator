@@ -22,13 +22,18 @@ export function readGlbInfo(bytes: Uint8Array): GlbInfo {
   if (chunkType !== JSON_CHUNK_TYPE) return { valid: false, error: "GLB does not start with a JSON chunk." };
   if (20 + chunkLength > bytes.length) return { valid: false, error: "GLB chunk length exceeds file size." };
 
-  let json: { nodes?: { name?: string }[] };
+  let parsed: unknown;
   try {
-    json = JSON.parse(new TextDecoder().decode(bytes.subarray(20, 20 + chunkLength)));
+    parsed = JSON.parse(new TextDecoder().decode(bytes.subarray(20, 20 + chunkLength)));
   } catch {
     return { valid: false, error: "GLB JSON chunk is not valid JSON." };
   }
 
-  const nodeNames = (json.nodes ?? []).map((node) => node.name).filter((name): name is string => typeof name === "string");
+  const json: { nodes?: unknown } = parsed && typeof parsed === "object" ? (parsed as { nodes?: unknown }) : {};
+  const rawNodes = Array.isArray(json.nodes) ? json.nodes : [];
+  const nodeNames = rawNodes
+    .filter((node): node is { name?: unknown } => !!node && typeof node === "object")
+    .map((node) => node.name)
+    .filter((name): name is string => typeof name === "string");
   return { valid: true, nodeNames };
 }
