@@ -87,6 +87,9 @@ export function steerlabApiPlugin(): Plugin {
           const exportMatch = url.pathname.match(/^\/api\/scenes\/([^/]+)\/environment\/export$/);
           if (exportMatch && method === "POST") {
             const body = await readJson<{ scene: Scene; options: { chunkSize: number; removeSeamFaces: boolean } }>(request);
+            if (body.scene.id !== decodeURIComponent(exportMatch[1])) {
+              return sendJson(response, { error: "Route scene ID does not match the scene body ID." }, 400);
+            }
             const catalog = await discoverAssetCatalog(assetRoot);
             const result = await environmentExports.compile(body.scene, catalog, assetRoot, body.options);
             if (result.status === "error") return sendJson(response, { error: result.message }, 400);
