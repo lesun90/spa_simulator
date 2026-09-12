@@ -1072,7 +1072,7 @@ function removeMatchingTrianglePairs(
   for (const triangleA of trianglesA) {
     for (const triangleB of trianglesB) {
       if (removeB.has(triangleB.index)) continue;
-      if (trianglesMatch(triangleA, triangleB)) {
+      if (trianglesMatch(triangleA, triangleB, cellSize)) {
         removeA.add(triangleA.index);
         removeB.add(triangleB.index);
         break;
@@ -1121,13 +1121,13 @@ function boundaryTriangles(mesh: THREE.Mesh, boundaryX: number | null, boundaryZ
   return triangles;
 }
 
-function trianglesMatch(a: BoundaryTriangle, b: BoundaryTriangle): boolean {
+function trianglesMatch(a: BoundaryTriangle, b: BoundaryTriangle, cellSize: number): boolean {
   const oppositeNormals = a.normal.dot(b.normal) < -0.99;
   if (!oppositeNormals) return false;
 
   const unmatched = [...b.vertices];
   for (const vertex of a.vertices) {
-    const matchIndex = unmatched.findIndex((candidate) => candidate.distanceTo(vertex) < EPSILON);
+    const matchIndex = unmatched.findIndex((candidate) => candidate.distanceTo(vertex) < EPSILON * cellSize);
     if (matchIndex === -1) return false;
     unmatched.splice(matchIndex, 1);
   }
