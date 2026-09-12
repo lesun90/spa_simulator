@@ -105,3 +105,13 @@ export async function uploadEnvironmentModelRequest(sceneId: string, glb: Uint8A
 export async function commitEnvironmentImportRequest(sceneId: string): Promise<Scene> {
   return (await request<{ scene: Scene }>(`/api/scenes/${encodeURIComponent(sceneId)}/environment/import/commit`, { method: "POST" })).scene;
 }
+
+export async function fetchCommittedEnvironmentManifest(sceneId: string): Promise<EnvironmentManifest | null> {
+  return (await request<{ manifest: EnvironmentManifest | null }>(`/api/scenes/${encodeURIComponent(sceneId)}/environment`)).manifest;
+}
+
+export async function fetchCommittedEnvironmentModel(sceneId: string): Promise<Uint8Array> {
+  const response = await fetch(`/api/scenes/${encodeURIComponent(sceneId)}/environment/model`);
+  if (!response.ok) throw new Error(`Request failed with ${response.status}`);
+  return new Uint8Array(await response.arrayBuffer());
+}

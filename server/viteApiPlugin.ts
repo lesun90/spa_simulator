@@ -132,6 +132,19 @@ export function steerlabApiPlugin(): Plugin {
             return sendJson(response, { scene: updated });
           }
 
+          const committedManifestMatch = url.pathname.match(/^\/api\/scenes\/([^/]+)\/environment$/);
+          if (committedManifestMatch && method === "GET") {
+            const committed = await environmentStore.read(decodeURIComponent(committedManifestMatch[1]));
+            return sendJson(response, { manifest: committed ? JSON.parse(committed.manifest) : null });
+          }
+
+          const committedModelMatch = url.pathname.match(/^\/api\/scenes\/([^/]+)\/environment\/model$/);
+          if (committedModelMatch && method === "GET") {
+            const committed = await environmentStore.read(decodeURIComponent(committedModelMatch[1]));
+            if (!committed) return sendJson(response, { error: "Not found" }, 404);
+            return sendBinary(response, committed.glb, "model/gltf-binary");
+          }
+
           sendJson(response, { error: "Not found" }, 404);
         } catch {
           sendJson(response, { error: "Request failed." }, 500);
