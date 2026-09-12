@@ -1444,11 +1444,12 @@ git commit -m "feat: add asset table with content hashing for environment export
 **Files:**
 - Create: `src/environment/manifestBuilder.ts`
 - Create: `src/environment/navigationGraph.ts`
+- Modify: `src/wfc/sceneLayout.ts` — export the existing `rotateSemanticPorts` function (visibility change only, no behavior change)
 - Test: `tests/environmentManifestBuilder.test.ts`
 - Test: `tests/environmentNavigationGraph.test.ts`
 
 **Interfaces:**
-- Consumes: `SceneRecipe`, `RecipeCell`, `RecipeObject`, `EnvironmentManifestCell`, `EnvironmentManifestObject`, `EnvironmentManifestGround`, `EnvironmentManifestAsset`, `EnvironmentManifestNavigationNode`, `EnvironmentManifestNavigationEdge`, `WorldBounds` from `./types`; `ChunkAssignment` from `./chunking` (Task 2); `AssetCatalogEntry`, `AssetSemantics` from `../editor-core/assets`/`../wfc/metadata/socketTypes`.
+- Consumes: `SceneRecipe`, `RecipeCell`, `RecipeObject`, `EnvironmentManifestCell`, `EnvironmentManifestObject`, `EnvironmentManifestGround`, `EnvironmentManifestAsset`, `EnvironmentManifestNavigationNode`, `EnvironmentManifestNavigationEdge`, `WorldBounds` from `./types`; `ChunkAssignment` from `./chunking` (Task 2); `AssetCatalogEntry`, `AssetSemantics` from `../editor-core/assets`/`../wfc/metadata/socketTypes`; `rotateSemanticPorts` from `../wfc/sceneLayout` (existing function, exported by this task — do not reimplement rotation math independently).
 - Produces: `buildManifestRecords(recipe: SceneRecipe, chunkAssignment: ChunkAssignment, assetTable: readonly EnvironmentManifestAsset[]): { cells: EnvironmentManifestCell[]; objects: EnvironmentManifestObject[]; ground: EnvironmentManifestGround | null }`; `buildNavigationGraph(cells: readonly EnvironmentManifestCell[], recipe: SceneRecipe, assets: readonly AssetCatalogEntry[]): { nodes: EnvironmentManifestNavigationNode[]; edges: EnvironmentManifestNavigationEdge[] }`. Task 8 (`compiler.ts`) calls both, in that order (navigation nodes reference the cells `buildManifestRecords` just produced). `buildManifestRecords` takes no `assets` parameter — every field it needs (`semanticRoles`, `variantId`, etc.) is already on the `RecipeCell`/`RecipeObject` records themselves; only the navigation graph needs live catalog lookups (rotated socket data), which is why `buildNavigationGraph` alone takes `assets`.
 
 - [ ] **Step 1: Write the failing test**
@@ -1622,12 +1623,17 @@ function buildGroundRecord(recipe: SceneRecipe, chunkAssignment: ChunkAssignment
 }
 ```
 
+**Reuse note:** `src/wfc/sceneLayout.ts` already has a module-private `rotateSemanticPorts(sockets, rotationDegrees)` function (used at `sceneLayout.ts:93` to compute a solved WFC cell's world-facing semantic ports) that does exactly the "rotate an authored socket map to world-facing directions" computation this task needs — and it's already exercised by the real WFC generation pipeline, unlike a fresh implementation here which this plan's own test suite (below) would only exercise with `rotationY: 0` fixtures, never actually proving a rotation-aware formula correct. Reuse it instead of re-deriving the rotation math independently. First, export it:
+
+In `src/wfc/sceneLayout.ts`, change line 108's `function rotateSemanticPorts(...)` to `export function rotateSemanticPorts(...)` — no other change to that file. (One-line visibility change; re-run `npx vitest run tests/sceneLayout.test.ts tests/wfcWorker.test.ts` afterward to confirm nothing else in that file's test suite broke, though a visibility-only change cannot affect behavior.)
+
 Create `src/environment/navigationGraph.ts`:
 
 ```typescript
 import type { AssetCatalogEntry } from "../editor-core/assets";
-import type { WfcDirection, WfcPlanarDirection } from "../wfc/metadata/socketTypes";
+import type { WfcPlanarDirection } from "../wfc/metadata/socketTypes";
 import { oppositeDirections } from "../wfc/metadata/socketTypes";
+import { rotateSemanticPorts } from "../wfc/sceneLayout";
 import type { EnvironmentManifestCell, EnvironmentManifestNavigationEdge, EnvironmentManifestNavigationNode, SceneRecipe } from "./types";
 
 const PLANAR_DIRECTIONS: readonly WfcPlanarDirection[] = ["north", "east", "south", "west"];
@@ -1647,6 +1653,7 @@ export interface NavigationGraph {
 export function buildNavigationGraph(cells: readonly EnvironmentManifestCell[], _recipe: SceneRecipe, assets: readonly AssetCatalogEntry[]): NavigationGraph {
   const assetsById = new Map(assets.map((asset) => [asset.id, asset]));
   const cellsByCoordinate = new Map(cells.map((cell) => [`${cell.column},${cell.row}`, cell]));
+  const rotatedPortsByCellId = new Map(cells.map((cell) => [cell.id, rotatedPortsForCell(cell, assetsById)]));
 
   const nodes: EnvironmentManifestNavigationNode[] = cells.map((cell) => ({
     id: `nav_${cell.id}`,
@@ -1658,13 +1665,15 @@ export function buildNavigationGraph(cells: readonly EnvironmentManifestCell[], 
 
   const edges: EnvironmentManifestNavigationEdge[] = [];
   for (const cell of cells) {
+    const ports = rotatedPortsByCellId.get(cell.id);
     for (const direction of PLANAR_DIRECTIONS) {
-      if (!hasRotatedPort(cell, direction, assetsById)) continue;
+      if (!ports?.[direction]?.includes("road")) continue;
       const offset = DIRECTION_OFFSETS[direction];
       const neighbor = cellsByCoordinate.get(`${cell.column + offset.column},${cell.row + offset.row}`);
       if (!neighbor) continue;
       const oppositeDirection = oppositeDirections[direction] as WfcPlanarDirection;
-      if (!hasRotatedPort(neighbor, oppositeDirection, assetsById)) continue;
+      const neighborPorts = rotatedPortsByCellId.get(neighbor.id);
+      if (!neighborPorts?.[oppositeDirection]?.includes("road")) continue;
       if (direction !== "north" && direction !== "east") continue; // visit each pair once
 
       edges.push({
@@ -1691,19 +1700,12 @@ function roadChannelsForCell(cell: EnvironmentManifestCell, assetsById: Readonly
   return [...channels];
 }
 
-/** A cell's raw socket map is authored at rotation 0; rotate the direction being queried backward by the cell's placed rotation to read the un-rotated socket. */
-function hasRotatedPort(cell: EnvironmentManifestCell, direction: WfcPlanarDirection, assetsById: ReadonlyMap<string, AssetCatalogEntry>): boolean {
+/** Converts the cell's radian rotationY back to the degrees rotateSemanticPorts expects, and rotates the asset's authored (rotation-0) sockets to their world-facing directions for this placement. */
+function rotatedPortsForCell(cell: EnvironmentManifestCell, assetsById: ReadonlyMap<string, AssetCatalogEntry>): Partial<Record<WfcPlanarDirection, readonly string[]>> | undefined {
   const asset = assetsById.get(cell.sourceAssetId);
-  if (!asset?.semantics) return false;
-  const rotationSteps = Math.round(cell.transform.rotationY / (Math.PI / 2)) % 4;
-  const sourceDirection = rotateDirection(direction, (4 - ((rotationSteps % 4) + 4) % 4) % 4);
-  return asset.semantics.sockets[sourceDirection]?.type === "road";
-}
-
-function rotateDirection(direction: WfcPlanarDirection, steps: number): WfcPlanarDirection {
-  const order: WfcPlanarDirection[] = ["north", "east", "south", "west"];
-  const index = (order.indexOf(direction) + steps) % order.length;
-  return order[index];
+  if (!asset?.semantics) return undefined;
+  const rotationDegrees = Math.round((cell.transform.rotationY * 180) / Math.PI);
+  return rotateSemanticPorts(asset.semantics.sockets, rotationDegrees);
 }
 
 function distance(a: { x: number; z: number }, b: { x: number; z: number }): number {
@@ -1765,16 +1767,42 @@ describe("buildNavigationGraph", () => {
 
     expect(graph.edges).toEqual([]);
   });
+
+  test("rotates authored ports to world-facing directions before matching adjacent cells", () => {
+    // Both cells share one asset whose only authored (rotation-0) port faces "east". Neither
+    // cell is placed at rotation 0, so this only produces an edge if the rotation is actually
+    // applied before matching — a rotation-unaware implementation (or one that accidentally
+    // rotates the wrong way) would find no connecting ports here.
+    const assets: AssetCatalogEntry[] = [
+      {
+        id: "tiles.corner",
+        label: "Corner",
+        category: "3d-road-tiles",
+        source: "shared",
+        implementation: "glb",
+        semantics: { roles: [], sockets: { east: { type: "road" } } }
+      }
+    ];
+    const cells: EnvironmentManifestCell[] = [
+      cellFixture({ id: "c-0-0", column: 0, row: 0, rotationY: Math.PI / 2, assetId: "tiles.corner" }), // authored east -> world south
+      cellFixture({ id: "c-0-1", column: 0, row: 1, rotationY: (3 * Math.PI) / 2, assetId: "tiles.corner" }) // authored east -> world north
+    ];
+
+    const graph = buildNavigationGraph(cells, recipeStub(), assets);
+
+    expect(graph.edges).toHaveLength(1);
+    expect(graph.edges[0]).toMatchObject({ fromNodeId: "nav_c-0-1", toNodeId: "nav_c-0-0", direction: "north", channel: "road", bidirectional: true });
+  });
 });
 
-function cellFixture(options: { id: string; column: number; row: number }): EnvironmentManifestCell {
+function cellFixture(options: { id: string; column: number; row: number; rotationY?: number; assetId?: string }): EnvironmentManifestCell {
   return {
     id: options.id,
     column: options.column,
     row: options.row,
-    transform: { position: { x: options.column, y: 0, z: options.row }, rotationY: 0, scale: 1 },
+    transform: { position: { x: options.column, y: 0, z: options.row }, rotationY: options.rotationY ?? 0, scale: 1 },
     bounds: { min: { x: 0, y: 0, z: 0 }, max: { x: 1, y: 1, z: 1 } },
-    sourceAssetId: "tiles.straight",
+    sourceAssetId: options.assetId ?? "tiles.straight",
     semanticRoles: [],
     chunkId: "chunk_0_0",
     sourceLayer: "scene"
