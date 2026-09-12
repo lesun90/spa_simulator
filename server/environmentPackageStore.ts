@@ -22,8 +22,17 @@ export function createEnvironmentPackageStore(sceneRoot: string) {
       await mkdir(stagingDir, { recursive: true });
       await writeFile(join(stagingDir, "environment.json"), manifestJson, "utf8");
       await writeFile(join(stagingDir, "environment.glb"), glb);
-      await rm(dir, { recursive: true, force: true });
+
+      const previousDir = `${dir}.previous-${Date.now()}`;
+      const hadExisting = await rename(dir, previousDir).then(
+        () => true,
+        (error) => {
+          if ((error as NodeJS.ErrnoException).code === "ENOENT") return false;
+          throw error;
+        }
+      );
       await rename(stagingDir, dir);
+      if (hadExisting) await rm(previousDir, { recursive: true, force: true });
     },
 
     async copy(fromSceneId: string, toSceneId: string): Promise<void> {

@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, test } from "vitest";
@@ -39,6 +39,17 @@ describe("createEnvironmentPackageStore", () => {
     const read = await store.read("scene-1");
     expect(read?.manifest).toBe("new-manifest");
     expect(read?.glb.toString()).toBe("new");
+  });
+
+  test("replace leaves no stray staging or previous directories behind", async () => {
+    root = await mkdtemp(join(tmpdir(), "steerlab-env-store-"));
+    const store = createEnvironmentPackageStore(root);
+    await store.replace("scene-1", "old-manifest", Buffer.from("old"));
+
+    await store.replace("scene-1", "new-manifest", Buffer.from("new"));
+
+    const entries = await readdir(root);
+    expect(entries).toEqual(["scene-1.environment"]);
   });
 
   test("copy duplicates a scene's package under a new scene ID", async () => {
