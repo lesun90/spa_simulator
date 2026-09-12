@@ -3,7 +3,7 @@ import { theme } from "../../../app/theme";
 import type { InteractionSystem } from "../../../engine/InteractionSystem";
 import type { Rect } from "./layout";
 import { hudBasicMaterial } from "./materials";
-import { Panel, unitPlane } from "./Panel";
+import { unitPlane } from "./Panel";
 import { rasterizeText } from "./TextRenderer";
 import { configureHudCanvasTexture } from "./textures";
 import { hudZ } from "./zIndex";
