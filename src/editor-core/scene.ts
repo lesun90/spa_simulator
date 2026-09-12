@@ -43,6 +43,11 @@ export interface SceneObject {
   generated?: GeneratedObjectProvenance;
 }
 
+export interface SceneEnvironmentReference {
+  sha256: string;
+  manifestVersion: number;
+}
+
 export interface Scene {
   id: string;
   name: string;
@@ -51,6 +56,13 @@ export interface Scene {
   background: SurfaceAppearance;
   ground: SurfaceAppearance;
   objects: SceneObject[];
+  environment: SceneEnvironmentReference | null;
+}
+
+export function isSceneEnvironmentReference(value: unknown): value is SceneEnvironmentReference {
+  const reference = value as Partial<SceneEnvironmentReference> | undefined;
+  if (!reference || typeof reference !== "object") return false;
+  return typeof reference.sha256 === "string" && typeof reference.manifestVersion === "number";
 }
 
 export function createId(prefix = "id") {
@@ -73,7 +85,8 @@ export function createScene(name: string): Scene {
     grid: { cellSize: 1, width: 10, depth: 10 },
     background: defaultSurfaceAppearance(DEFAULT_BACKGROUND_COLOR),
     ground: defaultSurfaceAppearance(DEFAULT_GROUND_COLOR),
-    objects: []
+    objects: [],
+    environment: null
   };
 }
 
@@ -99,6 +112,7 @@ export function normalizeScene(scene: Scene): Scene {
     description: typeof scene.description === "string" ? scene.description : "",
     background: isSurfaceAppearance(scene.background) ? scene.background : defaultSurfaceAppearance(DEFAULT_BACKGROUND_COLOR),
     ground: isSurfaceAppearance(scene.ground) ? scene.ground : defaultSurfaceAppearance(DEFAULT_GROUND_COLOR),
+    environment: isSceneEnvironmentReference(scene.environment) ? scene.environment : null,
     objects: scene.objects.map((object) => ({
       ...object,
       name: typeof object.name === "string" && object.name.trim() ? object.name : names.get(object.id) ?? assetSlug(object.assetId),

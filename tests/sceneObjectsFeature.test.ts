@@ -103,7 +103,8 @@ function testScene(objectPatch: Partial<Scene["objects"][number]> = {}): Scene {
         scale: 1,
         ...objectPatch
       }
-    ]
+    ],
+    environment: null
   };
 }
 

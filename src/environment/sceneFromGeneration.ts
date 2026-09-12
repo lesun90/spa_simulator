@@ -15,6 +15,7 @@ export function sceneFromGeneration(result: SolvedGeneration, request: GenerateW
     grid: { cellSize: tileWidth, width: request.width * tileWidth, depth: request.depth * tileDepth },
     background: defaultSurfaceAppearance(DEFAULT_BACKGROUND_COLOR),
     ground: defaultSurfaceAppearance(DEFAULT_GROUND_COLOR),
-    objects: result.objects as SceneObject[]
+    objects: result.objects as SceneObject[],
+    environment: null
   };
 }

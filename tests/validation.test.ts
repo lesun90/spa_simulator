@@ -22,7 +22,8 @@ describe("scene validation", () => {
             rotationY: 0,
             scale: 1
           }
-        ]
+        ],
+        environment: null
       },
       [{ id: "temp.imported", label: "Imported", category: "imports", source: "temporary", implementation: "module" }]
     );
@@ -49,7 +50,8 @@ test("server save validation rejects mismatched route ids and temporary assets",
         rotationY: 0,
         scale: 1
       }
-    ]
+    ],
+    environment: null
   };
 
   const result = validateSceneSaveRequest("scene_route", scene, [
