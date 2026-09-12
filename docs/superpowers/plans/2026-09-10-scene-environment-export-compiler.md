@@ -100,7 +100,12 @@ describe("resolveAssetGeometry", () => {
   });
 
   test("resolves a module-implementation asset by importing its createAsset export", async () => {
-    assetRoot = await mkdtemp(join(tmpdir(), "steerlab-assets-"));
+    // Vitest's dev-server module graph refuses to dynamically import() files outside the
+    // project root (confirmed: an equivalent fixture under os.tmpdir() fails with "Cannot
+    // find module", while the identical fixture under the project root imports fine) — this
+    // test's asset root must live inside the repo, unlike the other two tests in this file,
+    // which never trigger a dynamic import and so can safely use os.tmpdir().
+    assetRoot = await mkdtemp(join(process.cwd(), "tests", ".tmp-assets-"));
     await mkdir(join(assetRoot, "props", "lamp"), { recursive: true });
     await writeFile(
       join(assetRoot, "props", "lamp", "lamp.js"),
