@@ -917,11 +917,13 @@ export function encodeManifest(manifest: EnvironmentManifest): EnvironmentManife
     assets: sortById(manifest.assets),
     cells: sortById(manifest.cells),
     objects: sortById(manifest.objects),
+    ground: manifest.ground ? { ...manifest.ground, chunkIds: [...manifest.ground.chunkIds].sort(byCodepoint) } : manifest.ground,
+    provenance: { ...manifest.provenance, generationRuns: [...manifest.provenance.generationRuns].sort((a, b) => a.seed - b.seed) },
     navigation: {
       nodes: sortById(manifest.navigation.nodes),
       edges: sortById(manifest.navigation.edges)
     },
-    diagnostics: [...manifest.diagnostics].sort()
+    diagnostics: [...manifest.diagnostics].sort(byCodepoint)
   };
 }
 
@@ -930,18 +932,33 @@ export function canonicalJson(value: unknown): string {
   return JSON.stringify(sortKeys(value), null, 2);
 }
 
+/** Plain UTF-16 codepoint comparison, independent of host locale/ICU — required for byte-identical output. */
+function byCodepoint(a: string, b: string): number {
+  return a < b ? -1 : a > b ? 1 : 0;
+}
+
 function sortById<T extends { id: string }>(items: readonly T[]): readonly T[] {
-  return [...items].sort((a, b) => a.id.localeCompare(b.id));
+  return [...items].sort((a, b) => byCodepoint(a.id, b.id));
 }
 
 function sortKeys(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(sortKeys);
   if (value && typeof value === "object") {
-    return Object.fromEntries(Object.entries(value).sort(([a], [b]) => a.localeCompare(b)).map(([key, entry]) => [key, sortKeys(entry)]));
+    return Object.fromEntries(Object.entries(value).sort(([a], [b]) => byCodepoint(a, b)).map(([key, entry]) => [key, sortKeys(entry)]));
   }
   return value;
 }
 ```
+
+> **Post-implementation correction (2026-09-11 final review):** the original code block above used
+> `localeCompare` (no explicit locale) for `sortById` and `sortKeys`, and plain `.sort()` for
+> `diagnostics`. `localeCompare` without an explicit locale argument uses the host's default
+> locale/ICU build, so the same manifest content could sort differently on different machines —
+> directly contradicting this task's own "re-exporting identical content produces byte-identical
+> JSON" requirement — and `diagnostics`'s plain `.sort()` used yet another ordering rule. The
+> corrected code above uses one `byCodepoint` comparator everywhere in the file, and additionally
+> sorts `ground.chunkIds` and `provenance.generationRuns` (by `seed`), which the original block
+> omitted.
 
 - [ ] **Step 4: Run test to verify it passes**
 

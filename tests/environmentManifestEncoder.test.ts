@@ -22,6 +22,38 @@ describe("encodeManifest", () => {
 
     expect(encodeManifest(manifest).diagnostics).toEqual(["aardvark", "zebra"]);
   });
+
+  test("sorts ground.chunkIds so reordered input produces the same encoded manifest", () => {
+    const manifestA = fixtureManifest({ order: ["a", "b"] });
+    manifestA.ground = { bounds: manifestA.grid.bounds, material: { color: "#fff", textureUrl: null }, chunkIds: ["b", "a"] };
+    const manifestB = fixtureManifest({ order: ["a", "b"] });
+    manifestB.ground = { bounds: manifestB.grid.bounds, material: { color: "#fff", textureUrl: null }, chunkIds: ["a", "b"] };
+
+    expect(encodeManifest(manifestA)).toEqual(encodeManifest(manifestB));
+    expect(encodeManifest(manifestA).ground?.chunkIds).toEqual(["a", "b"]);
+  });
+
+  test("sorts provenance.generationRuns by seed so reordered input produces the same encoded manifest", () => {
+    const manifestA = fixtureManifest({ order: ["a", "b"] });
+    manifestA.provenance = {
+      ...manifestA.provenance,
+      generationRuns: [
+        { seed: 2, width: 1, depth: 1, cellSize: 1 },
+        { seed: 1, width: 1, depth: 1, cellSize: 1 }
+      ]
+    };
+    const manifestB = fixtureManifest({ order: ["a", "b"] });
+    manifestB.provenance = {
+      ...manifestB.provenance,
+      generationRuns: [
+        { seed: 1, width: 1, depth: 1, cellSize: 1 },
+        { seed: 2, width: 1, depth: 1, cellSize: 1 }
+      ]
+    };
+
+    expect(encodeManifest(manifestA)).toEqual(encodeManifest(manifestB));
+    expect(encodeManifest(manifestA).provenance.generationRuns.map((run) => run.seed)).toEqual([1, 2]);
+  });
 });
 
 describe("canonicalJson", () => {
