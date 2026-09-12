@@ -3,6 +3,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import type { Plugin } from "vite";
 import { discoverAssetCatalog, importSharedAsset, type SharedImportRequest } from "./assetCatalog";
+import { createEnvironmentExportCache } from "./environmentRoutes";
 import { createEnvironmentPackageStore } from "./environmentPackageStore";
 import { createSceneStore } from "./sceneStore";
 import type { Scene } from "../src/editor-core/scene";
@@ -14,6 +15,7 @@ export function steerlabApiPlugin(): Plugin {
   const sceneRoot = process.env.STEERLAB_USER_DATA_DIR ?? join(homedir(), ".steerlab", "scenes");
   const store = createSceneStore(sceneRoot);
   const environmentStore = createEnvironmentPackageStore(sceneRoot);
+  const environmentExports = createEnvironmentExportCache();
 
   return {
     name: "steerlab-api",
@@ -82,6 +84,22 @@ export function steerlabApiPlugin(): Plugin {
             return sendJson(response, { scene: duplicated }, 201);
           }
 
+          const exportMatch = url.pathname.match(/^\/api\/scenes\/([^/]+)\/environment\/export$/);
+          if (exportMatch && method === "POST") {
+            const body = await readJson<{ scene: Scene; options: { chunkSize: number; removeSeamFaces: boolean } }>(request);
+            const catalog = await discoverAssetCatalog(assetRoot);
+            const result = await environmentExports.compile(body.scene, catalog, assetRoot, body.options);
+            if (result.status === "error") return sendJson(response, { error: result.message }, 400);
+            return sendJson(response, { exportId: result.exportId, manifest: result.manifest, metrics: result.metrics });
+          }
+
+          const exportModelMatch = url.pathname.match(/^\/api\/scenes\/([^/]+)\/environment\/export\/([^/]+)\/model$/);
+          if (exportModelMatch && method === "GET") {
+            const glb = environmentExports.model(decodeURIComponent(exportModelMatch[2]));
+            if (!glb) return sendJson(response, { error: "Not found" }, 404);
+            return sendBinary(response, glb, "model/gltf-binary");
+          }
+
           sendJson(response, { error: "Not found" }, 404);
         } catch {
           sendJson(response, { error: "Request failed." }, 500);
@@ -105,6 +123,12 @@ function sendJson(response: { statusCode: number; setHeader(name: string, value:
   response.statusCode = status;
   response.setHeader("Content-Type", "application/json");
   response.end(JSON.stringify(body));
+}
+
+function sendBinary(response: { statusCode: number; setHeader(name: string, value: string): void; end(body?: Buffer): void }, bytes: Uint8Array, contentType: string) {
+  response.statusCode = 200;
+  response.setHeader("Content-Type", contentType);
+  response.end(Buffer.from(bytes));
 }
 
 async function readJson<T>(request: NodeJS.ReadableStream): Promise<T> {
