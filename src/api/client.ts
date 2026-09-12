@@ -97,7 +97,7 @@ export async function uploadEnvironmentModelRequest(sceneId: string, glb: Uint8A
   const response = await fetch(`/api/scenes/${encodeURIComponent(sceneId)}/environment/import/model`, {
     method: "POST",
     headers: { "Content-Type": "model/gltf-binary" },
-    body: glb as any
+    body: glb as BodyInit
   });
   if (!response.ok) throw new Error(`Request failed with ${response.status}`);
 }
