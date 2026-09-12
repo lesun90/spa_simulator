@@ -104,7 +104,7 @@ Do not create empty versions of every file in this map. Introduce each file with
 
 ## Step 1 — Browse and confirm a published scene
 
-- [ ] **Feature complete and reviewed**
+- [x] **Feature complete and reviewed**
 
 **Deliverable:** `/scenario_studio` opens on an empty green flat ground with a usable viewport and Scenes browser. Clicking a card previews its selection; **Use Scene** loads the actual package after confirmation. No agent or playback controls are exposed in this step.
 
@@ -141,13 +141,13 @@ export interface SceneCatalog {
 
 **Implementation checklist:**
 
-- [ ] Discover the root `environment.json`/`environment.glb` pair and nested packages under `assets/scenes`. Use canonical relative keys; validate path containment, manifest version, model hash, and finite positive units. A bad package becomes an unavailable card with its reason instead of breaking the entire list.
-- [ ] Add `GET /api/scenario-studio/scenes` and package-loading routes to shared middleware. Serve required scene/agent source files under their explicit asset prefixes in built-client review without shadowing Vite's hashed `/assets` bundles. Attach middleware through both development and preview hooks.
-- [ ] Compose existing renderer/camera/HUD facilities into the new app. Scope keyboard/pointer handlers and resize behavior to its canvas. Load models with original transforms and units; fit the camera to the actual scene bounds.
-- [ ] Add the built-in default environment for a null scene reference: a flat green 100 m by 100 m ground centered at Y=0. Own its geometry through the scene transaction. When selecting any imported scene, remove the default surface; never recreate it underneath an import because a ground mesh is missing. Treat the default environment as active when deciding to show the replacement warning.
-- [ ] Implement candidate selection, **Use Scene**, loading progress, Refresh, errors, and the specified replacement confirmation. At this stage the agent-removal count is zero. Selecting the unchanged active reference does nothing; changed content is a replacement.
-- [ ] Protect against rapid selection, cancellation, and route disposal with request generations. Failed or obsolete loads must release their resources.
-- [ ] Add the release-build review scripts defined above and document exact commands/URLs used in the local environment. Extend the same shared middleware when subsequent features add routes.
+- [x] Discover the root `environment.json`/`environment.glb` pair and nested packages under `assets/scenes`. Use canonical relative keys; validate path containment, manifest version, model hash, and finite positive units. A bad package becomes an unavailable card with its reason instead of breaking the entire list.
+- [x] Add `GET /api/scenario-studio/scenes` and package-loading routes to shared middleware. Serve required scene/agent source files under their explicit asset prefixes in built-client review without shadowing Vite's hashed `/assets` bundles. Attach middleware through both development and preview hooks.
+- [x] Compose existing renderer/camera/HUD facilities into the new app. Scope keyboard/pointer handlers and resize behavior to its canvas. Load models with original transforms and units; fit the camera to the actual scene bounds.
+- [x] Add the built-in default environment for a null scene reference: a flat green 100 m by 100 m ground centered at Y=0. Own its geometry through the scene transaction. When selecting any imported scene, remove the default surface; never recreate it underneath an import because a ground mesh is missing. Treat the default environment as active when deciding to show the replacement warning.
+- [x] Implement candidate selection, **Use Scene**, loading progress, Refresh, errors, and the specified replacement confirmation. At this stage the agent-removal count is zero. Selecting the unchanged active reference does nothing; changed content is a replacement.
+- [x] Protect against rapid selection, cancellation, and route disposal with request generations. Failed or obsolete loads must release their resources.
+- [x] Add the release-build review scripts defined above and document exact commands/URLs used in the local environment. Extend the same shared middleware when subsequent features add routes.
 
 **Production review:** Open the built app and observe the empty green flat ground. Load the existing published scene, verify the default surface is removed, orbit/zoom/resize, choose another valid package, cancel replacement, then confirm it. Load a valid package with no ground mesh and verify no green fallback appears beneath it. Refresh the catalog after adding/removing a review fixture. Try an invalid hash and confirm the current scene remains visible. Verify `/scene_studio` still works in its existing supported environment.
 
@@ -491,4 +491,4 @@ def on_step(ctx, dt):
 | Lifecycle ownership, disposal, failure cleanup | Each owning feature; repeated-run evidence in 11 |
 | Reviewable production behavior after every step | Every step's built-client walkthrough and exit gate |
 
-Current state: all feature checkboxes are intentionally unchecked. This plan and the relocated design document are the only deliverables of the planning task; no Scenario Studio implementation is claimed.
+Current state: Step 1 is implemented and reviewed; Steps 2–11 remain unchecked.

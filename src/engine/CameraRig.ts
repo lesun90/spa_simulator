@@ -6,6 +6,7 @@ export class CameraRig {
   private readonly controls: OrbitControls;
   private readonly initialPosition: THREE.Vector3;
   private readonly initialTarget: THREE.Vector3;
+  private maxZoomDistance = 140;
 
   constructor(private readonly camera: THREE.Camera, domElement: HTMLElement, maxPolarAngle: number) {
     this.controls = new OrbitControls(camera, domElement);
@@ -20,6 +21,15 @@ export class CameraRig {
     this.controls.enabled = enabled;
   }
 
+  focus(target: THREE.Vector3) {
+    this.controls.target.copy(target);
+    this.controls.update();
+  }
+
+  setMaxZoomDistance(distance: number) {
+    this.maxZoomDistance = Math.max(140, distance);
+  }
+
   resetView() {
     this.camera.position.copy(this.initialPosition);
     this.controls.target.copy(this.initialTarget);
@@ -29,7 +39,7 @@ export class CameraRig {
   zoom(deltaY: number) {
     const direction = new THREE.Vector3().subVectors(this.camera.position, this.controls.target);
     const scale = Math.exp(deltaY * 0.001);
-    const distance = THREE.MathUtils.clamp(direction.length() * scale, 4, 140);
+    const distance = THREE.MathUtils.clamp(direction.length() * scale, 4, this.maxZoomDistance);
     direction.setLength(distance);
     this.camera.position.copy(this.controls.target).add(direction);
     this.controls.update();

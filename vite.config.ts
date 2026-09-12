@@ -1,8 +1,9 @@
 import { defineConfig } from "vite";
 import { steerlabApiPlugin } from "./server/viteApiPlugin";
+import { scenarioStudioPlugin } from "./server/scenarioStudioPlugin";
 
 export default defineConfig({
-  plugins: [steerlabApiPlugin()],
+  plugins: [scenarioStudioPlugin(), steerlabApiPlugin()],
   server: {
     host: "0.0.0.0",
     port: 5173,

@@ -7,6 +7,7 @@ if (path === "/" || path === "/index.html") {
   void import("./scene-studio/main");
 } else if (path === "/scenario_studio") {
   document.title = "Scenario Studio · Steerlab";
+  void import("./scenario-studio/main");
 } else {
   document.title = "Page not found · Steerlab";
   document.body.textContent = "Page not found";

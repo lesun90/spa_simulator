@@ -7,6 +7,8 @@
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "build:check": "tsc --noEmit && vite build --outDir /tmp/steerlab-dist --emptyOutDir",
+    "review:build": "tsc --noEmit && vite build --outDir /tmp/steerlab-review-dist --emptyOutDir",
+    "review:serve": "vite preview --outDir /tmp/steerlab-review-dist --host 0.0.0.0 --port 4173",
     "assets:import": "vite-node scripts/importAssets.ts",
     "assets:road-reimport": "vite-node scripts/reimportRoadTilesFromObj.ts",
     "assets:road-wfc": "vite-node scripts/generateRoadTileWfcMetadata.ts",
