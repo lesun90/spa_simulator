@@ -109,8 +109,8 @@ function parseStrictFloat(raw: string): number | undefined {
 
 function printExportHelp() {
   console.log(`Usage:
-  npm run scene:export -- --width 100 --depth 100 --cell-size 1 --seed 12345 --output ./exports/city-12345 [--chunk-size 10] [--remove-seam-faces] [--asset-root ./assets] [--force]
-  npm run scene:export -- --size 100 --cell-size 1 --seed 12345 --output ./exports/city-12345
+  npm run scene:export -- --width 100 --depth 100 --cell-size 3 --seed 12345 --output ./exports/city-12345 [--chunk-size 10] [--remove-seam-faces] [--asset-root ./assets] [--force]
+  npm run scene:export -- --size 100 --cell-size 3 --seed 12345 --output ./exports/city-12345
 `);
 }
 
