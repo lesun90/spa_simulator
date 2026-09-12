@@ -502,7 +502,25 @@ describe("runExportCli", () => {
   test("generates a small scene and writes a valid package, printing metrics", async () => {
     assetRoot = await mkdtemp(join(tmpdir(), "steerlab-cli-assets-"));
     await mkdir(join(assetRoot, "props", "cone"), { recursive: true });
-    await writeFile(join(assetRoot, "props", "cone", "asset.json"), JSON.stringify({ id: "props.cone", label: "Cone", category: "props" }));
+    // A bare asset.json is not enough: discoverAssetFolders only registers a directory containing a
+    // .js/.glb/.png file, and paletteFromAssets needs a non-empty, self-tileable wfc.variants entry
+    // (all four sides sharing one socket type) for solvePlanarWfc to find any valid palette at all.
+    await writeFile(join(assetRoot, "props", "cone", "cone.png"), "");
+    await writeFile(
+      join(assetRoot, "props", "cone", "asset.json"),
+      JSON.stringify({
+        id: "props.cone",
+        label: "Cone",
+        category: "props",
+        wfc: {
+          height: 1,
+          diagnostics: [],
+          variants: [
+            { variantId: "props.cone@r0", rotationDegrees: 0, sockets: { north: "road", east: "road", south: "road", west: "road", top: "top", bottom: "bottom" } }
+          ]
+        }
+      })
+    );
     outputDir = join(await mkdtemp(join(tmpdir(), "steerlab-cli-out-")), "package");
 
     const logs: string[] = [];
