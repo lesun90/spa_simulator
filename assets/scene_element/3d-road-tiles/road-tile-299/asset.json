@@ -1,0 +1,12 @@
+{
+  "id": "3d-road-tiles.road-tile-299",
+  "label": "Road Tile 299",
+  "category": "3d-road-tiles",
+  "wfc": {
+    "height": 0.63,
+    "variants": [],
+    "diagnostics": [
+      "Footprint 2.4375 × 2.4375 does not fill a 3 × 3 WFC cell; available for manual placement only."
+    ]
+  }
+}
