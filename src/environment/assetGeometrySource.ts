@@ -17,6 +17,9 @@ interface AssetModule {
 export async function resolveAssetGeometry(asset: AssetCatalogEntry | undefined, assetId: string, assetRoot: string): Promise<AssetGeometryResult> {
   if (!asset) return { status: "error", diagnostics: [`Asset ${assetId} is not present in the catalog.`] };
 
+  const malformed = malformedImplementationDiagnostic(asset);
+  if (malformed) return { status: "error", diagnostics: [malformed] };
+
   try {
     const object = await loadAssetObject(asset, assetRoot);
     const diagnostics = unsupportedNodeDiagnostics(object, asset.id);
@@ -27,23 +30,46 @@ export async function resolveAssetGeometry(asset: AssetCatalogEntry | undefined,
   }
 }
 
+/**
+ * A build-time compiler has no one watching to notice a wrong-looking box the way a human editor
+ * user would — so unlike AssetManager.resolve()'s browser-side fallback, a catalog entry that
+ * declares "glb"/"module" but is missing the URL that implementation requires must be reported as
+ * an error, not silently substituted with a placeholder.
+ */
+function malformedImplementationDiagnostic(asset: AssetCatalogEntry): string | undefined {
+  if (asset.implementation === "glb" && !asset.modelUrl) {
+    return `Asset ${asset.id} is declared as a glb implementation but has no modelUrl.`;
+  }
+  if (asset.implementation === "module" && !asset.moduleUrl) {
+    return `Asset ${asset.id} is declared as a module implementation but has no moduleUrl.`;
+  }
+  return undefined;
+}
+
 async function loadAssetObject(asset: AssetCatalogEntry, assetRoot: string): Promise<THREE.Object3D> {
-  if (asset.implementation === "glb" && asset.modelUrl) {
-    const bytes = await readFile(assetFilePath(assetRoot, asset.modelUrl));
-    const loader = new GLTFLoader();
-    return await new Promise<THREE.Object3D>((resolve, reject) => {
-      loader.parse(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength), "", (gltf) => resolve(gltf.scene), reject);
-    });
+  switch (asset.implementation) {
+    case "glb": {
+      const bytes = await readFile(assetFilePath(assetRoot, asset.modelUrl!));
+      // Rebuild the ArrayBuffer via Uint8Array in the current realm rather than reaching into
+      // Buffer.buffer directly: under a jsdom-based test runner, a Node Buffer's backing
+      // ArrayBuffer belongs to a different JS realm than the one GLTFLoader's internal
+      // `instanceof ArrayBuffer` checks run against, which silently misparses otherwise
+      // byte-identical GLB data. This copy is realm-agnostic and correct in real Node too.
+      const arrayBuffer = new Uint8Array(bytes).buffer;
+      const loader = new GLTFLoader();
+      return await new Promise<THREE.Object3D>((resolve, reject) => {
+        loader.parse(arrayBuffer, "", (gltf) => resolve(gltf.scene), reject);
+      });
+    }
+    case "module": {
+      const modulePath = assetFilePath(assetRoot, asset.moduleUrl!);
+      const module = (await import(pathToFileURL(modulePath).href)) as AssetModule;
+      if (!module.createAsset) throw new Error(`${asset.moduleUrl} does not export createAsset.`);
+      return await module.createAsset({ THREE, directoryUrl: "", modelUrl: asset.modelUrl });
+    }
+    case "placeholder":
+      return createPlaceholder(asset);
   }
-
-  if (asset.implementation === "module" && asset.moduleUrl) {
-    const modulePath = assetFilePath(assetRoot, asset.moduleUrl);
-    const module = (await import(pathToFileURL(modulePath).href)) as AssetModule;
-    if (!module.createAsset) throw new Error(`${asset.moduleUrl} does not export createAsset.`);
-    return await module.createAsset({ THREE, directoryUrl: "", modelUrl: asset.modelUrl });
-  }
-
-  return createPlaceholder(asset);
 }
 
 function assetFilePath(assetRoot: string, url: string): string {
