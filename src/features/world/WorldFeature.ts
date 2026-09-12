@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { worldConfig } from "../../app/config";
+import { fetchCommittedEnvironmentManifest, fetchCommittedEnvironmentModel } from "../../api/client";
 import type { AssetManager } from "../../engine/AssetManager";
 import type { InteractionSystem, RaycastLayer } from "../../engine/InteractionSystem";
 import { CameraRig } from "../../engine/CameraRig";
@@ -9,6 +10,7 @@ import type { GridDefinition, SceneObject } from "../../editor-core/scene";
 import type { EditorState } from "../../state/EditorState";
 import { createGround, disposeGround, type GroundMesh } from "./Ground";
 import { applyGridVisibilityColors, gridColorsForGroundColor } from "./gridVisibility";
+import { LockedEnvironmentFeature } from "./LockedEnvironmentFeature";
 import { PlacementGhost } from "./PlacementGhost";
 import { centerGroundFootprintOnOrigin, scaleToFitGridCell } from "./placementSizing";
 import { SceneObjectsFeature, type TransformMode } from "./SceneObjectsFeature";
@@ -36,6 +38,8 @@ export class WorldFeature {
   private readonly ghost: PlacementGhost;
   private readonly objects: SceneObjectsFeature;
   private readonly wfcPreview: WfcPreviewFeature;
+  private readonly lockedEnvironment = new LockedEnvironmentFeature();
+  private environmentSyncToken = 0;
   private readonly unsubscribers: Array<() => void> = [];
   private unregisterGround: (() => void) | null = null;
   private ghostAssetToken = 0;
@@ -89,6 +93,7 @@ export class WorldFeature {
       }
     });
     this.scene.add(this.objects.root);
+    this.scene.add(this.lockedEnvironment.root);
     this.wfcPreview = new WfcPreviewFeature(assetManager);
     this.scene.add(this.wfcPreview.root);
 
@@ -109,7 +114,8 @@ export class WorldFeature {
       state.on("sceneGrid", () => {
         this.syncGrid();
         void this.syncGhostAsset();
-      })
+      }),
+      state.on("sceneEnvironment", () => this.syncEnvironment())
     );
 
     this.resync();
@@ -137,6 +143,33 @@ export class WorldFeature {
     this.applyBackground();
     this.applyGround();
     this.syncGrid();
+    void this.syncEnvironment();
+  }
+
+  private async syncEnvironment() {
+    const token = ++this.environmentSyncToken;
+    const sceneId = this.state.scene?.id;
+    const hasEnvironment = Boolean(this.state.scene?.environment);
+
+    if (!sceneId || !hasEnvironment) {
+      this.lockedEnvironment.clear();
+      this.applyGroundVisibility(true);
+      return;
+    }
+
+    const [manifest, glb] = await Promise.all([fetchCommittedEnvironmentManifest(sceneId), fetchCommittedEnvironmentModel(sceneId)]);
+    if (token !== this.environmentSyncToken || !manifest) return;
+
+    // `Uint8Array.buffer` is typed `ArrayBufferLike` in this TS version, but `fetchCommittedEnvironmentModel`
+    // always builds the array from `Response.arrayBuffer()`, so the backing buffer is a real `ArrayBuffer`.
+    await this.lockedEnvironment.load(JSON.stringify(manifest), glb.buffer as ArrayBuffer);
+    if (token !== this.environmentSyncToken) return;
+    this.applyGroundVisibility(!this.lockedEnvironment.hasGround);
+  }
+
+  /** Hides the visible ground surface without disabling its raycast — material.visible (unlike object.visible) does not gate InteractionSystem's hit-testing, so placement/snap clicks against the invisible plane keep working. */
+  private applyGroundVisibility(visible: boolean) {
+    this.ground.material.visible = visible;
   }
 
   private schedulePreviewSync() {
@@ -231,6 +264,7 @@ export class WorldFeature {
     this.scene.add(gridHelper, ground);
     this.registerGroundInteraction();
     this.applyGround();
+    this.applyGroundVisibility(!this.lockedEnvironment.hasGround);
   }
 
   /** Applies the scene's configured background: a flat color, or a loaded image for the "texture" type. */
@@ -425,6 +459,7 @@ export class WorldFeature {
     this.disposeGroundTexture();
     this.objects.dispose();
     this.wfcPreview.dispose();
+    this.lockedEnvironment.dispose();
     this.ghost.dispose();
     this.cameraRig.dispose();
   }
