@@ -1,0 +1,11 @@
+{
+  "id": "road-car-pack.tesla-model-3",
+  "label": "Tesla Model 3",
+  "category": "vehicles",
+  "tags": [
+    "car",
+    "road-car-pack",
+    "separate-wheels",
+    "vehicle-lights"
+  ]
+}

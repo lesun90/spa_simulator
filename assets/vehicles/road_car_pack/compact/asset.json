@@ -1,0 +1,11 @@
+{
+  "id": "road-car-pack.compact",
+  "label": "Compact",
+  "category": "vehicles",
+  "tags": [
+    "car",
+    "road-car-pack",
+    "separate-wheels",
+    "vehicle-lights"
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "id": "road-car-pack.sedan",
+  "label": "Sedan",
+  "category": "vehicles",
+  "tags": [
+    "car",
+    "road-car-pack",
+    "separate-wheels",
+    "vehicle-lights"
+  ]
+}

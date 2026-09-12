@@ -1,0 +1,264 @@
+{
+  "schemaVersion": 1,
+  "id": "compact",
+  "model": "compact.glb",
+  "units": "meters",
+  "axes": {
+    "up": "+Y",
+    "forward": "+Z",
+    "left": "+X",
+    "wheelSpin": "+X"
+  },
+  "origin": "ground plane below midpoint of axles",
+  "rootNode": "CarRoot",
+  "chassisNode": "Chassis",
+  "dimensions": [
+    1.808754,
+    1.47992,
+    3.664798
+  ],
+  "bounds": {
+    "min": [
+      -0.904378,
+      0,
+      -1.75376
+    ],
+    "max": [
+      0.904376,
+      1.47992,
+      1.911039
+    ]
+  },
+  "wheels": [
+    {
+      "id": "FL",
+      "suspensionNode": "Suspension_FL",
+      "steeringNode": "Steering_FL",
+      "wheelNode": "Wheel_FL",
+      "position": [
+        0.614893,
+        0.273232,
+        1.171883
+      ],
+      "radius": 0.273232,
+      "width": 0.208682,
+      "steerable": true,
+      "placement": "source wheel hub"
+    },
+    {
+      "id": "RL",
+      "suspensionNode": "Suspension_RL",
+      "steeringNode": "Steering_RL",
+      "wheelNode": "Wheel_RL",
+      "position": [
+        0.614893,
+        0.273232,
+        -1.171883
+      ],
+      "radius": 0.273232,
+      "width": 0.208682,
+      "steerable": false,
+      "placement": "source wheel hub"
+    },
+    {
+      "id": "RR",
+      "suspensionNode": "Suspension_RR",
+      "steeringNode": "Steering_RR",
+      "wheelNode": "Wheel_RR",
+      "position": [
+        -0.614894,
+        0.273232,
+        -1.171883
+      ],
+      "radius": 0.273232,
+      "width": 0.208682,
+      "steerable": false,
+      "placement": "source wheel hub"
+    },
+    {
+      "id": "FR",
+      "suspensionNode": "Suspension_FR",
+      "steeringNode": "Steering_FR",
+      "wheelNode": "Wheel_FR",
+      "position": [
+        -0.614893,
+        0.273232,
+        1.171883
+      ],
+      "radius": 0.273232,
+      "width": 0.208682,
+      "steerable": true,
+      "placement": "source wheel hub"
+    }
+  ],
+  "lights": [
+    {
+      "node": "Taillight_L",
+      "material": "Taillight_L",
+      "position": [
+        0.613211,
+        0.802103,
+        -1.534359
+      ],
+      "emissiveOn": [
+        1,
+        0,
+        0
+      ]
+    },
+    {
+      "node": "ReverseLight_L",
+      "material": "ReverseLight_L",
+      "position": [
+        0.617621,
+        0.713723,
+        -1.589102
+      ],
+      "emissiveOn": [
+        1,
+        1,
+        1
+      ]
+    },
+    {
+      "node": "Indicator_RL",
+      "material": "Indicator_RL",
+      "position": [
+        0.617621,
+        0.793104,
+        -1.571888
+      ],
+      "emissiveOn": [
+        1,
+        0.22,
+        0
+      ]
+    },
+    {
+      "node": "Indicator_FL",
+      "material": "Indicator_FL",
+      "position": [
+        0.604547,
+        0.754173,
+        1.213398
+      ],
+      "emissiveOn": [
+        1,
+        0.22,
+        0
+      ]
+    },
+    {
+      "node": "Headlight_L",
+      "material": "Headlight_L",
+      "position": [
+        0.502271,
+        0.664501,
+        1.625009
+      ],
+      "emissiveOn": [
+        1,
+        1,
+        1
+      ]
+    },
+    {
+      "node": "Taillight_R",
+      "material": "Taillight_R",
+      "position": [
+        -0.613212,
+        0.802103,
+        -1.534359
+      ],
+      "emissiveOn": [
+        1,
+        0,
+        0
+      ]
+    },
+    {
+      "node": "ReverseLight_R",
+      "material": "ReverseLight_R",
+      "position": [
+        -0.617623,
+        0.713723,
+        -1.589102
+      ],
+      "emissiveOn": [
+        1,
+        1,
+        1
+      ]
+    },
+    {
+      "node": "Indicator_RR",
+      "material": "Indicator_RR",
+      "position": [
+        -0.617623,
+        0.793104,
+        -1.571888
+      ],
+      "emissiveOn": [
+        1,
+        0.22,
+        0
+      ]
+    },
+    {
+      "node": "Indicator_FR",
+      "material": "Indicator_FR",
+      "position": [
+        -0.604549,
+        0.754173,
+        1.213398
+      ],
+      "emissiveOn": [
+        1,
+        0.22,
+        0
+      ]
+    },
+    {
+      "node": "Headlight_R",
+      "material": "Headlight_R",
+      "position": [
+        -0.502273,
+        0.664501,
+        1.625009
+      ],
+      "emissiveOn": [
+        1,
+        1,
+        1
+      ]
+    }
+  ],
+  "collision": {
+    "type": "box",
+    "status": "initial approximation; tune for driving physics",
+    "center": [
+      0,
+      0.83996,
+      0
+    ],
+    "halfExtents": [
+      0.777764,
+      0.63996,
+      1.685807
+    ]
+  },
+  "sources": [
+    {
+      "file": "assets/vehicles/generic_passenger_car_pack.glb",
+      "author": "Comrade1280 (https://sketchfab.com/comrade1280)",
+      "license": "CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)",
+      "source": "https://sketchfab.com/3d-models/generic-passenger-car-pack-20f9af9b8a404d5cb022ac6fe87f21f5",
+      "title": "Generic passenger car pack"
+    }
+  ],
+  "notes": [
+    "Original body textures retained; recoloring the whole body also tints trim.",
+    "Taillight lenses serve both running lights and brakes through emissive intensity.",
+    "No physics or real light sources are embedded."
+  ]
+}

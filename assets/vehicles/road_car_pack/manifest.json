@@ -1,0 +1,57 @@
+[
+  {
+    "id": "compact",
+    "model": "compact/compact.glb",
+    "metadata": "compact/vehicle.json"
+  },
+  {
+    "id": "coupe",
+    "model": "coupe/coupe.glb",
+    "metadata": "coupe/vehicle.json"
+  },
+  {
+    "id": "hatchback",
+    "model": "hatchback/hatchback.glb",
+    "metadata": "hatchback/vehicle.json"
+  },
+  {
+    "id": "minivan",
+    "model": "minivan/minivan.glb",
+    "metadata": "minivan/vehicle.json"
+  },
+  {
+    "id": "offroad",
+    "model": "offroad/offroad.glb",
+    "metadata": "offroad/vehicle.json"
+  },
+  {
+    "id": "pickup",
+    "model": "pickup/pickup.glb",
+    "metadata": "pickup/vehicle.json"
+  },
+  {
+    "id": "sedan",
+    "model": "sedan/sedan.glb",
+    "metadata": "sedan/vehicle.json"
+  },
+  {
+    "id": "sport",
+    "model": "sport/sport.glb",
+    "metadata": "sport/vehicle.json"
+  },
+  {
+    "id": "suv",
+    "model": "suv/suv.glb",
+    "metadata": "suv/vehicle.json"
+  },
+  {
+    "id": "wagon",
+    "model": "wagon/wagon.glb",
+    "metadata": "wagon/vehicle.json"
+  },
+  {
+    "id": "tesla-model-3",
+    "model": "tesla-model-3/tesla-model-3.glb",
+    "metadata": "tesla-model-3/vehicle.json"
+  }
+]

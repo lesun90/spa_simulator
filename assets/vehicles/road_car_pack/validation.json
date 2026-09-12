@@ -1,0 +1,136 @@
+{
+  "validator": "Khronos glTF Validator",
+  "checks": [
+    "11 standalone GLBs",
+    "No external textures or buffers",
+    "Four named wheel hubs with steering/spin hierarchy",
+    "Eight required independently controlled lamp materials",
+    "Lights initially off",
+    "Positive Y up, positive Z forward, positive X left",
+    "Ground at Y=0",
+    "All 69,280 passenger vehicle triangles retained; display ground excluded"
+  ],
+  "assets": [
+    {
+      "id": "compact",
+      "bytes": 2061460,
+      "triangles": 7257,
+      "meshes": 16,
+      "materials": 13,
+      "images": 5,
+      "errors": 0,
+      "warnings": 0,
+      "messages": []
+    },
+    {
+      "id": "coupe",
+      "bytes": 1986800,
+      "triangles": 6022,
+      "meshes": 16,
+      "materials": 13,
+      "images": 5,
+      "errors": 0,
+      "warnings": 0,
+      "messages": []
+    },
+    {
+      "id": "hatchback",
+      "bytes": 2025836,
+      "triangles": 6808,
+      "meshes": 16,
+      "materials": 13,
+      "images": 5,
+      "errors": 0,
+      "warnings": 0,
+      "messages": []
+    },
+    {
+      "id": "minivan",
+      "bytes": 1875296,
+      "triangles": 7450,
+      "meshes": 16,
+      "materials": 13,
+      "images": 5,
+      "errors": 0,
+      "warnings": 0,
+      "messages": []
+    },
+    {
+      "id": "offroad",
+      "bytes": 1750192,
+      "triangles": 6502,
+      "meshes": 16,
+      "materials": 13,
+      "images": 5,
+      "errors": 0,
+      "warnings": 0,
+      "messages": []
+    },
+    {
+      "id": "pickup",
+      "bytes": 1879728,
+      "triangles": 6918,
+      "meshes": 16,
+      "materials": 13,
+      "images": 5,
+      "errors": 0,
+      "warnings": 0,
+      "messages": []
+    },
+    {
+      "id": "sedan",
+      "bytes": 1753840,
+      "triangles": 7122,
+      "meshes": 16,
+      "materials": 13,
+      "images": 5,
+      "errors": 0,
+      "warnings": 0,
+      "messages": []
+    },
+    {
+      "id": "sport",
+      "bytes": 2056108,
+      "triangles": 6268,
+      "meshes": 16,
+      "materials": 13,
+      "images": 5,
+      "errors": 0,
+      "warnings": 0,
+      "messages": []
+    },
+    {
+      "id": "suv",
+      "bytes": 1786948,
+      "triangles": 7951,
+      "meshes": 16,
+      "materials": 13,
+      "images": 5,
+      "errors": 0,
+      "warnings": 0,
+      "messages": []
+    },
+    {
+      "id": "wagon",
+      "bytes": 1762772,
+      "triangles": 6982,
+      "meshes": 16,
+      "materials": 13,
+      "images": 5,
+      "errors": 0,
+      "warnings": 0,
+      "messages": []
+    },
+    {
+      "id": "tesla-model-3",
+      "bytes": 1244804,
+      "triangles": 22661,
+      "meshes": 19,
+      "materials": 20,
+      "images": 2,
+      "errors": 0,
+      "warnings": 0,
+      "messages": []
+    }
+  ]
+}

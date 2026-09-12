@@ -1,0 +1,11 @@
+{
+  "id": "road-car-pack.wagon",
+  "label": "Wagon",
+  "category": "vehicles",
+  "tags": [
+    "car",
+    "road-car-pack",
+    "separate-wheels",
+    "vehicle-lights"
+  ]
+}

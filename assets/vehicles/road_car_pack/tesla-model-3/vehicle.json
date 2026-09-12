@@ -1,0 +1,242 @@
+{
+  "schemaVersion": 1,
+  "id": "tesla-model-3",
+  "model": "tesla-model-3.glb",
+  "units": "meters",
+  "axes": {
+    "up": "+Y",
+    "forward": "+Z",
+    "left": "+X",
+    "wheelSpin": "+X"
+  },
+  "origin": "ground plane below midpoint of axles",
+  "rootNode": "CarRoot",
+  "chassisNode": "Chassis",
+  "dimensions": [
+    2.107764,
+    1.487489,
+    4.69
+  ],
+  "bounds": {
+    "min": [
+      -1.053882,
+      0,
+      -2.430869
+    ],
+    "max": [
+      1.053882,
+      1.487489,
+      2.259131
+    ]
+  },
+  "wheels": [
+    {
+      "id": "FR",
+      "suspensionNode": "Suspension_FR",
+      "steeringNode": "Steering_FR",
+      "wheelNode": "Wheel_FR",
+      "position": [
+        -0.843759,
+        0.37,
+        1.467244
+      ],
+      "radius": 0.37,
+      "width": 0.259093,
+      "steerable": true,
+      "placement": "estimated from wheel arches"
+    },
+    {
+      "id": "FL",
+      "suspensionNode": "Suspension_FL",
+      "steeringNode": "Steering_FL",
+      "wheelNode": "Wheel_FL",
+      "position": [
+        0.843759,
+        0.37,
+        1.467244
+      ],
+      "radius": 0.37,
+      "width": 0.259093,
+      "steerable": true,
+      "placement": "estimated from wheel arches"
+    },
+    {
+      "id": "RR",
+      "suspensionNode": "Suspension_RR",
+      "steeringNode": "Steering_RR",
+      "wheelNode": "Wheel_RR",
+      "position": [
+        -0.843759,
+        0.37,
+        -1.467244
+      ],
+      "radius": 0.37,
+      "width": 0.259093,
+      "steerable": false,
+      "placement": "estimated from wheel arches"
+    },
+    {
+      "id": "RL",
+      "suspensionNode": "Suspension_RL",
+      "steeringNode": "Steering_RL",
+      "wheelNode": "Wheel_RL",
+      "position": [
+        0.843759,
+        0.37,
+        -1.467244
+      ],
+      "radius": 0.37,
+      "width": 0.259093,
+      "steerable": false,
+      "placement": "estimated from wheel arches"
+    }
+  ],
+  "lights": [
+    {
+      "node": "Taillight_L",
+      "material": "Taillight_L",
+      "position": [
+        0.584525,
+        0.936851,
+        -2.243285
+      ],
+      "emissiveOn": [
+        1,
+        0,
+        0
+      ]
+    },
+    {
+      "node": "Indicator_RL",
+      "material": "Indicator_RL",
+      "position": [
+        0.589871,
+        0.99331,
+        -2.247682
+      ],
+      "emissiveOn": [
+        1,
+        0.22,
+        0
+      ]
+    },
+    {
+      "node": "Taillight_R",
+      "material": "Taillight_R",
+      "position": [
+        -0.584525,
+        0.936851,
+        -2.243284
+      ],
+      "emissiveOn": [
+        1,
+        0,
+        0
+      ]
+    },
+    {
+      "node": "Indicator_RR",
+      "material": "Indicator_RR",
+      "position": [
+        -0.589871,
+        0.99331,
+        -2.247681
+      ],
+      "emissiveOn": [
+        1,
+        0.22,
+        0
+      ]
+    },
+    {
+      "node": "Indicator_FL",
+      "material": "Indicator_FL",
+      "position": [
+        0.654973,
+        0.703341,
+        2.01622
+      ],
+      "emissiveOn": [
+        1,
+        0.22,
+        0
+      ]
+    },
+    {
+      "node": "Headlight_L",
+      "material": "Headlight_L",
+      "position": [
+        0.67519,
+        0.800959,
+        1.892996
+      ],
+      "emissiveOn": [
+        1,
+        1,
+        1
+      ]
+    },
+    {
+      "node": "Indicator_FR",
+      "material": "Indicator_FR",
+      "position": [
+        -0.654973,
+        0.703341,
+        2.01622
+      ],
+      "emissiveOn": [
+        1,
+        0.22,
+        0
+      ]
+    },
+    {
+      "node": "Headlight_R",
+      "material": "Headlight_R",
+      "position": [
+        -0.675191,
+        0.800959,
+        1.892996
+      ],
+      "emissiveOn": [
+        1,
+        1,
+        1
+      ]
+    }
+  ],
+  "collision": {
+    "type": "box",
+    "status": "initial approximation; tune for driving physics",
+    "center": [
+      0,
+      0.843744,
+      0
+    ],
+    "halfExtents": [
+      0.906338,
+      0.643744,
+      2.1574
+    ]
+  },
+  "sources": [
+    {
+      "file": "assets/vehicles/tesla_model3/model3-chassis-low.glb"
+    },
+    {
+      "file": "assets/vehicles/tesla_model3/wheel.glb",
+      "author": "iSteven (https://sketchfab.com/OneSteven)",
+      "license": "CC-BY-NC-4.0 (http://creativecommons.org/licenses/by-nc/4.0/)",
+      "source": "https://sketchfab.com/3d-models/tesla-model-3-117d7dbdd6f94df9886c42995cdd06db",
+      "title": "Tesla Model 3"
+    }
+  ],
+  "notes": [
+    "Body scaled uniformly to 4.69m length; scale and wheel fit are visual setup choices, not certified vehicle measurements.",
+    "Matching wheel.glb supplies all four wheels; hub placement and radius were fitted to the chassis wheel arches.",
+    "Headlights use the original assembled front lens mesh. Front/rear indicator bands were allocated from existing lens faces; their shapes are approximations.",
+    "Five detached, mis-scaled source parts omitted: Capot.009_Material.008_0, Capot.012_Material.004_0, Capot.008_Material.007_0, Capot.005_LED PHARE_0, Capot.006_Material.001_0.",
+    "Taillights double as brake lights through emissive intensity. This source has no independently identifiable reverse-light lens.",
+    "Paint is an untextured material and can be recolored directly."
+  ]
+}
