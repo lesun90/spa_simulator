@@ -78,9 +78,49 @@ describe("buildNavigationGraph", () => {
     expect(graph.edges).toHaveLength(1);
     expect(graph.edges[0]).toMatchObject({ fromNodeId: "nav_c-0-1", toNodeId: "nav_c-0-0", direction: "north", channel: "road", bidirectional: true });
   });
+
+  test("creates an edge from roadTopology.edges alone, matching real road-tile assets which have no semantics field", () => {
+    // Real assets in this repo's catalog (e.g. assets/3d-road-tiles/road-tile-034/asset.json) encode
+    // road connectivity entirely via wfc.variants[].roadTopology.edges and have no `semantics` field
+    // at all. A prior implementation that only read asset.semantics?.sockets produced zero edges for
+    // every real road scene; this fixture reproduces that shape to guard against regressing to it.
+    const assets: AssetCatalogEntry[] = [
+      {
+        id: "3d-road-tiles.road-tile-034",
+        label: "Straight",
+        category: "3d-road-tiles",
+        source: "shared",
+        implementation: "glb",
+        wfc: {
+          height: 1,
+          diagnostics: [],
+          variants: [
+            {
+              variantId: "tiles.straight@r0",
+              rotationDegrees: 0,
+              sockets: { north: "a", east: "b", south: "a", west: "b", top: "c", bottom: "d" },
+              roadTopology: { kind: "straight", edges: { north: "road", south: "road" } }
+            }
+          ]
+        }
+      }
+    ];
+    const cells: EnvironmentManifestCell[] = [
+      cellFixture({ id: "c-0-0", column: 0, row: 0, assetId: "3d-road-tiles.road-tile-034", variantId: "tiles.straight@r0" }),
+      cellFixture({ id: "c-0-1", column: 0, row: 1, assetId: "3d-road-tiles.road-tile-034", variantId: "tiles.straight@r0" })
+    ];
+
+    const graph = buildNavigationGraph(cells, recipeStub(), assets);
+
+    expect(graph.edges).toHaveLength(1);
+    expect(graph.edges[0]).toMatchObject({ fromNodeId: "nav_c-0-1", toNodeId: "nav_c-0-0", channel: "road", bidirectional: true });
+    // roadChannelsForCell must agree with rotatedPortsForCell: both nodes should report "road".
+    expect(graph.nodes.find((node) => node.cellId === "c-0-0")?.channels).toEqual(["road"]);
+    expect(graph.nodes.find((node) => node.cellId === "c-0-1")?.channels).toEqual(["road"]);
+  });
 });
 
-function cellFixture(options: { id: string; column: number; row: number; rotationY?: number; assetId?: string }): EnvironmentManifestCell {
+function cellFixture(options: { id: string; column: number; row: number; rotationY?: number; assetId?: string; variantId?: string }): EnvironmentManifestCell {
   return {
     id: options.id,
     column: options.column,
@@ -88,6 +128,7 @@ function cellFixture(options: { id: string; column: number; row: number; rotatio
     transform: { position: { x: options.column, y: 0, z: options.row }, rotationY: options.rotationY ?? 0, scale: 1 },
     bounds: { min: { x: 0, y: 0, z: 0 }, max: { x: 1, y: 1, z: 1 } },
     sourceAssetId: options.assetId ?? "tiles.straight",
+    variantId: options.variantId,
     semanticRoles: [],
     chunkId: "chunk_0_0",
     sourceLayer: "scene"

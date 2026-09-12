@@ -1,7 +1,7 @@
 import type { AssetCatalogEntry } from "../editor-core/assets";
 import type { WfcPlanarDirection } from "../wfc/metadata/socketTypes";
 import { oppositeDirections } from "../wfc/metadata/socketTypes";
-import { rotateSemanticPorts } from "../wfc/sceneLayout";
+import { mergeSemanticPorts, roadTopologyPorts, rotateSemanticPorts } from "../wfc/sceneLayout";
 import type { EnvironmentManifestCell, EnvironmentManifestNavigationEdge, EnvironmentManifestNavigationNode, SceneRecipe } from "./types";
 
 const PLANAR_DIRECTIONS: readonly WfcPlanarDirection[] = ["north", "east", "south", "west"];
@@ -27,7 +27,7 @@ export function buildNavigationGraph(cells: readonly EnvironmentManifestCell[], 
     id: `nav_${cell.id}`,
     cellId: cell.id,
     position: cell.transform.position,
-    channels: roadChannelsForCell(cell, assetsById),
+    channels: roadChannelsForCell(rotatedPortsByCellId.get(cell.id)),
     featureTags: []
   }));
 
@@ -59,21 +59,28 @@ export function buildNavigationGraph(cells: readonly EnvironmentManifestCell[], 
   return { nodes, edges };
 }
 
-function roadChannelsForCell(cell: EnvironmentManifestCell, assetsById: ReadonlyMap<string, AssetCatalogEntry>): string[] {
-  const sockets = assetsById.get(cell.sourceAssetId)?.semantics?.sockets ?? {};
+/** Channels a cell exposes, derived from the SAME merged, rotation-aware port map used for edge matching, so a cell's `channels` field never disagrees with which directions actually carry "road" in rotatedPortsForCell. */
+function roadChannelsForCell(ports: Partial<Record<WfcPlanarDirection, readonly string[]>> | undefined): string[] {
   const channels = new Set<string>();
-  for (const socket of Object.values(sockets)) {
-    if (socket?.type) channels.add(socket.type);
+  for (const values of Object.values(ports ?? {})) {
+    for (const value of values ?? []) channels.add(value);
   }
   return [...channels];
 }
 
-/** Converts the cell's radian rotationY back to the degrees rotateSemanticPorts expects, and rotates the asset's authored (rotation-0) sockets to their world-facing directions for this placement. */
+/**
+ * Converts the cell's radian rotationY back to the degrees rotateSemanticPorts expects, and merges
+ * BOTH sources of road connectivity the real WFC generation pipeline merges (see sceneLayout.ts's
+ * paletteFromAssets): rotation-aware `semantics.sockets` AND the cell's specific WFC variant's
+ * `roadTopology.edges` (which is how every real road-tile asset in this repo actually encodes
+ * connectivity — most have no `semantics` field at all).
+ */
 function rotatedPortsForCell(cell: EnvironmentManifestCell, assetsById: ReadonlyMap<string, AssetCatalogEntry>): Partial<Record<WfcPlanarDirection, readonly string[]>> | undefined {
   const asset = assetsById.get(cell.sourceAssetId);
-  if (!asset?.semantics) return undefined;
+  if (!asset) return undefined;
   const rotationDegrees = Math.round((cell.transform.rotationY * 180) / Math.PI);
-  return rotateSemanticPorts(asset.semantics.sockets, rotationDegrees);
+  const variant = asset.wfc?.variants.find((candidate) => candidate.variantId === cell.variantId);
+  return mergeSemanticPorts(roadTopologyPorts(variant?.roadTopology), rotateSemanticPorts(asset.semantics?.sockets, rotationDegrees));
 }
 
 function distance(a: { x: number; z: number }, b: { x: number; z: number }): number {
