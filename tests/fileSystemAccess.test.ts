@@ -101,3 +101,41 @@ describe("pickEnvironmentPackageFiles", () => {
     expect(result).toBeNull();
   });
 });
+
+describe("pickEnvironmentPackageFiles fallback (showOpenFilePicker unavailable)", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  test("reads both files from the hidden file input's change event", async () => {
+    const manifestFile = new File(['{"format":"steerlab-environment"}'], "environment.json", { type: "application/json" });
+    const modelFile = new File([new Uint8Array([4, 5, 6])], "environment.glb");
+    const originalCreateElement = document.createElement.bind(document);
+    vi.spyOn(document, "createElement").mockImplementation((tag: string) => {
+      const element = originalCreateElement(tag as "input");
+      if (tag === "input") {
+        Object.defineProperty(element, "files", { value: [manifestFile, modelFile], configurable: true });
+        element.click = () => element.dispatchEvent(new Event("change"));
+      }
+      return element;
+    });
+
+    const result = await pickEnvironmentPackageFiles();
+
+    expect(result?.manifestJson).toBe('{"format":"steerlab-environment"}');
+    expect(result?.glb).toEqual(new Uint8Array([4, 5, 6]));
+  });
+
+  test("resolves null when the hidden file input's cancel event fires", async () => {
+    const originalCreateElement = document.createElement.bind(document);
+    vi.spyOn(document, "createElement").mockImplementation((tag: string) => {
+      const element = originalCreateElement(tag as "input");
+      if (tag === "input") element.click = () => element.dispatchEvent(new Event("cancel"));
+      return element;
+    });
+
+    const result = await pickEnvironmentPackageFiles();
+
+    expect(result).toBeNull();
+  });
+});

@@ -11,16 +11,16 @@ interface FileSystemDirectoryHandleLike {
 }
 
 /** Writes both fixed-name package files into a user-picked directory, or triggers two plain downloads when the File System Access API isn't available. */
-export async function saveEnvironmentPackage(manifestJson: string, glb: Uint8Array<ArrayBuffer>): Promise<void> {
+export async function saveEnvironmentPackage(manifestJson: string, glb: Uint8Array): Promise<void> {
   const picker = (window as { showDirectoryPicker?: () => Promise<FileSystemDirectoryHandleLike> }).showDirectoryPicker;
   if (picker) {
     const directory = await picker();
     await writeFileInDirectory(directory, "environment.json", manifestJson);
-    await writeFileInDirectory(directory, "environment.glb", glb);
+    await writeFileInDirectory(directory, "environment.glb", glb as BlobPart);
     return;
   }
   downloadFile("environment.json", new Blob([manifestJson], { type: "application/json" }));
-  downloadFile("environment.glb", new Blob([glb], { type: "model/gltf-binary" }));
+  downloadFile("environment.glb", new Blob([glb as BlobPart], { type: "model/gltf-binary" }));
 }
 
 async function writeFileInDirectory(directory: FileSystemDirectoryHandleLike, name: string, data: BlobPart): Promise<void> {
