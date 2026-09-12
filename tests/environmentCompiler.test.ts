@@ -99,6 +99,51 @@ describe("compileEnvironmentPackage", () => {
     });
     expect(untouchedTriangleCount).toBe(6);
   });
+
+  test("removes seam triangles from BOTH sides of an interior cell in a 3-cell row, not just the first neighbor processed", async () => {
+    // Regression test for a "defensive hardening" WeakSet that was mistakenly added to
+    // removeInternalSeamFaces alongside the fix above: it flagged a geometry as done after its
+    // FIRST mutation anywhere in the WHOLE pass, so an interior cell that participates in TWO
+    // adjacent-pair checks (once as the pair's "cell", once as another pair's "neighbor") only had
+    // its first-processed seam actually removed — every later seam on that same cell was silently
+    // skipped, while removedSeamTriangleCount kept counting triangles that were never actually
+    // stripped from the buffer. Three same-asset cells in a row (A-B-C): B is adjacent to BOTH A
+    // and C, so it must lose triangles from both its west and east seams, not just one.
+    assetRoot = await mkdtemp(join(process.cwd(), "tests", ".tmp-assets-"));
+    await mkdir(join(assetRoot, "tiles", "wall"), { recursive: true });
+    await writeFile(join(assetRoot, "tiles", "wall", "wall.js"), WALL_ASSET_MODULE_SOURCE);
+    const assets: AssetCatalogEntry[] = [
+      { id: "tiles.wall", label: "Wall", category: "tiles", source: "shared", implementation: "module", moduleUrl: "/assets/tiles/wall/wall.js" }
+    ];
+    const recipe = seamRowRecipeFixture();
+
+    const result = await compileEnvironmentPackage(recipe, assets, {
+      chunkSize: 1,
+      removeInternalSeamFaces: true,
+      assetRoot,
+      source: "cli",
+      generatorVersion: "0.1.0"
+    });
+
+    if ("status" in result) throw new Error(`expected success, got diagnostics: ${result.diagnostics.join(", ")}`);
+
+    // Both seam pairs (A-B and B-C) must be fully applied: A and C each lose one face (2
+    // triangles), B loses BOTH its west and east faces (4 triangles) — not just whichever seam is
+    // processed first. 18 untrimmed triangles (3 cells x 6) minus 8 actually removed = 10 remaining.
+    expect(result.metrics.removedSeamTriangleCount).toBe(8);
+    expect(result.metrics.triangleCount).toBe(10);
+
+    const scene = await parseGlbScene(result.glb);
+    const middleChunk = scene.getObjectByName("chunk_1_0");
+    if (!middleChunk) throw new Error("expected a chunk_1_0 node in the exported GLB");
+    let middleTriangleCount = 0;
+    middleChunk.traverse((node) => {
+      if (node instanceof THREE.Mesh) middleTriangleCount += triangleCountOf(node.geometry);
+    });
+    // Only the top face (2 triangles) should survive on the middle cell: both its west seam
+    // (against A) and its east seam (against C) must be removed.
+    expect(middleTriangleCount).toBe(2);
+  });
 });
 
 /** Parses exported GLB bytes back into a THREE.Object3D scene graph, the same realm-safe way assetGeometrySource.ts does for GLB assets. */
@@ -170,6 +215,48 @@ function seamRecipeFixture(): SceneRecipe {
         column: 5,
         row: 0,
         transform: { position: { x: 100, y: 0, z: 0 }, rotationY: 0, scale: 1 },
+        sourceAssetId: "tiles.wall",
+        semanticRoles: [],
+        sourceLayer: "scene",
+        recovered: false
+      }
+    ],
+    objects: [],
+    ground: { appearance: { type: "color", color: "#050608", textureUrl: null } },
+    diagnostics: []
+  };
+}
+
+function seamRowRecipeFixture(): SceneRecipe {
+  return {
+    grid: { width: 3, depth: 1, cellSize: 2, origin: { x: -1, y: 0, z: -1 } },
+    generationRuns: [{ seed: 1, width: 3, depth: 1, cellSize: 2 }],
+    cells: [
+      {
+        id: "c-0-0",
+        column: 0,
+        row: 0,
+        transform: { position: { x: 0, y: 0, z: 0 }, rotationY: 0, scale: 1 },
+        sourceAssetId: "tiles.wall",
+        semanticRoles: [],
+        sourceLayer: "scene",
+        recovered: false
+      },
+      {
+        id: "c-1-0",
+        column: 1,
+        row: 0,
+        transform: { position: { x: 2, y: 0, z: 0 }, rotationY: 0, scale: 1 },
+        sourceAssetId: "tiles.wall",
+        semanticRoles: [],
+        sourceLayer: "scene",
+        recovered: false
+      },
+      {
+        id: "c-2-0",
+        column: 2,
+        row: 0,
+        transform: { position: { x: 4, y: 0, z: 0 }, rotationY: 0, scale: 1 },
         sourceAssetId: "tiles.wall",
         semanticRoles: [],
         sourceLayer: "scene",
