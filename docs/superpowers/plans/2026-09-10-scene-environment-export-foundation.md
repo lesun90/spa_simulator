@@ -416,8 +416,8 @@ describe("buildSceneRecipe", () => {
 
   test("recovers coordinate and variant for a WFC object saved before provenance carried them", () => {
     const scene = sceneWith(
-      [legacyWfcObject({ id: "legacy-1-0", assetId: "tiles.a", x: 1.5, z: -1.5, rotationDegrees: 90 })],
-      { width: 3, depth: 3, cellSize: 3 }
+      [legacyWfcObject({ id: "legacy-1-0", assetId: "tiles.a", x: 0, z: -3, rotationDegrees: 90 })],
+      { width: 9, depth: 9, cellSize: 3 }
     );
     const assets = [tileAsset("tiles.a")];
 
