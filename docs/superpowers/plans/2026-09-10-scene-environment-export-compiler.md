@@ -1744,7 +1744,13 @@ describe("buildNavigationGraph", () => {
 
     expect(graph.nodes).toHaveLength(2);
     expect(graph.edges).toHaveLength(1);
-    expect(graph.edges[0]).toMatchObject({ fromNodeId: "nav_c-0-0", toNodeId: "nav_c-0-1", channel: "road", bidirectional: true });
+    // The implementation visits each adjacent pair once via a canonical "north or east" direction
+    // preference (see navigationGraph.ts's `direction !== "north" && direction !== "east"` filter),
+    // so for a north/south pair the edge is reported from the higher-row cell (whose matching port
+    // faces north) to the lower-row cell — the opposite of the naive "first cell to second cell"
+    // ordering. bidirectional: true means the from/to labeling carries no semantic weight for graph
+    // traversal; this is also the direction independently verified for the rotated fixture below.
+    expect(graph.edges[0]).toMatchObject({ fromNodeId: "nav_c-0-1", toNodeId: "nav_c-0-0", channel: "road", bidirectional: true });
   });
 
   test("creates no edge when a neighbor's opposing port does not carry road", () => {
