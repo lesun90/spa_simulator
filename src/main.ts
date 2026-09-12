@@ -1,5 +1,13 @@
-import { App } from "./app/App";
+const path = window.location.pathname.replace(/\/+$/, "") || "/";
 
-const canvas = document.getElementById("app") as HTMLCanvasElement;
-const app = new App(canvas);
-app.start();
+if (path === "/" || path === "/index.html") {
+  window.location.replace(`/scene_studio${window.location.search}${window.location.hash}`);
+} else if (path === "/scene_studio") {
+  document.title = "Scene Studio · Steerlab";
+  void import("./scene-studio/main");
+} else if (path === "/scenario_studio") {
+  document.title = "Scenario Studio · Steerlab";
+} else {
+  document.title = "Page not found · Steerlab";
+  document.body.textContent = "Page not found";
+}

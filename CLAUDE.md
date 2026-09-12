@@ -1,28 +1,42 @@
 ## Software Design
 
+**Testing**
+
+* Do not create unit tests unless explicitly asked.
+* Verify changes directly in the product experience whenever possible.
+
 **Object model**
-- Model the domain as objects that own their data and enforce their own invariants.
-- Program against interfaces or abstract base classes, not concrete types. Inject dependencies instead of constructing them inside.
-- Prefer composition over inheritance. Inherit only for real is-a substitutability (LSP); a shared field is not a reason to subclass.
-- One responsibility per class (SRP). Split when the fields fall into disjoint clusters used by disjoint methods.
-- Keep state private and expose behavior, not getter/setter pairs that leak internals (tell, don't ask).
-- Constructors leave the object fully usable. No two-phase `init()`.
-- Encapsulate resources with RAII and explicit ownership. No raw owning pointers, no ambiguous lifetimes.
+
+* Use OOP for domain behavior: objects own their state and enforce their invariants.
+* Depend on interfaces or abstract base classes at replaceable boundaries.
+* Use abstract methods for reusable behavior with multiple implementations.
+* Inject dependencies; do not construct concrete implementations inside consumers.
+* Components must be replaceable without changing their consumers.
+* Keep engine/framework-specific types behind adapters and abstractions.
+* Prefer composition over inheritance. Inherit only for true is-a substitutability.
+* Keep state private and expose behavior, not getter/setter pairs.
+* Constructors leave objects fully usable.
+* Use RAII and explicit ownership. No raw owning pointers.
 
 **Reuse**
-- Search for an existing type or helper before adding one. Extend or generalize it instead of duplicating.
-- Factor shared behavior into a base class, a strategy/policy, or a free function. Extract on the second occurrence, not the first.
-- Parameterize existing code rather than forking a near-identical variant.
-- Place reusable code in the lowest layer that needs it. Lower layers never depend upward.
+
+* Search for existing types or helpers before adding new ones.
+* Extend or parameterize existing code instead of duplicating it.
+* Extract shared behavior on the second real occurrence.
+* Place reusable code in the lowest layer that needs it.
+* Lower layers never depend upward.
 
 **Boundaries**
-- Keep domain logic free of UI, I/O, persistence, rendering, and framework types.
-- Expose the minimum public surface. Hide implementation behind pimpl, anonymous namespaces, or module-private scope.
-- Cross-module dependencies go through abstractions so implementations can be swapped or mocked.
-- Extend behavior by adding an implementation, not by adding a branch or type switch in shared code (OCP).
-- Keep feature changes localized. A change that touches three modules is a design smell, not a big feature.
+
+* Keep domain logic free of UI, I/O, persistence, rendering, physics-engine, and framework-specific types.
+* Major subsystems such as physics, rendering, sensors, agents, and input should be replaceable through stable abstractions when appropriate.
+* Cross-module dependencies go through abstractions.
+* Extend behavior by adding implementations, not branches or type switches.
+* Keep feature changes localized.
 
 **Restraint**
-- No abstraction for hypothetical reuse. One implementer means no interface yet.
-- Hierarchies stay shallow. Past two or three levels, composition was the right answer.
-- No `Manager`, `Helper`, or `Utils` classes that are just namespaces for unrelated functions.
+
+* Do not add abstractions for hypothetical reuse.
+* One implementation usually does not need an interface unless replacement is an explicit design goal.
+* Keep hierarchies shallow.
+* No generic `Manager`, `Helper`, or `Utils` classes.

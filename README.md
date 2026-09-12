@@ -10,7 +10,7 @@ Install Docker Engine and Docker Compose. Node.js and project dependencies do no
 docker compose up
 ```
 
-Open http://localhost:5173.
+Open http://localhost:5173/scene_studio. The root URL redirects to Scene Studio.
 
 Edit files in this repository. The development server recompiles the application and refreshes the browser automatically.
 
@@ -26,9 +26,9 @@ Expected response:
 {"app":"steerlab","phase":"phase-1-scene-editor"}
 ```
 
-## Scene Editor
+## Scene Studio
 
-The Phase 1 editor opens at http://localhost:5173 and provides:
+Scene Studio opens at http://localhost:5173/scene_studio and provides:
 
 - Scene collection actions for create, open, rename, duplicate, delete, and save.
 - A docked workspace with tools, hierarchy, viewport, inspector, and asset browser, rendered entirely in-canvas with Three.js (no HTML/DOM UI).
@@ -43,6 +43,10 @@ Scene JSON files are stored outside the repository in the editor-managed user-da
 ```
 
 Set `STEERLAB_USER_DATA_DIR` to use a different scene location. Shared source-controlled assets live under `assets/`, with one folder per asset.
+
+## Scenario Studio
+
+Scenario Studio is available at http://localhost:5173/scenario_studio as a blank placeholder page.
 
 ## Run Checks
 
