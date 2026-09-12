@@ -35,6 +35,35 @@ describe("removeInternalSeamFaces", () => {
     expect(trianglesBefore).toBe(4);
   });
 
+  test("matches seam triangles at a non-unit cellSize (epsilon scales with cellSize, not fixed)", () => {
+    // Same setup as the unit-cellSize match test above, scaled up 10x: cellSize 10, corners at
+    // x=5 (the midpoint between cell columns 0 and 1 at cellSize 10), spanning y:[0,10] z:[-5,5].
+    // The east side's corners are perturbed by 0.005 along y — bigger than the bare EPSILON
+    // (1e-3) but smaller than EPSILON * cellSize (1e-2) — so this only matches if the vertex-match
+    // tolerance in trianglesMatch is scaled by cellSize the same way the boundary-plane tolerance
+    // in boundaryTriangles already is. Without that scaling, this fails to match at cellSize 10.
+    const recipe = recipeWithAdjacentCells(10);
+    const westCorners: [number, number, number][] = [
+      [5, 0, -5],
+      [5, 0, 5],
+      [5, 10, 5],
+      [5, 10, -5]
+    ];
+    const perturbation = 0.005;
+    const eastCorners: [number, number, number][] = westCorners.map(([x, y, z]) => [x, y + perturbation, z]);
+    const westMesh = quadFaceMesh(westCorners, true);
+    const eastMesh = quadFaceMesh(eastCorners, false);
+    const cellMeshesByCellId = new Map([
+      ["c-0-0", [westMesh]],
+      ["c-1-0", [eastMesh]]
+    ]);
+
+    const result = removeInternalSeamFaces(cellMeshesByCellId, recipe);
+
+    expect(result.removedTriangleCount).toBe(4);
+    expect(triangleCount(westMesh) + triangleCount(eastMesh)).toBe(0);
+  });
+
   test("leaves triangles alone when cells are not grid-adjacent", () => {
     const recipe = recipeWithFarCells();
     const meshA = boxMesh({ x: 0, z: 0 });
@@ -90,11 +119,14 @@ function triangleCount(mesh: THREE.Mesh): number {
   return (geometry.index ? geometry.index.count : geometry.attributes.position.count) / 3;
 }
 
-function recipeWithAdjacentCells(): SceneRecipe {
-  return recipeWithCells([
-    { id: "c-0-0", column: 0, row: 0 },
-    { id: "c-1-0", column: 1, row: 0 }
-  ]);
+function recipeWithAdjacentCells(cellSize = 1): SceneRecipe {
+  return recipeWithCells(
+    [
+      { id: "c-0-0", column: 0, row: 0 },
+      { id: "c-1-0", column: 1, row: 0 }
+    ],
+    cellSize
+  );
 }
 
 function recipeWithFarCells(): SceneRecipe {
@@ -104,15 +136,15 @@ function recipeWithFarCells(): SceneRecipe {
   ]);
 }
 
-function recipeWithCells(cells: { id: string; column: number; row: number }[]): SceneRecipe {
+function recipeWithCells(cells: { id: string; column: number; row: number }[], cellSize = 1): SceneRecipe {
   return {
-    grid: { width: 10, depth: 1, cellSize: 1, origin: { x: 0, y: 0, z: 0 } },
+    grid: { width: 10, depth: 1, cellSize, origin: { x: 0, y: 0, z: 0 } },
     generationRuns: [],
     cells: cells.map((cell) => ({
       id: cell.id,
       column: cell.column,
       row: cell.row,
-      transform: { position: { x: cell.column, y: 0, z: cell.row }, rotationY: 0, scale: 1 },
+      transform: { position: { x: cell.column * cellSize, y: 0, z: cell.row * cellSize }, rotationY: 0, scale: 1 },
       sourceAssetId: "tiles.a",
       semanticRoles: [],
       sourceLayer: "scene",
