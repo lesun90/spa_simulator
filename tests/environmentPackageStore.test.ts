@@ -72,6 +72,31 @@ describe("createEnvironmentPackageStore", () => {
     expect(await store.read("scene-2")).toBeNull();
   });
 
+  test("two concurrent replace() calls for the same scene never produce a torn or cross-mixed package", async () => {
+    root = await mkdtemp(join(tmpdir(), "steerlab-env-store-"));
+    const store = createEnvironmentPackageStore(root);
+
+    // Both calls race for the same final directory name. With unique staging/previous
+    // directory names (randomUUID instead of Date.now()), the two calls can never corrupt
+    // each other's in-flight files — whichever call's final rename loses the race simply
+    // rejects (leaving its own now-orphaned staging directory, a separately deferred, known
+    // minor finding), while the winner leaves a fully complete, self-consistent package.
+    // What must never happen is a torn package (mixed manifest/GLB) or a total loss of any
+    // package, which is what this test asserts.
+    const results = await Promise.allSettled([
+      store.replace("scene-1", "manifest-A", Buffer.from("glb-A")),
+      store.replace("scene-1", "manifest-B", Buffer.from("glb-B"))
+    ]);
+    expect(results.some((result) => result.status === "fulfilled")).toBe(true);
+
+    const read = await store.read("scene-1");
+    expect(read).not.toBeNull();
+    const manifestSuffix = read?.manifest.slice(-1);
+    const glbSuffix = read?.glb.toString().slice(-1);
+    expect(manifestSuffix).toBe(glbSuffix);
+    expect(["A", "B"]).toContain(manifestSuffix);
+  });
+
   test("remove deletes a scene's package directory", async () => {
     root = await mkdtemp(join(tmpdir(), "steerlab-env-store-"));
     const store = createEnvironmentPackageStore(root);

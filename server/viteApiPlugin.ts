@@ -81,7 +81,12 @@ export function steerlabApiPlugin(): Plugin {
           if (duplicateMatch && method === "POST") {
             const sourceId = decodeURIComponent(duplicateMatch[1]);
             const duplicated = await store.duplicate(sourceId);
-            await environmentStore.copy(sourceId, duplicated.id);
+            try {
+              await environmentStore.copy(sourceId, duplicated.id);
+            } catch (error) {
+              await store.delete(duplicated.id);
+              throw error;
+            }
             return sendJson(response, { scene: duplicated }, 201);
           }
 
@@ -94,7 +99,7 @@ export function steerlabApiPlugin(): Plugin {
             const catalog = await discoverAssetCatalog(assetRoot);
             const result = await environmentExports.compile(body.scene, catalog, assetRoot, body.options);
             if (result.status === "error") return sendJson(response, { error: result.message }, 400);
-            return sendJson(response, { exportId: result.exportId, manifest: result.manifest, metrics: result.metrics });
+            return sendJson(response, { exportId: result.exportId, manifest: result.manifest, manifestJson: result.manifestJson, metrics: result.metrics });
           }
 
           const exportModelMatch = url.pathname.match(/^\/api\/scenes\/([^/]+)\/environment\/export\/([^/]+)\/model$/);
@@ -125,9 +130,9 @@ export function steerlabApiPlugin(): Plugin {
           const importCommitMatch = url.pathname.match(/^\/api\/scenes\/([^/]+)\/environment\/import\/commit$/);
           if (importCommitMatch && method === "POST") {
             const id = decodeURIComponent(importCommitMatch[1]);
+            const scene = await store.open(id);
             const result = await environmentImports.commit(id, environmentStore);
             if (result.status === "error") return sendJson(response, { error: result.diagnostics.join(" ") }, 400);
-            const scene = await store.open(id);
             const updated = await store.save({ ...scene, environment: { sha256: result.sha256, manifestVersion: result.manifestVersion } });
             return sendJson(response, { scene: updated });
           }

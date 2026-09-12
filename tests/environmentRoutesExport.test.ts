@@ -5,6 +5,7 @@ import { afterEach, describe, expect, test } from "vitest";
 import type { AssetCatalogEntry } from "../src/editor-core/assets";
 import { createScene } from "../src/editor-core/scene";
 import { createEnvironmentExportCache } from "../server/environmentRoutes";
+import { canonicalJson } from "../src/environment/manifestEncoder";
 
 describe("createEnvironmentExportCache", () => {
   let assetRoot: string;
@@ -25,6 +26,7 @@ describe("createEnvironmentExportCache", () => {
     if (result.status !== "ok") throw new Error("expected ok");
     expect(result.manifest.format).toBe("steerlab-environment");
     expect(cache.model(result.exportId)).toBeInstanceOf(Uint8Array);
+    expect(result.manifestJson).toBe(canonicalJson(result.manifest));
   });
 
   test("returns an error result naming the failure instead of throwing", async () => {

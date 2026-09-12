@@ -345,7 +345,7 @@ git commit -m "feat: add File System Access helpers for environment export/impor
 - Test: `tests/editorStateEnvironment.test.ts`
 
 **Interfaces:**
-- Consumes: `exportEnvironmentRequest`, `fetchExportedEnvironmentModel`, `uploadEnvironmentManifestRequest`, `uploadEnvironmentModelRequest`, `commitEnvironmentImportRequest` from `../api/client` (server plan); `saveEnvironmentPackage`, `pickEnvironmentPackageFiles` from `../features/hud/kit/fileSystemAccess` (Task 2); `canonicalJson` from `../environment/manifestEncoder` (foundation plan).
+- Consumes: `exportEnvironmentRequest`, `fetchExportedEnvironmentModel`, `uploadEnvironmentManifestRequest`, `uploadEnvironmentModelRequest`, `commitEnvironmentImportRequest` from `../api/client` (server plan); `saveEnvironmentPackage`, `pickEnvironmentPackageFiles` from `../features/hud/kit/fileSystemAccess` (Task 2).
 - Produces: `"sceneEnvironment"` added to `EditorTopic`; `EditorState.exportEnvironment(options: { chunkSize: number; removeSeamFaces: boolean }): Promise<void>`; `EditorState.importEnvironment(): Promise<void>`. Task 4 (Project panel) calls both.
 
 - [ ] **Step 1: Write the failing test**
@@ -365,7 +365,7 @@ describe("EditorState.exportEnvironment", () => {
     const state = new EditorState();
     state["history"] = createHistory(createScene("Test"));
     const manifest = { cells: [{ id: "c-1" }] } as never;
-    vi.spyOn(client, "exportEnvironmentRequest").mockResolvedValue({ exportId: "export-1", manifest, metrics: {} as never });
+    vi.spyOn(client, "exportEnvironmentRequest").mockResolvedValue({ exportId: "export-1", manifest, manifestJson: JSON.stringify(manifest), metrics: {} as never });
     vi.spyOn(client, "fetchExportedEnvironmentModel").mockResolvedValue(new Uint8Array([1]));
     const save = vi.spyOn(fileSystemAccess, "saveEnvironmentPackage").mockResolvedValue();
 
@@ -434,7 +434,6 @@ In `src/state/EditorState.ts`, add `"sceneEnvironment"` to the `EditorTopic` uni
 
 ```typescript
 import { saveEnvironmentPackage, pickEnvironmentPackageFiles } from "../features/hud/kit/fileSystemAccess";
-import { canonicalJson } from "../environment/manifestEncoder";
 import type { EnvironmentManifest } from "../environment/types";
 import {
   commitEnvironmentImportRequest,
@@ -452,9 +451,9 @@ async exportEnvironment(options: { chunkSize: number; removeSeamFaces: boolean }
     return;
   }
   try {
-    const { exportId, manifest } = await exportEnvironmentRequest(this.scene, options);
+    const { exportId, manifest, manifestJson } = await exportEnvironmentRequest(this.scene, options);
     const glb = await fetchExportedEnvironmentModel(this.scene.id, exportId);
-    await saveEnvironmentPackage(canonicalJson(manifest), glb);
+    await saveEnvironmentPackage(manifestJson, glb);
     this.setNotice(`Exported environment (${manifest.cells.length} cells)`);
   } catch (error) {
     this.setNotice(error instanceof Error ? error.message : "Environment export failed");

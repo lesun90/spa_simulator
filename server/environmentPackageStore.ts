@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { cp, mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { safeId } from "./sceneStore";
@@ -18,12 +19,12 @@ export function createEnvironmentPackageStore(sceneRoot: string) {
 
     async replace(sceneId: string, manifestJson: string, glb: Buffer): Promise<void> {
       const dir = dirFor(sceneId);
-      const stagingDir = `${dir}.staging-${Date.now()}`;
+      const stagingDir = `${dir}.staging-${randomUUID()}`;
       await mkdir(stagingDir, { recursive: true });
       await writeFile(join(stagingDir, "environment.json"), manifestJson, "utf8");
       await writeFile(join(stagingDir, "environment.glb"), glb);
 
-      const previousDir = `${dir}.previous-${Date.now()}`;
+      const previousDir = `${dir}.previous-${randomUUID()}`;
       const hadExisting = await rename(dir, previousDir).then(
         () => true,
         (error) => {

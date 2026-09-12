@@ -72,7 +72,7 @@ export async function importSharedAssetRequest(input: {
 }
 
 export async function exportEnvironmentRequest(scene: Scene, options: { chunkSize: number; removeSeamFaces: boolean }) {
-  return request<{ exportId: string; manifest: EnvironmentManifest; metrics: EnvironmentCompileMetrics }>(
+  return request<{ exportId: string; manifest: EnvironmentManifest; manifestJson: string; metrics: EnvironmentCompileMetrics }>(
     `/api/scenes/${encodeURIComponent(scene.id)}/environment/export`,
     { method: "POST", body: JSON.stringify({ scene, options }) }
   );

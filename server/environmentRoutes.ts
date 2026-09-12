@@ -4,6 +4,7 @@ import { join } from "node:path";
 import type { AssetCatalogEntry } from "../src/editor-core/assets";
 import type { Scene } from "../src/editor-core/scene";
 import { compileEnvironmentPackage, type EnvironmentCompileMetrics } from "../src/environment/compiler";
+import { canonicalJson } from "../src/environment/manifestEncoder";
 import { validateEnvironmentPackage } from "../src/environment/packageValidator";
 import { buildSceneRecipe } from "../src/environment/sceneRecipe";
 import type { EnvironmentManifest } from "../src/environment/types";
@@ -18,7 +19,7 @@ export interface ExportEnvironmentOptions {
 }
 
 export type ExportEnvironmentResult =
-  | { status: "ok"; exportId: string; manifest: EnvironmentManifest; metrics: EnvironmentCompileMetrics }
+  | { status: "ok"; exportId: string; manifest: EnvironmentManifest; manifestJson: string; metrics: EnvironmentCompileMetrics }
   | { status: "error"; message: string };
 
 /** Compiles a scene server-side and holds its GLB in memory under a fresh export ID, so the client can fetch the manifest (JSON response) and the model (a later binary GET) as separate payloads. */
@@ -49,7 +50,7 @@ export function createEnvironmentExportCache() {
       glbByExportId.set(exportId, compiled.glb);
       exportIdBySceneId.set(scene.id, exportId);
 
-      return { status: "ok", exportId, manifest: compiled.manifest, metrics: compiled.metrics };
+      return { status: "ok", exportId, manifest: compiled.manifest, manifestJson: canonicalJson(compiled.manifest), metrics: compiled.metrics };
     },
 
     model(exportId: string): Uint8Array | undefined {
