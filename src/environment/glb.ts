@@ -20,6 +20,7 @@ export function readGlbInfo(bytes: Uint8Array): GlbInfo {
   const chunkLength = view.getUint32(12, true);
   const chunkType = view.getUint32(16, true);
   if (chunkType !== JSON_CHUNK_TYPE) return { valid: false, error: "GLB does not start with a JSON chunk." };
+  if (20 + chunkLength > bytes.length) return { valid: false, error: "GLB chunk length exceeds file size." };
 
   let json: { nodes?: { name?: string }[] };
   try {

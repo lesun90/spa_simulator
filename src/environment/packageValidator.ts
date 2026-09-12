@@ -35,6 +35,8 @@ export function validateEnvironmentPackage(manifestJson: unknown, glbBytes: Uint
   const cellIds = idSet(manifest.cells, diagnostics, "cell");
   idSet(manifest.objects, diagnostics, "object");
   const nodeIds = idSet(manifest.navigation?.nodes, diagnostics, "navigation node");
+  idSet(manifest.navigation?.edges, diagnostics, "navigation edge");
+  const nodesById = new Map((manifest.navigation?.nodes ?? []).map((node) => [node.id, node] as const));
 
   for (const cell of manifest.cells ?? []) {
     validatePlacedRecord(cell, "Cell", diagnostics);
@@ -60,6 +62,13 @@ export function validateEnvironmentPackage(manifestJson: unknown, glbBytes: Uint
     if (!nodeIds.has(edge.toNodeId)) diagnostics.push(`Navigation edge ${edge.id} references unknown node ${edge.toNodeId}.`);
     if (!isFiniteNumber(edge.cost) || edge.cost < 0) diagnostics.push(`Navigation edge ${edge.id} must have a non-negative finite cost.`);
     if (typeof edge.channel !== "string" || !edge.channel) diagnostics.push(`Navigation edge ${edge.id} requires a channel.`);
+
+    for (const endpointId of [edge.fromNodeId, edge.toNodeId]) {
+      const node = nodesById.get(endpointId);
+      if (node && !node.channels.includes(edge.channel)) {
+        diagnostics.push(`Navigation edge ${edge.id} channel ${edge.channel} is not compatible with node ${node.id}'s channels.`);
+      }
+    }
   }
 
   return { valid: diagnostics.length === 0, diagnostics };
