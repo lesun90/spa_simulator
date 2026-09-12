@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import type { EnvironmentManifest, EnvironmentManifestCell, EnvironmentManifestObject, WorldBounds } from "../../environment/types";
+import { disposeObject } from "./disposeObject";
 
 const loader = new GLTFLoader();
 
@@ -33,6 +34,7 @@ export class LockedEnvironmentFeature {
     this.manifest = null;
     if (this.loadedModel) {
       this.root.remove(this.loadedModel);
+      disposeObject(this.loadedModel);
       this.loadedModel = null;
     }
   }

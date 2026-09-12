@@ -136,7 +136,7 @@ export class EditorState {
     });
   }
 
-  private setNotice(notice: string) {
+  setNotice(notice: string) {
     this.notice = notice;
     this.emit("notice");
   }
@@ -252,7 +252,7 @@ export class EditorState {
       const { exportId, manifest, manifestJson } = await exportEnvironmentRequest(this.scene, options);
       const glb = await fetchExportedEnvironmentModel(this.scene.id, exportId);
       await saveEnvironmentPackage(manifestJson, glb);
-      this.setNotice(`Exported environment (${manifest.cells.length} cells)`);
+      this.setNotice(`Exported environment (${manifest.cells?.length ?? 0} cells)`);
     } catch (error) {
       this.setNotice(error instanceof Error ? error.message : "Environment export failed");
     }
@@ -283,7 +283,7 @@ export class EditorState {
         }
       };
       this.emit("scene", "sceneGrid", "sceneEnvironment");
-      this.setNotice(`Imported environment (${manifest.cells.length} cells)`);
+      this.setNotice(`Imported environment (${manifest.cells?.length ?? 0} cells)`);
     } catch (error) {
       this.setNotice(error instanceof Error ? error.message : "Environment import failed");
     }

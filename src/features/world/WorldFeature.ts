@@ -40,6 +40,7 @@ export class WorldFeature {
   private readonly wfcPreview: WfcPreviewFeature;
   private readonly lockedEnvironment = new LockedEnvironmentFeature();
   private environmentSyncToken = 0;
+  private loadedEnvironmentSha256: string | null = null;
   private readonly unsubscribers: Array<() => void> = [];
   private unregisterGround: (() => void) | null = null;
   private ghostAssetToken = 0;
@@ -149,22 +150,45 @@ export class WorldFeature {
   private async syncEnvironment() {
     const token = ++this.environmentSyncToken;
     const sceneId = this.state.scene?.id;
-    const hasEnvironment = Boolean(this.state.scene?.environment);
+    const environment = this.state.scene?.environment ?? null;
 
-    if (!sceneId || !hasEnvironment) {
+    if (!sceneId || !environment) {
+      this.loadedEnvironmentSha256 = null;
       this.lockedEnvironment.clear();
       this.applyGroundVisibility(true);
       return;
     }
 
-    const [manifest, glb] = await Promise.all([fetchCommittedEnvironmentManifest(sceneId), fetchCommittedEnvironmentModel(sceneId)]);
-    if (token !== this.environmentSyncToken || !manifest) return;
+    if (environment.sha256 === this.loadedEnvironmentSha256) return;
 
-    // `Uint8Array.buffer` is typed `ArrayBufferLike` in this TS version, but `fetchCommittedEnvironmentModel`
-    // always builds the array from `Response.arrayBuffer()`, so the backing buffer is a real `ArrayBuffer`.
-    await this.lockedEnvironment.load(JSON.stringify(manifest), glb.buffer as ArrayBuffer);
-    if (token !== this.environmentSyncToken) return;
-    this.applyGroundVisibility(!this.lockedEnvironment.hasGround);
+    try {
+      const [manifest, glb] = await Promise.all([fetchCommittedEnvironmentManifest(sceneId), fetchCommittedEnvironmentModel(sceneId)]);
+      if (token !== this.environmentSyncToken) return;
+
+      if (!manifest) {
+        this.loadedEnvironmentSha256 = null;
+        this.lockedEnvironment.clear();
+        this.applyGroundVisibility(true);
+        return;
+      }
+
+      // `Uint8Array.buffer` is typed `ArrayBufferLike` in this TS version, but `fetchCommittedEnvironmentModel`
+      // always builds the array from `Response.arrayBuffer()`, so the backing buffer is a real `ArrayBuffer`.
+      await this.lockedEnvironment.load(JSON.stringify(manifest), glb.buffer as ArrayBuffer);
+      if (token !== this.environmentSyncToken) return;
+
+      this.loadedEnvironmentSha256 = environment.sha256;
+      // Ground suppression is intentionally disabled: every compiled environment package's manifest
+      // carries a ground record unconditionally (the compiler plan never implemented ground-quad
+      // export), so `hasGround` can never distinguish "package has real ground" from "package has
+      // none" — suppressing based on it would just hide the floor on every import with nothing to
+      // replace it. Re-enable `!this.lockedEnvironment.hasGround` once the compiler plan emits real
+      // ground geometry into the GLB.
+      this.applyGroundVisibility(true);
+    } catch (error) {
+      if (token !== this.environmentSyncToken) return;
+      this.state.setNotice(error instanceof Error ? error.message : "Failed to load the attached environment");
+    }
   }
 
   /** Hides the visible ground surface without disabling its raycast — material.visible (unlike object.visible) does not gate InteractionSystem's hit-testing, so placement/snap clicks against the invisible plane keep working. */
@@ -264,7 +288,13 @@ export class WorldFeature {
     this.scene.add(gridHelper, ground);
     this.registerGroundInteraction();
     this.applyGround();
-    this.applyGroundVisibility(!this.lockedEnvironment.hasGround);
+    // Ground suppression is intentionally disabled: every compiled environment package's manifest
+    // carries a ground record unconditionally (the compiler plan never implemented ground-quad
+    // export), so `hasGround` can never distinguish "package has real ground" from "package has
+    // none" — suppressing based on it would just hide the floor on every import with nothing to
+    // replace it. Re-enable `!this.lockedEnvironment.hasGround` once the compiler plan emits real
+    // ground geometry into the GLB.
+    this.applyGroundVisibility(true);
   }
 
   /** Applies the scene's configured background: a flat color, or a loaded image for the "texture" type. */

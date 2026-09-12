@@ -13,6 +13,7 @@ import {
   scaleFromGroundHandle,
   transformModeForPointerButton
 } from "./objectTransform";
+import { disposeObject } from "./disposeObject";
 import { centerGroundFootprintOnOrigin, scaleToFitGridCell } from "./placementSizing";
 import { worldSceneConfig } from "./world.config";
 
@@ -371,17 +372,6 @@ function captureMaterials(instance: THREE.Object3D): Map<THREE.Mesh, THREE.Mater
 
 function cloneSceneObject(object: SceneObject): SceneObject {
   return { ...object, position: { ...object.position } };
-}
-
-function disposeObject(object: THREE.Object3D) {
-  object.traverse((child) => {
-    if (child instanceof THREE.Mesh || child instanceof THREE.Line) {
-      child.geometry.dispose();
-      const material = child.material;
-      if (Array.isArray(material)) material.forEach((item) => item.dispose());
-      else material.dispose();
-    }
-  });
 }
 
 class ObjectTransformControls {

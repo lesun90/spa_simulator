@@ -29,6 +29,19 @@ describe("EditorState.exportEnvironment", () => {
 
     expect(state.notice).toBe("compile failed");
   });
+
+  test("falls back to 0 cells in the success notice when the manifest has no cells array", async () => {
+    const state = new EditorState();
+    state["history"] = createHistory(createScene("Test"));
+    const manifest = {} as never;
+    vi.spyOn(client, "exportEnvironmentRequest").mockResolvedValue({ exportId: "export-1", manifest, manifestJson: JSON.stringify(manifest), metrics: {} as never });
+    vi.spyOn(client, "fetchExportedEnvironmentModel").mockResolvedValue(new Uint8Array([1]));
+    vi.spyOn(fileSystemAccess, "saveEnvironmentPackage").mockResolvedValue();
+
+    await state.exportEnvironment({ chunkSize: 10, removeSeamFaces: false });
+
+    expect(state.notice).toBe("Exported environment (0 cells)");
+  });
 });
 
 describe("EditorState.importEnvironment", () => {
@@ -52,6 +65,24 @@ describe("EditorState.importEnvironment", () => {
     expect(state.scene?.environment).toEqual({ sha256: "a".repeat(64), manifestVersion: 1 });
     expect(state.scene?.grid).toEqual({ cellSize: 2, width: 8, depth: 8 });
     expect(state.canUndo()).toBe(false);
+  });
+
+  test("falls back to 0 cells in the success notice when the manifest has no cells array", async () => {
+    const state = new EditorState();
+    const scene = createScene("Test");
+    state["history"] = createHistory(scene);
+    const manifest = { grid: { width: 4, depth: 4, cellSize: 2 } };
+    vi.spyOn(fileSystemAccess, "pickEnvironmentPackageFiles").mockResolvedValue({ manifestJson: JSON.stringify(manifest), glb: new Uint8Array([1]) });
+    vi.spyOn(client, "uploadEnvironmentManifestRequest").mockResolvedValue();
+    vi.spyOn(client, "uploadEnvironmentModelRequest").mockResolvedValue();
+    vi.spyOn(client, "commitEnvironmentImportRequest").mockResolvedValue({
+      ...scene,
+      environment: { sha256: "a".repeat(64), manifestVersion: 1 }
+    });
+
+    await state.importEnvironment();
+
+    expect(state.notice).toBe("Imported environment (0 cells)");
   });
 
   test("does nothing when the user cancels the file picker", async () => {
