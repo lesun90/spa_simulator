@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises";
-import { join } from "node:path";
 import type { AssetCatalogEntry } from "../editor-core/assets";
+import { assetFilePath } from "./assetGeometrySource";
 import { sha256Hex } from "./manifestEncoder";
 import type { EnvironmentManifestAsset, SceneRecipe } from "./types";
 
@@ -30,9 +30,4 @@ async function contentHashForAsset(asset: AssetCatalogEntry, assetRoot: string):
   if (asset.implementation === "glb" && asset.modelUrl) return sha256Hex(await readFile(assetFilePath(assetRoot, asset.modelUrl)));
   if (asset.implementation === "module" && asset.moduleUrl) return sha256Hex(await readFile(assetFilePath(assetRoot, asset.moduleUrl)));
   return sha256Hex(Buffer.from(`placeholder:${asset.id}`, "utf8"));
-}
-
-function assetFilePath(assetRoot: string, url: string): string {
-  const relative = decodeURIComponent(url.replace(/^\/assets\//, ""));
-  return join(assetRoot, ...relative.split("/"));
 }

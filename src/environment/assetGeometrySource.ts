@@ -72,7 +72,7 @@ async function loadAssetObject(asset: AssetCatalogEntry, assetRoot: string): Pro
   }
 }
 
-function assetFilePath(assetRoot: string, url: string): string {
+export function assetFilePath(assetRoot: string, url: string): string {
   const relative = decodeURIComponent(url.replace(/^\/assets\//, ""));
   return join(assetRoot, ...relative.split("/"));
 }
