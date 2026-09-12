@@ -16,3 +16,40 @@ if (typeof (globalThis as { document?: unknown }).document === "undefined") {
 if (typeof (globalThis as { Image?: unknown }).Image === "undefined") {
   (globalThis as { Image?: unknown }).Image = Image;
 }
+
+/**
+ * GLTFExporter reads embedded texture images via FileReader.readAsArrayBuffer/readAsDataURL
+ * (see processBufferViewImage in three's GLTFExporter). Real Node has no FileReader — only
+ * Vitest's jsdom test environment does — so placeholder-only test fixtures never exercise this
+ * path; it only surfaces when exporting a scene with real image textures.
+ */
+class NodeFileReader {
+  result: string | ArrayBuffer | null = null;
+  onloadend: (() => void) | null = null;
+  onerror: ((error: unknown) => void) | null = null;
+
+  readAsArrayBuffer(blob: Blob) {
+    blob
+      .arrayBuffer()
+      .then((buffer) => {
+        this.result = buffer;
+        this.onloadend?.();
+      })
+      .catch((error) => this.onerror?.(error));
+  }
+
+  readAsDataURL(blob: Blob) {
+    blob
+      .arrayBuffer()
+      .then((buffer) => {
+        const base64 = Buffer.from(buffer).toString("base64");
+        this.result = `data:${blob.type || "application/octet-stream"};base64,${base64}`;
+        this.onloadend?.();
+      })
+      .catch((error) => this.onerror?.(error));
+  }
+}
+
+if (!("FileReader" in globalThis)) {
+  Object.assign(globalThis, { FileReader: NodeFileReader });
+}

@@ -1,34 +1,3 @@
-class NodeFileReader {
-  result: string | ArrayBuffer | null = null;
-  onloadend: (() => void) | null = null;
-  onerror: ((error: unknown) => void) | null = null;
-
-  readAsArrayBuffer(blob: Blob) {
-    blob
-      .arrayBuffer()
-      .then((buffer) => {
-        this.result = buffer;
-        this.onloadend?.();
-      })
-      .catch((error) => this.onerror?.(error));
-  }
-
-  readAsDataURL(blob: Blob) {
-    blob
-      .arrayBuffer()
-      .then((buffer) => {
-        const base64 = Buffer.from(buffer).toString("base64");
-        this.result = `data:${blob.type || "application/octet-stream"};base64,${base64}`;
-        this.onloadend?.();
-      })
-      .catch((error) => this.onerror?.(error));
-  }
-}
-
-if (!("FileReader" in globalThis)) {
-  Object.assign(globalThis, { FileReader: NodeFileReader });
-}
-
 import { mkdir, mkdtemp, readdir, rename, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { discoverAssetCatalog } from "../server/assetCatalog";
