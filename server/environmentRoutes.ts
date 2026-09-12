@@ -1,9 +1,14 @@
 import { randomUUID } from "node:crypto";
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { join } from "node:path";
 import type { AssetCatalogEntry } from "../src/editor-core/assets";
 import type { Scene } from "../src/editor-core/scene";
 import { compileEnvironmentPackage, type EnvironmentCompileMetrics } from "../src/environment/compiler";
+import { validateEnvironmentPackage } from "../src/environment/packageValidator";
 import { buildSceneRecipe } from "../src/environment/sceneRecipe";
 import type { EnvironmentManifest } from "../src/environment/types";
+import type { createEnvironmentPackageStore } from "./environmentPackageStore";
+import { safeId } from "./sceneStore";
 
 const GENERATOR_VERSION = "0.1.0";
 
@@ -49,6 +54,54 @@ export function createEnvironmentExportCache() {
 
     model(exportId: string): Uint8Array | undefined {
       return glbByExportId.get(exportId);
+    }
+  };
+}
+
+export type CommitEnvironmentImportResult = { status: "ok"; sha256: string; manifestVersion: number } | { status: "error"; diagnostics: string[] };
+
+/** Stages an uploaded manifest and model as two separate payloads, then validates and commits them as one unit. */
+export function createEnvironmentImportStaging(sceneRoot: string) {
+  const stagingDir = (sceneId: string) => join(sceneRoot, `${safeId(sceneId)}.environment.staging`);
+
+  return {
+    async stageManifest(sceneId: string, manifestJson: string): Promise<void> {
+      const dir = stagingDir(sceneId);
+      await mkdir(dir, { recursive: true });
+      await writeFile(join(dir, "environment.json"), manifestJson, "utf8");
+    },
+
+    async stageModel(sceneId: string, glb: Buffer): Promise<void> {
+      const dir = stagingDir(sceneId);
+      await mkdir(dir, { recursive: true });
+      await writeFile(join(dir, "environment.glb"), glb);
+    },
+
+    async commit(sceneId: string, environmentStore: ReturnType<typeof createEnvironmentPackageStore>): Promise<CommitEnvironmentImportResult> {
+      const dir = stagingDir(sceneId);
+      let manifestJson: string;
+      let glb: Buffer;
+      try {
+        [manifestJson, glb] = await Promise.all([readFile(join(dir, "environment.json"), "utf8"), readFile(join(dir, "environment.glb"))]);
+      } catch {
+        return { status: "error", diagnostics: ["Both environment.json and environment.glb must be uploaded before committing."] };
+      }
+
+      let manifestValue: unknown;
+      try {
+        manifestValue = JSON.parse(manifestJson);
+      } catch {
+        return { status: "error", diagnostics: ["environment.json is not valid JSON."] };
+      }
+
+      const validation = validateEnvironmentPackage(manifestValue, glb);
+      if (!validation.valid) return { status: "error", diagnostics: validation.diagnostics };
+
+      await environmentStore.replace(sceneId, manifestJson, glb);
+      await rm(dir, { recursive: true, force: true });
+
+      const manifest = manifestValue as { model: { sha256: string }; formatVersion: number };
+      return { status: "ok", sha256: manifest.model.sha256, manifestVersion: manifest.formatVersion };
     }
   };
 }

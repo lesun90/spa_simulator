@@ -3,7 +3,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import type { Plugin } from "vite";
 import { discoverAssetCatalog, importSharedAsset, type SharedImportRequest } from "./assetCatalog";
-import { createEnvironmentExportCache } from "./environmentRoutes";
+import { createEnvironmentExportCache, createEnvironmentImportStaging } from "./environmentRoutes";
 import { createEnvironmentPackageStore } from "./environmentPackageStore";
 import { createSceneStore } from "./sceneStore";
 import type { Scene } from "../src/editor-core/scene";
@@ -16,6 +16,7 @@ export function steerlabApiPlugin(): Plugin {
   const store = createSceneStore(sceneRoot);
   const environmentStore = createEnvironmentPackageStore(sceneRoot);
   const environmentExports = createEnvironmentExportCache();
+  const environmentImports = createEnvironmentImportStaging(sceneRoot);
 
   return {
     name: "steerlab-api",
@@ -103,6 +104,34 @@ export function steerlabApiPlugin(): Plugin {
             return sendBinary(response, glb, "model/gltf-binary");
           }
 
+          const importManifestMatch = url.pathname.match(/^\/api\/scenes\/([^/]+)\/environment\/import\/manifest$/);
+          if (importManifestMatch && method === "POST") {
+            const id = decodeURIComponent(importManifestMatch[1]);
+            await environmentImports.stageManifest(id, (await readBuffer(request)).toString("utf8"));
+            response.statusCode = 204;
+            response.end();
+            return;
+          }
+
+          const importModelMatch = url.pathname.match(/^\/api\/scenes\/([^/]+)\/environment\/import\/model$/);
+          if (importModelMatch && method === "POST") {
+            const id = decodeURIComponent(importModelMatch[1]);
+            await environmentImports.stageModel(id, await readBuffer(request));
+            response.statusCode = 204;
+            response.end();
+            return;
+          }
+
+          const importCommitMatch = url.pathname.match(/^\/api\/scenes\/([^/]+)\/environment\/import\/commit$/);
+          if (importCommitMatch && method === "POST") {
+            const id = decodeURIComponent(importCommitMatch[1]);
+            const result = await environmentImports.commit(id, environmentStore);
+            if (result.status === "error") return sendJson(response, { error: result.diagnostics.join(" ") }, 400);
+            const scene = await store.open(id);
+            const updated = await store.save({ ...scene, environment: { sha256: result.sha256, manifestVersion: result.manifestVersion } });
+            return sendJson(response, { scene: updated });
+          }
+
           sendJson(response, { error: "Not found" }, 404);
         } catch {
           sendJson(response, { error: "Request failed." }, 500);
@@ -140,4 +169,10 @@ async function readJson<T>(request: NodeJS.ReadableStream): Promise<T> {
     chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
   }
   return chunks.length ? (JSON.parse(Buffer.concat(chunks).toString("utf8")) as T) : ({} as T);
+}
+
+async function readBuffer(request: NodeJS.ReadableStream): Promise<Buffer> {
+  const chunks: Buffer[] = [];
+  for await (const chunk of request) chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+  return Buffer.concat(chunks);
 }
