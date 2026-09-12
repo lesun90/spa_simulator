@@ -595,7 +595,7 @@ describe("compileGeometry", () => {
 
     expect(compiled.diagnostics).toEqual([]);
     expect(compiled.stats.instancedMeshCount).toBe(1);
-    expect(compiled.stats.meshCount).toBe(1);
+    expect(compiled.stats.meshCount).toBe(0);
     let instancedMesh: THREE.InstancedMesh | null = null;
     compiled.root.traverse((node) => {
       if (node instanceof THREE.InstancedMesh) instancedMesh = node;
