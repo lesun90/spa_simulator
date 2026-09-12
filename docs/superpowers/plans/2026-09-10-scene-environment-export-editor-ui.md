@@ -67,23 +67,42 @@ Create `tests/checkbox.test.ts`:
 
 ```typescript
 import { describe, expect, test, vi } from "vitest";
+import * as THREE from "three";
 import { InteractionSystem } from "../src/engine/InteractionSystem";
+import { Viewport } from "../src/engine/Viewport";
 import { CheckboxControl } from "../src/features/hud/kit/Checkbox";
+
+vi.stubGlobal("innerWidth", 400);
+vi.stubGlobal("innerHeight", 300);
+
+function makeOrthoHudCamera(width: number, height: number) {
+  const camera = new THREE.OrthographicCamera(0, width, 0, height, 0.1, 100);
+  camera.position.z = 10;
+  camera.updateProjectionMatrix();
+  camera.updateMatrixWorld(true);
+  return camera;
+}
 
 describe("CheckboxControl", () => {
   test("starts unchecked, and reports its state via isChecked", () => {
-    const interaction = new InteractionSystem();
+    const interaction = new InteractionSystem(new Viewport(2));
     const checkbox = new CheckboxControl({ x: 0, y: 0, width: 100, height: 24 }, interaction, "Test", () => {});
 
     expect(checkbox.isChecked()).toBe(false);
   });
 
   test("clicking the hit area toggles checked and calls onChange", () => {
-    const interaction = new InteractionSystem();
+    const interaction = new InteractionSystem(new Viewport(2));
+    const scene = new THREE.Scene();
+    const camera = makeOrthoHudCamera(400, 300);
     const onChange = vi.fn();
     const checkbox = new CheckboxControl({ x: 0, y: 0, width: 100, height: 24 }, interaction, "Test", onChange);
+    scene.add(checkbox.root);
+    interaction.setLayers([{ scene, camera }]);
+    scene.updateMatrixWorld(true);
 
-    interaction.handleClick(0, 0);
+    interaction.handlePointerDown(20, 10, {} as PointerEvent);
+    interaction.handlePointerUp(20, 10, {} as PointerEvent);
 
     expect(onChange).toHaveBeenCalledWith(true);
     expect(checkbox.isChecked()).toBe(true);
@@ -91,7 +110,7 @@ describe("CheckboxControl", () => {
 });
 ```
 
-Note: if `InteractionSystem` has no `handleClick(x, y)` convenience method for simulating a click by screen position, use whatever the existing HUD kit tests already use to simulate a click on a registered hit area (check `tests/` for an existing `Button`/`TextField` interaction test and copy its exact simulation approach instead of inventing a new one — this codebase already has a click-simulation pattern for other kit controls).
+Note: `InteractionSystem`'s constructor takes a required `Viewport` (`new InteractionSystem(viewport)`, never called with zero arguments anywhere in this codebase — confirmed by reading `src/engine/InteractionSystem.ts` and every existing call site), and it has no `handleClick(x, y)` convenience method. The established click-simulation pattern (see `tests/interactionSystem.test.ts`) is `handlePointerDown(x, y, {} as PointerEvent)` followed by `handlePointerUp(x, y, {} as PointerEvent)` on the same coordinates, with the target's `root` added to a real `THREE.Scene`, a real orthographic camera registered via `interaction.setLayers([{ scene, camera }])`, and `scene.updateMatrixWorld(true)` called before the click so the raycast sees current world transforms. `InteractionSystem.handlePointerDown`/`handlePointerUp` resolve screen coordinates against `window.innerWidth`/`innerHeight` (via the injected `Viewport`), not the camera's own projection bounds — `vi.stubGlobal` those to match the test camera's ortho bounds, exactly as `tests/interactionSystem.test.ts` already does, so a click at HUD-rect coordinate `(20, 10)` (inside the checkbox's `{x:0,y:0,width:100,height:24}` rect) actually lands on its hit area.
 
 - [ ] **Step 3: Run test to verify it fails**
 
