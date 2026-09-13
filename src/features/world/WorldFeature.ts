@@ -1,6 +1,5 @@
 import * as THREE from "three";
 import { worldConfig } from "../../app/config";
-import { fetchCommittedEnvironmentManifest, fetchCommittedEnvironmentModel } from "../../api/client";
 import type { AssetManager } from "../../engine/AssetManager";
 import type { InteractionSystem, RaycastLayer } from "../../engine/InteractionSystem";
 import { CameraRig } from "../../engine/CameraRig";
@@ -10,7 +9,6 @@ import type { GridDefinition, SceneObject } from "../../editor-core/scene";
 import type { EditorState } from "../../state/EditorState";
 import { createGround, disposeGround, type GroundMesh } from "./Ground";
 import { applyGridVisibilityColors, gridColorsForGroundColor } from "./gridVisibility";
-import { LockedEnvironmentFeature } from "./LockedEnvironmentFeature";
 import { PlacementGhost } from "./PlacementGhost";
 import { centerGroundFootprintOnOrigin, scaleToFitGridCell } from "./placementSizing";
 import { SceneObjectsFeature, type TransformMode } from "./SceneObjectsFeature";
@@ -38,9 +36,6 @@ export class WorldFeature {
   private readonly ghost: PlacementGhost;
   private readonly objects: SceneObjectsFeature;
   private readonly wfcPreview: WfcPreviewFeature;
-  private readonly lockedEnvironment = new LockedEnvironmentFeature();
-  private environmentSyncToken = 0;
-  private loadedEnvironmentSha256: string | null = null;
   private readonly unsubscribers: Array<() => void> = [];
   private unregisterGround: (() => void) | null = null;
   private ghostAssetToken = 0;
@@ -94,7 +89,6 @@ export class WorldFeature {
       }
     });
     this.scene.add(this.objects.root);
-    this.scene.add(this.lockedEnvironment.root);
     this.wfcPreview = new WfcPreviewFeature(assetManager);
     this.scene.add(this.wfcPreview.root);
 
@@ -115,8 +109,7 @@ export class WorldFeature {
       state.on("sceneGrid", () => {
         this.syncGrid();
         void this.syncGhostAsset();
-      }),
-      state.on("sceneEnvironment", () => this.syncEnvironment())
+      })
     );
 
     this.resync();
@@ -144,56 +137,6 @@ export class WorldFeature {
     this.applyBackground();
     this.applyGround();
     this.syncGrid();
-    void this.syncEnvironment();
-  }
-
-  private async syncEnvironment() {
-    const token = ++this.environmentSyncToken;
-    const sceneId = this.state.scene?.id;
-    const environment = this.state.scene?.environment ?? null;
-
-    if (!sceneId || !environment) {
-      this.loadedEnvironmentSha256 = null;
-      this.lockedEnvironment.clear();
-      this.applyGroundVisibility(true);
-      return;
-    }
-
-    if (environment.sha256 === this.loadedEnvironmentSha256) return;
-
-    try {
-      const [manifest, glb] = await Promise.all([fetchCommittedEnvironmentManifest(sceneId), fetchCommittedEnvironmentModel(sceneId)]);
-      if (token !== this.environmentSyncToken) return;
-
-      if (!manifest) {
-        this.loadedEnvironmentSha256 = null;
-        this.lockedEnvironment.clear();
-        this.applyGroundVisibility(true);
-        return;
-      }
-
-      // `Uint8Array.buffer` is typed `ArrayBufferLike` in this TS version, but `fetchCommittedEnvironmentModel`
-      // always builds the array from `Response.arrayBuffer()`, so the backing buffer is a real `ArrayBuffer`.
-      await this.lockedEnvironment.load(JSON.stringify(manifest), glb.buffer as ArrayBuffer);
-      if (token !== this.environmentSyncToken) return;
-
-      this.loadedEnvironmentSha256 = environment.sha256;
-      // Ground suppression is intentionally disabled: every compiled environment package's manifest
-      // carries a ground record unconditionally (the compiler plan never implemented ground-quad
-      // export), so `hasGround` can never distinguish "package has real ground" from "package has
-      // none" — suppressing based on it would just hide the floor on every import with nothing to
-      // replace it. Re-enable `!this.lockedEnvironment.hasGround` once the compiler plan emits real
-      // ground geometry into the GLB.
-      this.applyGroundVisibility(true);
-    } catch (error) {
-      if (token !== this.environmentSyncToken) return;
-      this.state.setNotice(error instanceof Error ? error.message : "Failed to load the attached environment");
-    }
-  }
-
-  /** Hides the visible ground surface without disabling its raycast — material.visible (unlike object.visible) does not gate InteractionSystem's hit-testing, so placement/snap clicks against the invisible plane keep working. */
-  private applyGroundVisibility(visible: boolean) {
-    this.ground.material.visible = visible;
   }
 
   private schedulePreviewSync() {
@@ -207,7 +150,7 @@ export class WorldFeature {
 
   private syncSceneObjects() {
     if (!this.state.scene) return;
-    void this.objects.sync(this.state.scene, this.state.assets, this.state.selectedObjectId, this.state.hiddenObjectIds);
+    void this.objects.sync(this.state.scene, this.state.catalogAssets, this.state.selectedObjectId, this.state.hiddenObjectIds);
     this.wfcPreview.sync(this.state.wfcPreviewObjects, this.state.assets);
   }
 
@@ -288,13 +231,6 @@ export class WorldFeature {
     this.scene.add(gridHelper, ground);
     this.registerGroundInteraction();
     this.applyGround();
-    // Ground suppression is intentionally disabled: every compiled environment package's manifest
-    // carries a ground record unconditionally (the compiler plan never implemented ground-quad
-    // export), so `hasGround` can never distinguish "package has real ground" from "package has
-    // none" — suppressing based on it would just hide the floor on every import with nothing to
-    // replace it. Re-enable `!this.lockedEnvironment.hasGround` once the compiler plan emits real
-    // ground geometry into the GLB.
-    this.applyGroundVisibility(true);
   }
 
   /** Applies the scene's configured background: a flat color, or a loaded image for the "texture" type. */
@@ -378,7 +314,7 @@ export class WorldFeature {
       this.placementScale = 1;
       return;
     }
-    const asset = this.state.assets.find((entry) => entry.id === assetId);
+    const asset = this.state.catalogAssets.find((entry) => entry.id === assetId);
     const instance = asset ? await this.assetManager.instantiate(asset) : null;
     if (token !== this.ghostAssetToken || this.state.placementAssetId !== assetId) return;
     if (instance) centerGroundFootprintOnOrigin(instance);
@@ -432,7 +368,7 @@ export class WorldFeature {
 
   private async resolvePlacementScale(assetId: string): Promise<number> {
     if (!this.state.scene || this.state.placementResolution === "free") return 1;
-    const asset = this.state.assets.find((entry) => entry.id === assetId);
+    const asset = this.state.catalogAssets.find((entry) => entry.id === assetId);
     const instance = asset ? await this.assetManager.instantiate(asset) : null;
     return instance ? scaleToFitGridCell(instance, this.state.scene.grid.cellSize) : this.placementScale;
   }
@@ -489,7 +425,6 @@ export class WorldFeature {
     this.disposeGroundTexture();
     this.objects.dispose();
     this.wfcPreview.dispose();
-    this.lockedEnvironment.dispose();
     this.ghost.dispose();
     this.cameraRig.dispose();
   }

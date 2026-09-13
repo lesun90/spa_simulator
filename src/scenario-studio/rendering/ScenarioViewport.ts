@@ -1,9 +1,7 @@
 import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { CameraRig } from "../../engine/CameraRig";
-import { Renderer } from "../../engine/Renderer";
-import { RenderLoop } from "../../engine/RenderLoop";
-import { Viewport } from "../../engine/Viewport";
+import type { ViewportSize } from "../../engine/Viewport";
 import { disposeObject } from "../../features/world/disposeObject";
 import { DefaultGround } from "../domain/DefaultGround";
 import type { ScenePackageData } from "../domain/scene";
@@ -32,47 +30,52 @@ class OwnedPresentation implements ScenePresentation {
 }
 
 export class ScenarioViewport implements ScenePresenter {
-  private readonly scene = new THREE.Scene();
-  private readonly camera = new THREE.PerspectiveCamera(48, 1, 0.05, 3000);
-  private readonly viewport = new Viewport(2);
-  private readonly renderer: Renderer;
-  private readonly loop: RenderLoop;
+  readonly scene = new THREE.Scene();
+  readonly camera = new THREE.PerspectiveCamera(48, 1, 0.05, 3000);
   private readonly cameraRig: CameraRig;
   private readonly loader = new GLTFLoader();
-  private readonly unsubscribe: () => void;
   private disposed = false;
 
-  constructor(private readonly canvas: HTMLCanvasElement) {
-    this.scene.background = new THREE.Color(0xb8cbd2);
+  constructor(canvas: HTMLCanvasElement) {
+    this.scene.background = new THREE.Color(0x15181d);
     this.scene.add(new THREE.HemisphereLight(0xffffff, 0x728568, 2.2));
     const sun = new THREE.DirectionalLight(0xffffff, 2.1);
     sun.position.set(25, 55, 35);
     this.scene.add(sun);
     this.camera.position.set(55, 48, 55);
-    this.renderer = new Renderer(canvas, this.viewport);
-    this.loop = new RenderLoop(this.renderer);
     this.cameraRig = new CameraRig(this.camera, canvas, Math.PI / 2.03);
-    this.unsubscribe = this.viewport.subscribe((size) => {
-      this.camera.aspect = size.aspect;
-      this.camera.updateProjectionMatrix();
-    });
-    canvas.addEventListener("wheel", this.onWheel, { passive: false });
-    this.loop.start(() => {
-      this.cameraRig.update();
-      this.renderer.renderLayers([{ scene: this.scene, camera: this.camera }]);
-    });
   }
+
+  resize(size: ViewportSize): void {
+    this.camera.aspect = size.aspect;
+    this.camera.updateProjectionMatrix();
+  }
+
+  update(): void { this.cameraRig.update(); }
+  zoom(deltaY: number): void { this.cameraRig.zoom(deltaY); }
+  setCameraControlsEnabled(enabled: boolean): void { this.cameraRig.setEnabled(enabled); }
+  resetView(): void { this.cameraRig.resetView(); }
 
   createDefault(): ScenePresentation {
     const ground = new DefaultGround();
+    const root = new THREE.Group();
+    const grid = new THREE.GridHelper(ground.width, ground.width, 0x9fb0c7, 0xe6edf7);
     const mesh = new THREE.Mesh(
       new THREE.PlaneGeometry(ground.width, ground.depth),
-      new THREE.MeshStandardMaterial({ color: ground.color, roughness: 1, side: THREE.DoubleSide })
+      new THREE.MeshStandardMaterial({
+        color: ground.color,
+        roughness: 1,
+        side: THREE.DoubleSide,
+        polygonOffset: true,
+        polygonOffsetFactor: 1,
+        polygonOffsetUnits: 1
+      })
     );
     mesh.rotation.x = -Math.PI / 2;
     mesh.position.y = ground.y;
-    mesh.name = "Default ground";
-    return new OwnedPresentation(mesh, new THREE.Box3().setFromObject(mesh));
+    root.name = "Default ground grid";
+    root.add(grid, mesh);
+    return new OwnedPresentation(root, new THREE.Box3().setFromObject(root));
   }
 
   async prepare(data: ScenePackageData): Promise<ScenePresentation> {
@@ -102,21 +105,12 @@ export class ScenarioViewport implements ScenePresenter {
     this.camera.near = Math.max(distance / 200, 0.05);
     this.camera.far = Math.max(distance * 20, 500);
     this.camera.updateProjectionMatrix();
+    this.cameraRig.saveViewAsHome();
   }
-
-  private readonly onWheel = (event: WheelEvent) => {
-    event.preventDefault();
-    this.cameraRig.zoom(event.deltaY);
-  };
 
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
-    this.canvas.removeEventListener("wheel", this.onWheel);
-    this.loop.stop();
     this.cameraRig.dispose();
-    this.unsubscribe();
-    this.renderer.dispose();
-    this.viewport.dispose();
   }
 }

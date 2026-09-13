@@ -1,6 +1,6 @@
 import { mkdir, readdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { createScene, normalizeScene, type Scene } from "../src/editor-core/scene";
+import { createScene, environmentAssetId, normalizeScene, type Scene } from "../src/editor-core/scene";
 import { validateSceneJson } from "../src/editor-core/validation";
 
 export interface SceneSummary {
@@ -23,7 +23,7 @@ export function createSceneStore(root: string) {
       const files = (await readdir(root)).filter((file) => file.endsWith(".json"));
       const scenes = await Promise.all(
         files.map(async (file) => {
-          const scene = JSON.parse(await readFile(join(root, file), "utf8")) as Scene;
+          const scene = normalizeScene(JSON.parse(await readFile(join(root, file), "utf8")) as Scene);
           return {
             id: scene.id,
             name: scene.name,
@@ -69,12 +69,13 @@ export function createSceneStore(root: string) {
     },
     async duplicate(id: string): Promise<Scene> {
       const scene = await this.open(id);
+      const copyId = createScene(scene.name).id;
       const copy = {
         ...scene,
-        id: createScene(scene.name).id,
+        id: copyId,
         name: `${scene.name} Copy`,
         background: { ...scene.background },
-        objects: scene.objects.map((object) => ({ ...object, position: { ...object.position } }))
+        objects: scene.objects.map((object) => ({ ...object, assetId: object.assetId === environmentAssetId(scene.id) ? environmentAssetId(copyId) : object.assetId, position: { ...object.position } }))
       };
       await this.save(copy);
       return copy;

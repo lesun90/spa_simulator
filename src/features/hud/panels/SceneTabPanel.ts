@@ -62,6 +62,7 @@ export class SceneTabPanel {
   readonly root = new THREE.Group();
 
   private readonly scroll: ScrollRegion;
+  private readonly footerScroll: ScrollRegion;
   private rows: SceneObjectRow[] = [];
   private emptyStateMesh: LabelMesh | null = null;
   private objectsHeader: SectionHeader;
@@ -101,31 +102,34 @@ export class SceneTabPanel {
     this.scroll = new ScrollRegion(this.listRect(), interaction, { axis: "vertical" });
     this.root.add(this.scroll.root);
 
+    this.footerScroll = new ScrollRegion(this.footerRect(), interaction, { axis: "vertical" });
+    this.root.add(this.footerScroll.root);
+
     this.divider = new Panel(this.dividerRect(), { fill: theme.borderSubtle.hex, radius: 0 });
-    this.root.add(this.divider.root);
+    this.footerScroll.content.add(this.divider.root);
 
     this.backgroundHeader = new SectionHeader(this.backgroundHeaderRect());
-    this.root.add(this.backgroundHeader.root);
+    this.footerScroll.content.add(this.backgroundHeader.root);
     this.backgroundEditor = new SurfaceAppearanceEditor(this.backgroundDropdownRect(), this.backgroundValueRect(), interaction, {
       getAppearance: () => state.scene?.background,
       onTypeChange: (type) => state.setBackgroundType(type),
       onColorChange: (color) => state.setBackgroundColor(color),
       onTextureChange: (dataUrl) => state.setBackgroundTexture(dataUrl)
     });
-    this.root.add(this.backgroundEditor.root);
+    this.footerScroll.content.add(this.backgroundEditor.root);
 
     this.groundHeader = new SectionHeader(this.groundHeaderRect());
-    this.root.add(this.groundHeader.root);
+    this.footerScroll.content.add(this.groundHeader.root);
     this.groundEditor = new SurfaceAppearanceEditor(this.groundDropdownRect(), this.groundValueRect(), interaction, {
       getAppearance: () => state.scene?.ground,
       onTypeChange: (type) => state.setGroundType(type),
       onColorChange: (color) => state.setGroundColor(color),
       onTextureChange: (dataUrl) => state.setGroundTexture(dataUrl)
     });
-    this.root.add(this.groundEditor.root);
+    this.footerScroll.content.add(this.groundEditor.root);
 
     this.gridHeader = new SectionHeader(this.gridHeaderRect());
-    this.root.add(this.gridHeader.root);
+    this.footerScroll.content.add(this.gridHeader.root);
 
     this.gridField = new TextField(
       this.gridFieldRect(),
@@ -133,7 +137,7 @@ export class SceneTabPanel {
       { numeric: true, placeholder: "1", onCommit: (value) => this.commitGridSize(value) },
       formatGridSize(state.scene?.grid.cellSize ?? 1)
     );
-    this.root.add(this.gridField.root);
+    this.footerScroll.content.add(this.gridField.root);
 
     this.sceneSizeField = new TextField(
       this.sceneSizeFieldRect(),
@@ -141,7 +145,7 @@ export class SceneTabPanel {
       { numeric: true, placeholder: "10", onCommit: (value) => this.commitSceneSize(value) },
       formatGridSize(state.scene?.grid.width ?? 10)
     );
-    this.root.add(this.sceneSizeField.root);
+    this.footerScroll.content.add(this.sceneSizeField.root);
 
     this.placementCellButton = new Button(this.placementCellButtonRect(), interaction, {
       label: "Cell",
@@ -153,10 +157,10 @@ export class SceneTabPanel {
       fontSize: 11.5,
       onClick: () => this.state.setPlacementResolution("free")
     });
-    this.root.add(this.placementCellButton.root, this.placementFreeButton.root);
+    this.footerScroll.content.add(this.placementCellButton.root, this.placementFreeButton.root);
 
     this.wfcHeader = new SectionHeader(this.wfcHeaderRect());
-    this.root.add(this.wfcHeader.root);
+    this.footerScroll.content.add(this.wfcHeader.root);
     this.wfcRandomSeedCheckbox = new CheckboxControl(this.wfcRandomSeedCheckboxRect(), interaction, "Random seed", (checked) => {
       this.useRandomWfcSeed = checked;
     });
@@ -171,9 +175,11 @@ export class SceneTabPanel {
       fontSize: 11.5,
       onClick: () => this.generateWfcLayout()
     });
-    this.root.add(this.wfcRandomSeedCheckbox.root, this.wfcSeedField.root, this.generateWfcButton.root);
+    this.footerScroll.content.add(this.wfcRandomSeedCheckbox.root, this.wfcSeedField.root, this.generateWfcButton.root);
 
     this.applyStaticHeaders();
+    this.footerScroll.setContentSize(this.footerContentSize());
+    this.footerScroll.applyClipping();
 
     this.cleanups.push(
       state.on("scene", () => this.onSceneChanged()),
@@ -211,12 +217,26 @@ export class SceneTabPanel {
   }
 
   private footerTop(): number {
-    return this.rect.y + this.rect.height - FOOTER_HEIGHT;
+    const list = this.listRect();
+    return list.y + list.height + 12;
   }
 
   private listRect(): Rect {
     const top = this.rect.y + PADDING + HEADER_HEIGHT + HEADER_GAP;
-    return { x: this.rect.x + PADDING, y: top, width: this.rect.width - PADDING * 2, height: Math.max(this.footerTop() - top, 0) };
+    const available = Math.max(this.rect.y + this.rect.height - top, 0);
+    const preferred = available - FOOTER_HEIGHT;
+    const height = Math.min(available, Math.max(Math.min(104, available), preferred));
+    return { x: this.rect.x + PADDING, y: top, width: this.rect.width - PADDING * 2, height };
+  }
+
+  private footerRect(): Rect {
+    const y = this.footerTop();
+    return { x: this.rect.x + PADDING, y, width: this.rect.width - PADDING * 2, height: Math.max(this.rect.y + this.rect.height - y, 0) };
+  }
+
+  private footerContentSize(): number {
+    const button = this.generateWfcButtonRect();
+    return button.y + button.height + PADDING - this.footerTop();
   }
 
   private dividerRect(): Rect {
@@ -335,12 +355,13 @@ export class SceneTabPanel {
     this.renderRowLabel("sceneSizeLabel", "Scene size", this.sceneSizeLabelRect());
     this.renderRowLabel("placementLabel", "Placement", this.placementLabelRect());
     this.refreshPlacementControls();
+    this.footerScroll.applyClipping();
   }
 
   private renderRowLabel(field: "cellSizeLabel" | "sceneSizeLabel" | "placementLabel", text: string, rect: Rect) {
     const existing = this[field];
     if (existing) {
-      this.root.remove(existing);
+      this.footerScroll.content.remove(existing);
       existing.material.dispose();
     }
     const rasterized = rasterizeText(text, { size: 11.5, color: theme.textMutedStrong.css, weight: "600" });
@@ -349,7 +370,7 @@ export class SceneTabPanel {
     mesh.scale.set(rasterized.width, rasterized.height, 1);
     mesh.position.set(rect.x, rect.y + rect.height / 2, hudZ.glyph);
     mesh.position.x += rasterized.width / 2;
-    this.root.add(mesh);
+    this.footerScroll.content.add(mesh);
     this[field] = mesh;
   }
 
@@ -469,6 +490,8 @@ export class SceneTabPanel {
   setRect(rect: Rect) {
     this.rect = rect;
     this.scroll.setRect(this.listRect());
+    this.footerScroll.setRect(this.footerRect());
+    this.footerScroll.setContentSize(this.footerContentSize());
     this.divider.setRect(this.dividerRect());
     this.backgroundEditor.setRects(this.backgroundDropdownRect(), this.backgroundValueRect());
     this.groundEditor.setRects(this.groundDropdownRect(), this.groundValueRect());
@@ -489,6 +512,7 @@ export class SceneTabPanel {
     for (const row of this.rows) row.dispose();
     this.objectsHeader.dispose();
     this.scroll.dispose();
+    this.footerScroll.dispose();
     this.divider.dispose();
     this.backgroundHeader.dispose();
     this.backgroundEditor.dispose();

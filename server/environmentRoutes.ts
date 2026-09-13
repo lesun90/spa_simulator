@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { AssetCatalogEntry } from "../src/editor-core/assets";
-import type { Scene } from "../src/editor-core/scene";
+import { isEnvironmentObject, type Scene } from "../src/editor-core/scene";
 import { compileEnvironmentPackage, type EnvironmentCompileMetrics } from "../src/environment/compiler";
 import { canonicalJson } from "../src/environment/manifestEncoder";
 import { validateEnvironmentPackage } from "../src/environment/packageValidator";
@@ -34,7 +34,9 @@ export function createEnvironmentExportCache() {
       assetRoot: string,
       options: ExportEnvironmentOptions
     ): Promise<ExportEnvironmentResult> {
-      const recipe = buildSceneRecipe(scene, assets);
+      // An attached package was previously a separate base layer. Keep exports scoped to
+      // authored objects so exporting a scene does not recursively embed its own package.
+      const recipe = buildSceneRecipe({ ...scene, objects: scene.objects.filter((object) => !isEnvironmentObject(scene, object)) }, assets);
       const compiled = await compileEnvironmentPackage(recipe, assets, {
         chunkSize: options.chunkSize,
         removeInternalSeamFaces: options.removeSeamFaces,

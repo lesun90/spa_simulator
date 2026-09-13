@@ -1,4 +1,4 @@
-import type { AssetCatalogEntry } from "../editor-core/assets";
+import { environmentAssetForScene, type AssetCatalogEntry } from "../editor-core/assets";
 import {
   addObjectCommand,
   createHistory,
@@ -12,7 +12,7 @@ import {
   type HistoryState
 } from "../editor-core/commands";
 import type { PlacementResolution } from "../editor-core/grid";
-import { createId, objectDisplayNames, type Scene, type SceneObject, type SurfaceAppearanceType, type Vector3Data } from "../editor-core/scene";
+import { createId, environmentAssetId, isEnvironmentObject, objectDisplayNames, type Scene, type SceneObject, type SurfaceAppearanceType, type Vector3Data } from "../editor-core/scene";
 import { validateSceneForSave } from "../editor-core/validation";
 import {
   commitEnvironmentImportRequest,
@@ -26,6 +26,7 @@ import {
   listScenes,
   openSceneRequest,
   renameSceneRequest,
+  removeEnvironmentRequest,
   saveSceneRequest,
   uploadEnvironmentManifestRequest,
   uploadEnvironmentModelRequest,
@@ -90,6 +91,7 @@ export class EditorState {
   private readonly listeners = new Map<EditorTopic, Set<Listener>>();
   /** Session-only, per-scene: objects hidden from the viewport for editing convenience, not persisted. */
   private readonly hiddenObjectIdSet = new Set<string>();
+  private environmentRemoval: Promise<void> | null = null;
 
   on(topic: EditorTopic, listener: Listener): () => void {
     let set = this.listeners.get(topic);
@@ -116,7 +118,12 @@ export class EditorState {
   }
 
   get activeAsset(): AssetCatalogEntry | null {
-    return this.assets.find((asset) => asset.id === this.placementAssetId) ?? null;
+    return this.catalogAssets.find((asset) => asset.id === this.placementAssetId) ?? null;
+  }
+
+  get catalogAssets(): AssetCatalogEntry[] {
+    const imported = environmentAssetForScene(this.scene);
+    return imported ? [...this.assets, imported] : this.assets;
   }
 
   get hiddenObjectIds(): ReadonlySet<string> {
@@ -124,12 +131,12 @@ export class EditorState {
   }
 
   get categories(): string[] {
-    return ["all", ...Array.from(new Set(this.assets.map((asset) => asset.category))).sort()];
+    return ["all", ...Array.from(new Set(this.catalogAssets.map((asset) => asset.category))).sort()];
   }
 
   get filteredAssets(): AssetCatalogEntry[] {
     const query = this.assetSearch.trim().toLowerCase();
-    return this.assets.filter((asset) => {
+    return this.catalogAssets.filter((asset) => {
       const matchesQuery = !query || `${asset.label} ${asset.id} ${asset.tags?.join(" ") ?? ""}`.toLowerCase().includes(query);
       const matchesCategory = this.category === "all" || asset.category === this.category;
       return matchesQuery && matchesCategory;
@@ -167,7 +174,7 @@ export class EditorState {
       this.history = createHistory(defaultScene);
       this.selectedObjectId = null;
       this.scenes = await listScenes();
-      this.emit("scene", "selection", "scenesList");
+      this.emit("scene", "selection", "scenesList", "assets");
       this.setNotice(`Created ${defaultScene.name}`);
       return;
     }
@@ -183,7 +190,7 @@ export class EditorState {
     this.history = createHistory(nextScene);
     this.selectedObjectId = null;
     this.hiddenObjectIdSet.clear();
-    this.emit("scene", "selection");
+    this.emit("scene", "selection", "assets");
     await this.refreshScenes();
     this.setNotice(`Created ${nextScene.name}`);
   }
@@ -193,13 +200,14 @@ export class EditorState {
     this.history = createHistory(nextScene);
     this.selectedObjectId = null;
     this.hiddenObjectIdSet.clear();
-    this.emit("scene", "selection");
+    this.emit("scene", "selection", "assets");
     this.setNotice(`Opened ${nextScene.name}`);
   }
 
   async saveScene() {
+    if (this.environmentRemoval) await this.environmentRemoval;
     if (!this.scene) return;
-    const result = validateSceneForSave(this.scene, this.assets);
+    const result = validateSceneForSave(this.scene, this.catalogAssets);
     if (!result.valid) {
       this.setNotice(result.diagnostics[0]);
       return;
@@ -221,12 +229,13 @@ export class EditorState {
   }
 
   async duplicateScene() {
+    if (this.environmentRemoval) await this.environmentRemoval;
     if (!this.scene) return;
     const copy = await duplicateSceneRequest(this.scene.id);
     this.history = createHistory(copy);
     this.selectedObjectId = null;
     this.hiddenObjectIdSet.clear();
-    this.emit("scene", "selection");
+    this.emit("scene", "selection", "assets");
     await this.refreshScenes();
     this.setNotice(`Duplicated ${copy.name}`);
   }
@@ -238,7 +247,7 @@ export class EditorState {
     this.history = null;
     this.selectedObjectId = null;
     this.hiddenObjectIdSet.clear();
-    this.emit("scene", "selection");
+    this.emit("scene", "selection", "assets");
     await this.refreshScenes();
     this.setNotice("Deleted scene");
   }
@@ -259,6 +268,7 @@ export class EditorState {
   }
 
   async importEnvironment() {
+    if (this.environmentRemoval) await this.environmentRemoval;
     if (!this.history || !this.scene) {
       this.setNotice("Open a scene before importing an environment");
       return;
@@ -274,15 +284,18 @@ export class EditorState {
       const updated = await commitEnvironmentImportRequest(this.scene.id);
       const manifest = JSON.parse(picked.manifestJson) as EnvironmentManifest;
 
+      const existingEnvironmentObjects = this.history.scene.objects.filter((object) => object.assetId === environmentAssetId(this.scene!.id));
+      const importedEnvironmentObjects = updated.objects.filter((object) => object.assetId === environmentAssetId(updated.id));
       this.history = {
         ...this.history,
         scene: {
           ...this.history.scene,
           environment: updated.environment,
+          objects: [...this.history.scene.objects.filter((object) => object.assetId !== environmentAssetId(updated.id)), ...(existingEnvironmentObjects.length ? existingEnvironmentObjects : importedEnvironmentObjects)],
           grid: { cellSize: manifest.grid.cellSize, width: manifest.grid.width * manifest.grid.cellSize, depth: manifest.grid.depth * manifest.grid.cellSize }
         }
       };
-      this.emit("scene", "sceneGrid", "sceneEnvironment");
+      this.emit("scene", "sceneGrid", "sceneEnvironment", "assets", "selection");
       this.setNotice(`Imported environment (${manifest.cells?.length ?? 0} cells)`);
     } catch (error) {
       this.setNotice(error instanceof Error ? error.message : "Environment import failed");
@@ -344,10 +357,7 @@ export class EditorState {
 
   selectObject(objectId: string | null) {
     if (this.activeTool === "erase" && objectId && this.history) {
-      this.history = executeCommand(this.history, deleteObjectCommand(objectId));
-      this.selectedObjectId = null;
-      this.emit("scene", "selection");
-      this.setNotice("Object erased");
+      this.deleteObject(objectId);
       return;
     }
     this.selectedObjectId = objectId;
@@ -382,11 +392,42 @@ export class EditorState {
 
   deleteObject(objectId: string) {
     if (!this.history) return;
+    const scene = this.history.scene;
+    const object = scene.objects.find((item) => item.id === objectId);
+    if (object && isEnvironmentObject(scene, object) && scene.objects.filter((item) => isEnvironmentObject(scene, item)).length === 1) {
+      if (this.environmentRemoval) return;
+      const removal = this.removeImportedEnvironment(scene.id, objectId);
+      this.environmentRemoval = removal;
+      void removal.finally(() => {
+        if (this.environmentRemoval === removal) this.environmentRemoval = null;
+      });
+      return;
+    }
     this.history = executeCommand(this.history, deleteObjectCommand(objectId));
     this.hiddenObjectIdSet.delete(objectId);
     if (this.selectedObjectId === objectId) this.selectedObjectId = null;
-    this.emit("scene", "selection");
+    this.emit("scene", "selection", "assets");
     this.setNotice("Object deleted");
+  }
+
+  private async removeImportedEnvironment(sceneId: string, objectId: string) {
+    this.setNotice("Removing imported environment…");
+    try {
+      await removeEnvironmentRequest(sceneId);
+      if (!this.history || this.scene?.id !== sceneId) return;
+      const scene = this.history.scene;
+      this.history = createHistory({
+        ...scene,
+        environment: null,
+        objects: scene.objects.filter((object) => object.assetId !== environmentAssetId(sceneId))
+      });
+      this.hiddenObjectIdSet.delete(objectId);
+      if (this.selectedObjectId === objectId) this.selectedObjectId = null;
+      this.emit("scene", "selection", "assets");
+      this.setNotice("Imported environment removed");
+    } catch (error) {
+      this.setNotice(error instanceof Error ? error.message : "Could not remove imported environment");
+    }
   }
 
   isObjectHidden(objectId: string): boolean {
@@ -488,7 +529,7 @@ export class EditorState {
   }
 
   choosePlacement(assetId: string) {
-    const asset = this.assets.find((entry) => entry.id === assetId);
+    const asset = this.catalogAssets.find((entry) => entry.id === assetId);
     this.placementAssetId = assetId;
     this.activeTool = "place";
     this.emit("placement", "tool");
@@ -541,13 +582,13 @@ export class EditorState {
   undo() {
     if (!this.history) return;
     this.history = undoHistory(this.history);
-    this.emit("scene");
+    this.emit("scene", "assets");
   }
 
   redo() {
     if (!this.history) return;
     this.history = redoHistory(this.history);
-    this.emit("scene");
+    this.emit("scene", "assets");
   }
 
   canUndo(): boolean {

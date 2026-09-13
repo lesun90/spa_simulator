@@ -106,6 +106,10 @@ export async function commitEnvironmentImportRequest(sceneId: string): Promise<S
   return (await request<{ scene: Scene }>(`/api/scenes/${encodeURIComponent(sceneId)}/environment/import/commit`, { method: "POST" })).scene;
 }
 
+export async function removeEnvironmentRequest(sceneId: string): Promise<Scene> {
+  return (await request<{ scene: Scene }>(`/api/scenes/${encodeURIComponent(sceneId)}/environment`, { method: "DELETE" })).scene;
+}
+
 export async function fetchCommittedEnvironmentManifest(sceneId: string): Promise<EnvironmentManifest | null> {
   return (await request<{ manifest: EnvironmentManifest | null }>(`/api/scenes/${encodeURIComponent(sceneId)}/environment`)).manifest;
 }

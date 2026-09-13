@@ -1,5 +1,5 @@
 import type { Scene, SceneObject } from "./scene";
-import { cloneScene } from "./scene";
+import { cloneScene, isEnvironmentObject } from "./scene";
 
 export interface SceneCommand {
   label: string;
@@ -65,7 +65,10 @@ export function replaceGeneratedLayoutCommand(generatedObjects: readonly SceneOb
       };
     },
     undo(scene) {
-      return { ...cloneScene(scene), objects: (previousObjects ?? scene.objects).map(cloneObject) };
+      const before = previousObjects ?? scene.objects;
+      const priorIds = new Set(before.map((object) => object.id));
+      const laterManualObjects = scene.objects.filter((object) => !priorIds.has(object.id) && !isGenerated(object));
+      return { ...cloneScene(scene), objects: [...before.map(cloneObject), ...laterManualObjects.map(cloneObject)] };
     }
   };
 }
@@ -84,19 +87,23 @@ export function addObjectCommand(object: SceneObject): SceneCommand {
 
 export function deleteObjectCommand(objectId: string): SceneCommand {
   let deleted: SceneObject | undefined;
+  let previousEnvironment: Scene["environment"] = null;
 
   return {
     label: "Delete object",
     execute(scene) {
       deleted = scene.objects.find((object) => object.id === objectId);
-      return { ...cloneScene(scene), objects: scene.objects.filter((object) => object.id !== objectId) };
+      previousEnvironment = scene.environment;
+      const objects = scene.objects.filter((object) => object.id !== objectId);
+      const removedLastEnvironment = deleted && isEnvironmentObject(scene, deleted) && !objects.some((object) => isEnvironmentObject(scene, object));
+      return { ...cloneScene(scene), objects, environment: removedLastEnvironment ? null : scene.environment };
     },
     undo(scene) {
       if (!deleted) {
         return scene;
       }
 
-      return { ...cloneScene(scene), objects: [...scene.objects, cloneObject(deleted)] };
+      return { ...cloneScene(scene), objects: [...scene.objects, cloneObject(deleted)], environment: isEnvironmentObject(scene, deleted) ? previousEnvironment : scene.environment };
     }
   };
 }

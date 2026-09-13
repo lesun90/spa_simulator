@@ -66,7 +66,7 @@ Paths below are the intended locations. Before creating a file, use CodeGraph to
 | `src/scenario-studio/domain/AgentInstance.ts`, `AgentPopulation.ts` | Per-agent state and automatic population lifecycle. |
 | `src/scenario-studio/domain/scene.ts`, `agent.ts`, `scenario.ts` | Focused immutable transport records/value types for the corresponding domain concepts. |
 | `src/scenario-studio/catalog/SceneCatalog.ts`, `AgentCatalog.ts`, `HttpSceneCatalog.ts`, `HttpAgentCatalog.ts` | Catalog boundaries and HTTP implementations. |
-| `src/scenario-studio/ui/ScenarioWorkspace.ts`, `AssetBrowserPanel.ts`, `SceneBrowserTab.ts`, `AgentBrowserTab.ts`, `AgentInspectorPanel.ts`, `PlaybackToolbar.ts` | Scenario-specific composition of existing HUD primitives and user actions. |
+| `src/scenario-studio/ui/ScenarioHudFeature.ts`, `SceneBrowserPanel.ts`, `HudText.ts`, `AgentBrowserTab.ts`, `AgentInspectorPanel.ts`, `PlaybackToolbar.ts` | Scenario-specific composition of existing HUD primitives and user actions. |
 | `src/scenario-studio/ui/ScriptEditorPanel.ts`, `ScenarioScriptPanel.ts`, `PerformancePanel.ts` | Complete script-authoring and performance-inspection features. |
 | `src/scenario-studio/rendering/ScenarioViewport.ts`, `SceneGeometrySource.ts`, `AgentVisuals.ts` | Three.js adaptation, scene extraction, model ownership, interpolation, selection. |
 | `src/scenario-studio/domain/DefaultGround.ts` | Validated built-in green-ground definition, shared by rendering and physics adapters. |

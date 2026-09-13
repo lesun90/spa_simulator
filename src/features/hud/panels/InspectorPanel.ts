@@ -229,7 +229,7 @@ export class InspectorPanel extends BasePanel {
   }
 
   private findAsset(assetId: string): AssetCatalogEntry | null {
-    return this.state.assets.find((asset) => asset.id === assetId) ?? null;
+    return this.state.catalogAssets.find((asset) => asset.id === assetId) ?? null;
   }
 
   private previewRect(): Rect {

@@ -48,6 +48,14 @@ export interface SceneEnvironmentReference {
   manifestVersion: number;
 }
 
+export function environmentAssetId(sceneId: string): string {
+  return `scene-environment:${sceneId}`;
+}
+
+export function isEnvironmentObject(scene: Scene, object: SceneObject): boolean {
+  return object.assetId === environmentAssetId(scene.id);
+}
+
 export interface Scene {
   id: string;
   name: string;
@@ -107,17 +115,22 @@ export function cloneScene(scene: Scene): Scene {
 /** Backfills fields absent from scene files saved before they existed, so old saves keep loading. */
 export function normalizeScene(scene: Scene): Scene {
   const names = objectDisplayNames(scene.objects);
+  const environment = isSceneEnvironmentReference(scene.environment) ? scene.environment : null;
+  const objects = scene.objects.map((object) => ({
+    ...object,
+    name: typeof object.name === "string" && object.name.trim() ? object.name : names.get(object.id) ?? assetSlug(object.assetId),
+    position: normalizeObjectPosition(object.position)
+  }));
+  if (environment && !objects.some((object) => isEnvironmentObject(scene, object))) {
+    objects.push({ id: `environment_${scene.id}`, assetId: environmentAssetId(scene.id), name: "Imported environment", position: { x: 0, y: 0, z: 0 }, rotationY: 0, scale: 1 });
+  }
   return {
     ...scene,
     description: typeof scene.description === "string" ? scene.description : "",
     background: isSurfaceAppearance(scene.background) ? scene.background : defaultSurfaceAppearance(DEFAULT_BACKGROUND_COLOR),
     ground: isSurfaceAppearance(scene.ground) ? scene.ground : defaultSurfaceAppearance(DEFAULT_GROUND_COLOR),
-    environment: isSceneEnvironmentReference(scene.environment) ? scene.environment : null,
-    objects: scene.objects.map((object) => ({
-      ...object,
-      name: typeof object.name === "string" && object.name.trim() ? object.name : names.get(object.id) ?? assetSlug(object.assetId),
-      position: normalizeObjectPosition(object.position)
-    }))
+    environment,
+    objects
   };
 }
 

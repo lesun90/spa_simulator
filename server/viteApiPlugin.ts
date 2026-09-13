@@ -6,8 +6,8 @@ import { discoverAssetCatalog, importSharedAsset, type SharedImportRequest } fro
 import { createEnvironmentExportCache, createEnvironmentImportStaging } from "./environmentRoutes";
 import { createEnvironmentPackageStore } from "./environmentPackageStore";
 import { createSceneStore } from "./sceneStore";
-import type { Scene } from "../src/editor-core/scene";
-import type { AssetCatalogEntry } from "../src/editor-core/assets";
+import { environmentAssetId, type Scene } from "../src/editor-core/scene";
+import { environmentAssetForScene, type AssetCatalogEntry } from "../src/editor-core/assets";
 import { validateSceneForSave, type ValidationResult } from "../src/editor-core/validation";
 
 export function steerlabApiPlugin(): Plugin {
@@ -65,7 +65,9 @@ export function steerlabApiPlugin(): Plugin {
               const catalog = await discoverAssetCatalog(assetRoot);
               const result = validateSceneSaveRequest(id, body.scene, catalog);
               if (!result.valid) return sendJson(response, { error: result.diagnostics.join(" ") }, 400);
-              return sendJson(response, { scene: await store.save(body.scene) });
+              const saved = await store.save(body.scene);
+              if (!saved.environment) await environmentStore.remove(id);
+              return sendJson(response, { scene: saved });
             }
             if (method === "PATCH") return sendJson(response, { scene: await store.rename(id, (await readJson<{ name: string }>(request)).name) });
             if (method === "DELETE") {
@@ -138,6 +140,17 @@ export function steerlabApiPlugin(): Plugin {
           }
 
           const committedManifestMatch = url.pathname.match(/^\/api\/scenes\/([^/]+)\/environment$/);
+          if (committedManifestMatch && method === "DELETE") {
+            const id = decodeURIComponent(committedManifestMatch[1]);
+            const scene = await store.open(id);
+            const updated = await store.save({
+              ...scene,
+              environment: null,
+              objects: scene.objects.filter((object) => object.assetId !== environmentAssetId(id))
+            });
+            await environmentStore.remove(id);
+            return sendJson(response, { scene: updated });
+          }
           if (committedManifestMatch && method === "GET") {
             const committed = await environmentStore.read(decodeURIComponent(committedManifestMatch[1]));
             return sendJson(response, { manifest: committed ? JSON.parse(committed.manifest) : null });
@@ -165,7 +178,8 @@ export function validateSceneSaveRequest(routeId: string, scene: Scene, catalog:
     diagnostics.push("Route scene ID does not match the scene body ID.");
   }
 
-  diagnostics.push(...validateSceneForSave(scene, catalog).diagnostics);
+  const environmentAsset = environmentAssetForScene(scene);
+  diagnostics.push(...validateSceneForSave(scene, environmentAsset ? [...catalog, environmentAsset] : catalog).diagnostics);
   return { valid: diagnostics.length === 0, diagnostics };
 }
 

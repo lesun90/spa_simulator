@@ -26,6 +26,11 @@ export class CameraRig {
     this.controls.update();
   }
 
+  saveViewAsHome() {
+    this.initialPosition.copy(this.camera.position);
+    this.initialTarget.copy(this.controls.target);
+  }
+
   setMaxZoomDistance(distance: number) {
     this.maxZoomDistance = Math.max(140, distance);
   }
