@@ -68,13 +68,13 @@ export class SceneBrowserPanel extends BasePanel {
     const grid = this.chrome.gridRect();
     const tileSize = this.rect.width < shellLayout.narrowBreakpoint ? narrowAssetTileSize : assetTileSize;
     const query = this.query.trim().toLowerCase();
-    const visible = this.choices.filter((choice) => `${choice.label} ${choice.reference.key}`.toLowerCase().includes(query));
+    const visible = this.choices.filter((choice) => `${choice.label} ${choice.description ?? ""} ${choice.reference.key}`.toLowerCase().includes(query));
     this.chrome.setEmpty(!this.choices.length ? "No published scenes found in assets/scenes." : !visible.length ? "No matching scenes. Change or clear your search." : "");
     const layout = layoutAssetTiles({ assetCount: visible.length, grid, tile: tileSize });
     visible.forEach((choice, index) => {
       const tile = new Tile(layout.tiles[index], this.interaction, {
         label: choice.label,
-        tag: choice.available ? choice.reference.key === "." ? "published" : choice.reference.key : "unavailable",
+        tag: choice.available ? sceneMetadataSummary(choice) || (choice.reference.key === "." ? "published" : choice.reference.key) : "unavailable",
         onClick: () => this.onSelect(choice),
         onHover: () => this.startHover(choice),
         onLeave: () => this.endHover(choice)
@@ -150,4 +150,12 @@ export class SceneBrowserPanel extends BasePanel {
     this.chrome.dispose();
     super.dispose();
   }
+}
+
+function sceneMetadataSummary(choice: SceneChoice): string {
+  const details: string[] = [];
+  if (choice.sceneSize !== undefined) details.push(`${choice.sceneSize}m`);
+  if (choice.cellSize !== undefined) details.push(`cell ${choice.cellSize}m`);
+  if (choice.seed !== undefined) details.push(`seed ${choice.seed}`);
+  return details.join(" · ");
 }

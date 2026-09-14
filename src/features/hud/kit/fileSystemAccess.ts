@@ -1,33 +1,26 @@
-interface WritableFileStream {
-  write(data: BlobPart): Promise<void>;
-  close(): Promise<void>;
-}
+import { strToU8, zip } from "fflate";
+
 interface FileSystemFileHandleLike {
-  createWritable(): Promise<WritableFileStream>;
   getFile(): Promise<File>;
 }
-interface FileSystemDirectoryHandleLike {
-  getFileHandle(name: string, options?: { create?: boolean }): Promise<FileSystemFileHandleLike>;
+
+/** Compresses the fixed package files and downloads one archive named after the scene. */
+export async function saveEnvironmentPackage(sceneName: string, manifestJson: string, glb: Uint8Array): Promise<void> {
+  const archive = await createEnvironmentArchive(manifestJson, glb);
+  downloadFile(`${safeArchiveName(sceneName)}.zip`, new Blob([archive], { type: "application/zip" }));
 }
 
-/** Writes both fixed-name package files into a user-picked directory, or triggers two plain downloads when the File System Access API isn't available. */
-export async function saveEnvironmentPackage(manifestJson: string, glb: Uint8Array): Promise<void> {
-  const picker = (window as { showDirectoryPicker?: () => Promise<FileSystemDirectoryHandleLike> }).showDirectoryPicker;
-  if (picker) {
-    const directory = await picker();
-    await writeFileInDirectory(directory, "environment.json", manifestJson);
-    await writeFileInDirectory(directory, "environment.glb", glb as BlobPart);
-    return;
-  }
-  downloadFile("environment.json", new Blob([manifestJson], { type: "application/json" }));
-  downloadFile("environment.glb", new Blob([glb as BlobPart], { type: "model/gltf-binary" }));
+function createEnvironmentArchive(manifestJson: string, glb: Uint8Array): Promise<Uint8Array> {
+  return new Promise((resolve, reject) => {
+    zip({ "environment.json": strToU8(manifestJson), "environment.glb": glb }, (error, archive) => {
+      if (error) reject(error);
+      else resolve(archive);
+    });
+  });
 }
 
-async function writeFileInDirectory(directory: FileSystemDirectoryHandleLike, name: string, data: BlobPart): Promise<void> {
-  const handle = await directory.getFileHandle(name, { create: true });
-  const writable = await handle.createWritable();
-  await writable.write(data);
-  await writable.close();
+function safeArchiveName(sceneName: string): string {
+  return sceneName.trim().replace(/[\\/:*?"<>|\u0000-\u001f]+/g, " ").replace(/\s+/g, " ").replace(/[. ]+$/g, "") || "environment";
 }
 
 function downloadFile(name: string, blob: Blob): void {

@@ -471,7 +471,7 @@
   ],
   "build": {
     "chunkSize": 10,
-    "removeInternalSeamFaces": false
+    "removeInternalSeamFaces": true
   },
   "cells": [
     {
@@ -54872,10 +54872,16 @@
       "textureUrl": null
     }
   },
+  "metadata": {
+    "cellSize": 1,
+    "name": "Downtown",
+    "sceneSize": 40,
+    "seed": 40
+  },
   "model": {
     "file": "environment.glb",
     "rootNode": "SteerlabEnvironment",
-    "sha256": "2aac7a3ec78afa10699acf8ed9bb352502fa3ba5c8bd62998ed0fe3745a51938",
+    "sha256": "9b586918406adf6b26164c6ee1cc62174737a797dfc2e5e28323ee36ca3410c6",
     "unitsPerMeter": 1,
     "upAxis": "Y"
   },

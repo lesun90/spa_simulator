@@ -16,7 +16,7 @@ describe("EditorState.exportEnvironment", () => {
 
     await state.exportEnvironment({ chunkSize: 10, removeSeamFaces: false });
 
-    expect(save).toHaveBeenCalledWith(expect.stringContaining("cells"), new Uint8Array([1]));
+    expect(save).toHaveBeenCalledWith("Test", expect.stringContaining("cells"), new Uint8Array([1]));
     expect(state.notice).toContain("Exported environment");
   });
 
@@ -28,6 +28,26 @@ describe("EditorState.exportEnvironment", () => {
     await state.exportEnvironment({ chunkSize: 10, removeSeamFaces: false });
 
     expect(state.notice).toBe("compile failed");
+  });
+
+  test("finishes exporting the original scene when the active scene changes mid-export", async () => {
+    const state = new EditorState();
+    const original = createScene("Original");
+    const replacement = createScene("Replacement");
+    state["history"] = createHistory(original);
+    let finishCompile!: (value: { exportId: string; manifest: never; manifestJson: string; metrics: never }) => void;
+    vi.spyOn(client, "exportEnvironmentRequest").mockImplementation(() => new Promise((resolve) => { finishCompile = resolve; }));
+    const fetchModel = vi.spyOn(client, "fetchExportedEnvironmentModel").mockResolvedValue(new Uint8Array([1]));
+    const save = vi.spyOn(fileSystemAccess, "saveEnvironmentPackage").mockResolvedValue();
+
+    const exporting = state.exportEnvironment({ chunkSize: 10, removeSeamFaces: false });
+    await vi.waitFor(() => expect(finishCompile).toBeTypeOf("function"));
+    state["history"] = createHistory(replacement);
+    finishCompile({ exportId: "export-1", manifest: { cells: [] } as never, manifestJson: "{}", metrics: {} as never });
+    await exporting;
+
+    expect(fetchModel).toHaveBeenCalledWith(original.id, "export-1");
+    expect(save).toHaveBeenCalledWith("Original", "{}", new Uint8Array([1]));
   });
 
   test("falls back to 0 cells in the success notice when the manifest has no cells array", async () => {

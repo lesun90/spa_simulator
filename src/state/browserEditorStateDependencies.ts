@@ -14,7 +14,7 @@ export function createBrowserEditorStateDependencies(): EditorStateDependencies 
     async importSharedAsset(input) { return (await import("../api/client")).importSharedAssetRequest(input); },
     async exportEnvironment(scene, options) { return (await import("../api/client")).exportEnvironmentRequest(scene, options); },
     async fetchEnvironmentModel(sceneId, exportId) { return (await import("../api/client")).fetchExportedEnvironmentModel(sceneId, exportId); },
-    async saveEnvironmentPackage(manifestJson, glb) { await (await import("../features/hud/kit/fileSystemAccess")).saveEnvironmentPackage(manifestJson, glb); },
+    async saveEnvironmentPackage(sceneName, manifestJson, glb) { await (await import("../features/hud/kit/fileSystemAccess")).saveEnvironmentPackage(sceneName, manifestJson, glb); },
     async pickEnvironmentPackage() { return (await import("../features/hud/kit/fileSystemAccess")).pickEnvironmentPackageFiles(); },
     async uploadEnvironmentManifest(sceneId, manifestJson) { await (await import("../api/client")).uploadEnvironmentManifestRequest(sceneId, manifestJson); },
     async uploadEnvironmentModel(sceneId, glb) { await (await import("../api/client")).uploadEnvironmentModelRequest(sceneId, glb); },

@@ -86,6 +86,14 @@ export interface EnvironmentManifestBuild {
   removeInternalSeamFaces: boolean;
 }
 
+export interface EnvironmentManifestMetadata {
+  name: string;
+  description?: string;
+  sceneSize?: number;
+  cellSize?: number;
+  seed?: number;
+}
+
 export interface EnvironmentManifestChunk {
   id: string;
   bounds: WorldBounds;
@@ -152,6 +160,7 @@ export interface EnvironmentManifestNavigationEdge {
 export interface EnvironmentManifest {
   format: "steerlab-environment";
   formatVersion: 1;
+  metadata?: EnvironmentManifestMetadata;
   model: EnvironmentManifestModel;
   grid: EnvironmentManifestGrid;
   provenance: EnvironmentManifestProvenance;

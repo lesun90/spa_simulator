@@ -39,6 +39,7 @@ export class PublishedScenes {
         catch { diagnostics.push("environment.json contains malformed package data."); }
       }
       const candidate = manifest as Partial<EnvironmentManifest> | null;
+      const metadata = metadataFrom(candidate?.metadata, diagnostics);
       if (candidate?.model && (!Number.isFinite(candidate.model.unitsPerMeter) || candidate.model.unitsPerMeter <= 0)) {
         diagnostics.push("Manifest unitsPerMeter must be finite and positive.");
       }
@@ -51,7 +52,8 @@ export class PublishedScenes {
       const thumbnail = join(folder, "thumbnail.png");
       const hasThumbnail = await this.file(thumbnail).then((path) => stat(path)).then((info) => info.isFile(), () => false);
       return {
-        label: key === "." ? "Published environment" : basename(folder).replace(/[-_]/g, " "),
+        label: metadata.name ?? (key === "." ? "Published environment" : basename(folder).replace(/[-_]/g, " ")),
+        ...metadata.optional,
         reference,
         thumbnailUrl: hasThumbnail ? `/scenario-assets/scenes/${key === "." ? "" : `${key}/`}thumbnail.png` : null,
         available: diagnostics.length === 0,
@@ -97,4 +99,57 @@ export class PublishedScenes {
     if (target !== root && !target.startsWith(`${root}${sep}`)) throw new Error("Asset path is outside the published directory.");
     return target;
   }
+}
+
+function metadataFrom(value: unknown, diagnostics: string[]): {
+  name?: string;
+  optional: { description?: string; sceneSize?: number; cellSize?: number; seed?: number };
+} {
+  if (value === undefined) return { optional: {} };
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    diagnostics.push("Manifest metadata must be an object.");
+    return { optional: {} };
+  }
+  const record = value as Record<string, unknown>;
+  const name = nonEmptyString(record.name, "name", diagnostics);
+  const description = optionalString(record.description, "description", diagnostics);
+  const sceneSize = optionalPositiveNumber(record.sceneSize, "sceneSize", diagnostics);
+  const cellSize = optionalPositiveNumber(record.cellSize, "cellSize", diagnostics);
+  const seed = optionalSeed(record.seed, diagnostics);
+  return {
+    ...(name ? { name } : {}),
+    optional: {
+      ...(description ? { description } : {}),
+      ...(sceneSize !== undefined ? { sceneSize } : {}),
+      ...(cellSize !== undefined ? { cellSize } : {}),
+      ...(seed !== undefined ? { seed } : {})
+    }
+  };
+}
+
+function nonEmptyString(value: unknown, name: string, diagnostics: string[]): string | undefined {
+  if (typeof value === "string" && value.trim()) return value.trim();
+  diagnostics.push(`Manifest metadata.${name} must be a non-empty string.`);
+  return undefined;
+}
+
+function optionalString(value: unknown, name: string, diagnostics: string[]): string | undefined {
+  if (value === undefined) return undefined;
+  if (typeof value === "string") return value.trim() || undefined;
+  diagnostics.push(`Manifest metadata.${name} must be a string when present.`);
+  return undefined;
+}
+
+function optionalPositiveNumber(value: unknown, name: string, diagnostics: string[]): number | undefined {
+  if (value === undefined) return undefined;
+  if (typeof value === "number" && Number.isFinite(value) && value > 0) return value;
+  diagnostics.push(`Manifest metadata.${name} must be a positive finite number when present.`);
+  return undefined;
+}
+
+function optionalSeed(value: unknown, diagnostics: string[]): number | undefined {
+  if (value === undefined) return undefined;
+  if (typeof value === "number" && Number.isInteger(value) && value >= 0 && value <= 0xffffffff) return value;
+  diagnostics.push("Manifest metadata.seed must be an unsigned 32-bit integer when present.");
+  return undefined;
 }

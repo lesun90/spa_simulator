@@ -9,6 +9,10 @@ export interface SceneReference {
 
 export interface SceneChoice {
   readonly label: string;
+  readonly description?: string;
+  readonly sceneSize?: number;
+  readonly cellSize?: number;
+  readonly seed?: number;
   readonly reference: SceneReference;
   readonly thumbnailUrl: string | null;
   readonly available: boolean;

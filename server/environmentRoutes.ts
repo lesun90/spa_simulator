@@ -52,7 +52,18 @@ export function createEnvironmentExportCache() {
       glbByExportId.set(exportId, compiled.glb);
       exportIdBySceneId.set(scene.id, exportId);
 
-      return { status: "ok", exportId, manifest: compiled.manifest, manifestJson: canonicalJson(compiled.manifest), metrics: compiled.metrics };
+      const generationRuns = compiled.manifest.provenance.generationRuns;
+      const manifest: EnvironmentManifest = {
+        ...compiled.manifest,
+        metadata: {
+          name: scene.name,
+          ...(scene.description ? { description: scene.description } : {}),
+          ...(scene.grid.width === scene.grid.depth ? { sceneSize: scene.grid.width } : {}),
+          ...(Number.isFinite(scene.grid.cellSize) ? { cellSize: scene.grid.cellSize } : {}),
+          ...(generationRuns.length === 1 ? { seed: generationRuns[0].seed } : {})
+        }
+      };
+      return { status: "ok", exportId, manifest, manifestJson: canonicalJson(manifest), metrics: compiled.metrics };
     },
 
     model(exportId: string): Uint8Array | undefined {

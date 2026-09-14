@@ -17,7 +17,7 @@ export interface EditorStateDependencies {
   importSharedAsset(input: { id: string; label: string; category: string; folderName: string; overwrite?: boolean; files: Array<{ name: string; contentBase64: string }> }): Promise<AssetCatalogEntry>;
   exportEnvironment(scene: Scene, options: { chunkSize: number; removeSeamFaces: boolean }): Promise<{ exportId: string; manifest: EnvironmentManifest; manifestJson: string }>;
   fetchEnvironmentModel(sceneId: string, exportId: string): Promise<Uint8Array>;
-  saveEnvironmentPackage(manifestJson: string, glb: Uint8Array): Promise<void>;
+  saveEnvironmentPackage(sceneName: string, manifestJson: string, glb: Uint8Array): Promise<void>;
   pickEnvironmentPackage(): Promise<{ manifestJson: string; glb: Uint8Array } | null>;
   uploadEnvironmentManifest(sceneId: string, manifestJson: string): Promise<void>;
   uploadEnvironmentModel(sceneId: string, glb: Uint8Array): Promise<void>;

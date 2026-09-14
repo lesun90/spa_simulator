@@ -245,7 +245,7 @@ export class ScenarioHudFeature {
   private select(choice: SceneChoice): void {
     if (this.busy || this.pending) return;
     this.candidate = choice;
-    this.labels.status.setText(choice.available ? "Ready to load selected scene." : choice.diagnostics.join(" "));
+    this.labels.status.setText(choice.available ? choice.description || "Ready to load selected scene." : choice.diagnostics.join(" "));
     this.update();
   }
 

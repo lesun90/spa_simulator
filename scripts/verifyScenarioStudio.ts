@@ -36,7 +36,7 @@ try {
   await writeFile(join(malformedAgent, "vehicle.json"), "{");
   await writeFile(join(malformedAgent, "malformed.glb"), "not a glb");
   const template = JSON.parse(await readFile(join(scenes, "sample", "environment.json"), "utf8"));
-  const fixture = async (name: string, empty = false) => {
+  const fixture = async (name: string, empty = false, metadata?: { name: string; description?: string; sceneSize?: number; cellSize?: number; seed?: number }) => {
     const root = new THREE.Group();
     root.name = "SteerlabEnvironment";
     if (!empty) {
@@ -46,7 +46,7 @@ try {
     }
     const glb = await exportGlb(root);
     disposeObject(root);
-    const manifest = { ...template, model: { ...template.model, sha256: createHash("sha256").update(glb).digest("hex") }, chunks: [], assets: [], cells: [], objects: [], navigation: { nodes: [], edges: [] } };
+    const manifest = { ...template, ...(metadata ? { metadata } : {}), model: { ...template.model, sha256: createHash("sha256").update(glb).digest("hex") }, chunks: [], assets: [], cells: [], objects: [], navigation: { nodes: [], edges: [] } };
     const folder = join(scenes, name);
     await mkdir(folder, { recursive: true });
     await writeFile(join(folder, "environment.json"), JSON.stringify(manifest));
@@ -54,6 +54,7 @@ try {
   };
   await fixture("review-groundless"); // Deliberately retains manifest.ground; GLB has only a raised box.
   await fixture("review-empty", true);
+  await fixture("review-metadata", false, { name: "Harbor Loop", description: "Compact harbor circuit.", sceneSize: 24, cellSize: 2, seed: 91 });
   {
     const root = new THREE.Group();
     root.name = "SteerlabEnvironment";
@@ -169,6 +170,14 @@ try {
   assert(choices.some((item) => item.reference.key === "." && item.available));
   assert(choices.some((item) => item.reference.key === "sample" && item.available));
   assert(choices.some((item) => item.reference.key === "scene2" && item.available));
+  const metadataChoice = choices.find((item) => item.reference.key === "review-metadata");
+  assert.deepEqual(metadataChoice && {
+    label: metadataChoice.label,
+    description: metadataChoice.description,
+    sceneSize: metadataChoice.sceneSize,
+    cellSize: metadataChoice.cellSize,
+    seed: metadataChoice.seed
+  }, { label: "Harbor Loop", description: "Compact harbor circuit.", sceneSize: 24, cellSize: 2, seed: 91 });
   const waterChoice = choices.find((item) => item.reference.key === "review-water");
   assert(waterChoice?.available, JSON.stringify(waterChoice));
   assert(choices.some((item) => item.reference.key === "review-steep" && item.available));
@@ -396,6 +405,9 @@ try {
     await page.setViewportSize({ width: 1366, height: 900 });
   }
   await page.waitForTimeout(600);
+  await search("Compact harbor circuit.");
+  await saw("Harbor Loop");
+  await saw("24m · cell 2m · seed 91");
   assert.deepEqual(errors, [], "Browser errors");
   observations.result = "PASS";
   observations.checks = ["default ground", "agent-only catalog with duplicate/malformed diagnostics", "two agent types at asset scale", "agent drag ghost and placement", "bridge placement above water", "overlap, water, and steep-surface rejection", "instance selection, transform, duplicate and delete", "scene warning count and successful population cleanup", "case-insensitive search and no matches", "selection preserved through filtering/refresh", "named confirmation, cancel/Escape/backdrop", "unchanged reference no-op", "sample and scene2 loading", "stale content rejected without replacement", "invalid package disabled", "empty geometry preserves previous scene", "groundless geometry without fallback", "orbit/zoom/reset and narrow layout", "root package and source routes", "catalog additions/removals", "rapid hover/refresh/resize"];

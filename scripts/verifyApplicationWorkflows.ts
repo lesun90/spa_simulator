@@ -18,6 +18,7 @@ declare global {
     } };
     verificationViewer: { camera: THREE.PerspectiveCamera; grid: THREE.GridHelper };
     verificationFiles: Record<string, Blob>;
+    verificationDownload: { name: string; blob: Blob } | null;
   }
 }
 
@@ -27,7 +28,7 @@ const outputDirectory = process.env.WORKFLOW_ARTIFACT_DIR ?? "/tmp/lean-modular-
 await mkdir(outputDirectory, { recursive: true });
 const previousSceneDirectory = process.env.STEERLAB_USER_DATA_DIR;
 process.env.STEERLAB_USER_DATA_DIR = sceneDirectory;
-const server = await createServer({ server: { host: "127.0.0.1", port: 5198, strictPort: true, hmr: false, watch: null } });
+const server = await createServer({ cacheDir: join(sceneDirectory, ".vite-cache"), server: { host: "127.0.0.1", port: 5198, strictPort: true, hmr: false, watch: null } });
 let browser;
 const observations: Record<string, unknown> = {};
 try {
@@ -100,24 +101,48 @@ try {
   // Native picker decisions are supplied by automation; real file-adapter reads/writes and HTTP/GLB operations run.
   observations.environment = await page.evaluate(async () => {
     window.verificationFiles = {};
-    Object.defineProperty(window, "showDirectoryPicker", { configurable: true, value: async () => ({
-      getFileHandle: async (name: string) => ({ createWritable: async () => ({
-        write: async (data: BlobPart) => { window.verificationFiles[name] = new Blob([data]); }, close: async () => {}
-      }) })
-    }) });
-    Object.defineProperty(window, "showOpenFilePicker", { configurable: true, value: async () => Object.entries(window.verificationFiles).map(([name, blob]) => ({ getFile: async () => new File([blob], name) })) });
+    window.verificationDownload = null;
+    let pendingDownload: Blob | null = null;
+    const nativeCreateObjectURL = URL.createObjectURL.bind(URL);
+    Object.defineProperty(URL, "createObjectURL", { configurable: true, value: (blob: Blob) => {
+      if (blob.type === "application/zip") pendingDownload = blob;
+      return nativeCreateObjectURL(blob);
+    } });
+    HTMLAnchorElement.prototype.click = function () {
+      if (pendingDownload) window.verificationDownload = { name: this.download, blob: pendingDownload };
+    };
+    const nativeFetch = window.fetch.bind(window);
+    window.fetch = async (...args) => {
+      const response = await nativeFetch(...args);
+      const url = typeof args[0] === "string" ? args[0] : args[0] instanceof Request ? args[0].url : String(args[0]);
+      if (/\/environment\/export$/.test(url)) {
+        const payload = await response.clone().json() as { manifestJson: string };
+        window.verificationFiles["environment.json"] = new Blob([payload.manifestJson], { type: "application/json" });
+      } else if (/\/environment\/export\/[^/]+\/model$/.test(url)) {
+        window.verificationFiles["environment.glb"] = await response.clone().blob();
+      }
+      return response;
+    };
     const state = window.verificationApp.state;
+    state.setSceneDescription("Workflow export scene");
     await state.exportEnvironment({ chunkSize: 16, removeSeamFaces: false });
     if (!state.notice.startsWith("Exported environment")) throw new Error(state.notice);
+    if (window.verificationDownload?.name !== `${state.scene!.name}.zip` || window.verificationDownload.blob.type !== "application/zip") throw new Error("Environment export did not download one scene-named ZIP");
     const glbBytes = window.verificationFiles["environment.glb"]?.size;
     if (!glbBytes) throw new Error("No exported GLB");
+    const exportedManifest = JSON.parse(await window.verificationFiles["environment.json"].text());
+    const metadata = exportedManifest.metadata;
+    if (metadata?.name !== state.scene!.name || metadata.description !== "Workflow export scene" || metadata.sceneSize !== state.scene!.grid.width || metadata.cellSize !== state.scene!.grid.cellSize || metadata.seed !== 13) {
+      throw new Error(`Environment metadata mismatch: ${JSON.stringify(metadata)}`);
+    }
+    Object.defineProperty(window, "showOpenFilePicker", { configurable: true, value: async () => Object.entries(window.verificationFiles).map(([name, blob]) => ({ getFile: async () => new File([blob], name) })) });
     await state.importEnvironment();
     if (!state.notice.startsWith("Imported environment") || !state.scene?.environment) throw new Error(state.notice);
     await state.saveScene();
     const hash = state.scene.environment.sha256;
     await state.openScene(state.scene.id);
     if (state.scene!.environment?.sha256 !== hash) throw new Error("Imported environment reference lost on reload");
-    return { glbBytes, sha256: hash, notice: state.notice };
+    return { archiveBytes: window.verificationDownload.blob.size, glbBytes, sha256: hash, notice: state.notice };
   });
   // Historical refactor baselines are optional external artifacts, not repository fixtures.
   if (process.env.WORKFLOW_BASELINE) {

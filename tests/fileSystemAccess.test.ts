@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, test, vi } from "vitest";
+import { strFromU8, unzipSync } from "fflate";
 import { pickEnvironmentPackageFiles, saveEnvironmentPackage } from "../src/features/hud/kit/fileSystemAccess";
 
 // This project's jsdom test environment implements Blob only partially (no
@@ -35,39 +36,32 @@ if (typeof URL.revokeObjectURL !== "function") {
 
 describe("saveEnvironmentPackage", () => {
   afterEach(() => {
-    delete (window as { showDirectoryPicker?: unknown }).showDirectoryPicker;
+    vi.restoreAllMocks();
   });
 
-  test("writes both fixed filenames through a picked directory handle when the API is available", async () => {
-    const writeCalls: Array<{ name: string; data: unknown }> = [];
-    const fakeDirectory = {
-      getFileHandle: vi.fn(async (name: string) => ({
-        createWritable: async () => ({
-          write: async (data: unknown) => writeCalls.push({ name, data }),
-          close: async () => {}
-        })
-      }))
-    };
-    (window as { showDirectoryPicker?: unknown }).showDirectoryPicker = vi.fn(async () => fakeDirectory);
-
-    await saveEnvironmentPackage('{"format":"steerlab-environment"}', new Uint8Array([1, 2, 3]));
-
-    expect(writeCalls.map((call) => call.name).sort()).toEqual(["environment.glb", "environment.json"]);
-  });
-
-  test("falls back to triggering two downloads when the API is unavailable", async () => {
-    const clicked: string[] = [];
+  test("downloads one scene-named ZIP containing both environment files", async () => {
+    let downloadedName = "";
+    let downloadedBlob: Blob | undefined;
+    vi.spyOn(URL, "createObjectURL").mockImplementation((blob) => {
+      downloadedBlob = blob as Blob;
+      return "blob:environment-package";
+    });
     const originalCreateElement = document.createElement.bind(document);
     vi.spyOn(document, "createElement").mockImplementation((tag: string) => {
       const element = originalCreateElement(tag as "a");
-      if (tag === "a") element.click = () => clicked.push((element as HTMLAnchorElement).download);
+      if (tag === "a") element.click = () => { downloadedName = (element as HTMLAnchorElement).download; };
       return element;
     });
 
-    await saveEnvironmentPackage('{"format":"steerlab-environment"}', new Uint8Array([1, 2, 3]));
+    const saving = saveEnvironmentPackage("Downtown/West", '{"format":"steerlab-environment"}', new Uint8Array([1, 2, 3]));
 
-    expect(clicked.sort()).toEqual(["environment.glb", "environment.json"]);
-    vi.restoreAllMocks();
+    expect(downloadedName).toBe("");
+    await saving;
+    expect(downloadedName).toBe("Downtown West.zip");
+    const archive = unzipSync(new Uint8Array(await downloadedBlob!.arrayBuffer()));
+    expect(Object.keys(archive).sort()).toEqual(["environment.glb", "environment.json"]);
+    expect(strFromU8(archive["environment.json"])).toBe('{"format":"steerlab-environment"}');
+    expect(archive["environment.glb"]).toEqual(new Uint8Array([1, 2, 3]));
   });
 });
 

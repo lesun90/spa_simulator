@@ -5,6 +5,7 @@ import type { InteractionSystem } from "../../engine/InteractionSystem";
 import { BasePanel } from "../../features/hud/kit/BasePanel";
 import type { Rect } from "../../features/hud/kit/layout";
 import { Tile } from "../../features/hud/kit/Tile";
+import { configureHudCanvasTexture } from "../../features/hud/kit/textures";
 import { layoutAssetTiles } from "../../features/hud/panels/assetBrowserLayout";
 import type { AgentChoice } from "../domain/agent";
 import { CatalogBrowserChrome } from "./CatalogBrowserChrome";
@@ -96,7 +97,7 @@ export class AgentBrowserTab extends BasePanel {
   private texture(url: string): Promise<THREE.Texture> {
     let pending = this.textures.get(url);
     if (!pending) {
-      pending = this.loader.loadAsync(url).then((texture) => { texture.colorSpace = THREE.SRGBColorSpace; return texture; });
+      pending = this.loader.loadAsync(url).then(configureHudCanvasTexture);
       this.textures.set(url, pending);
     }
     return pending;

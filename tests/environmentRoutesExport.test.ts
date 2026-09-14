@@ -17,7 +17,11 @@ describe("createEnvironmentExportCache", () => {
   test("compiles the given scene and caches the GLB under a fresh export ID", async () => {
     assetRoot = await mkdtemp(join(tmpdir(), "steerlab-export-assets-"));
     const assets: AssetCatalogEntry[] = [];
-    const scene = createScene("Export test");
+    const scene = {
+      ...createScene("Export test"),
+      description: "A compact validation scene",
+      grid: { width: 24, depth: 24, cellSize: 2 }
+    };
     const cache = createEnvironmentExportCache();
 
     const result = await cache.compile(scene, assets, assetRoot, { chunkSize: 10, removeSeamFaces: false });
@@ -25,6 +29,14 @@ describe("createEnvironmentExportCache", () => {
     expect(result.status).toBe("ok");
     if (result.status !== "ok") throw new Error("expected ok");
     expect(result.manifest.format).toBe("steerlab-environment");
+    expect(result.manifest).toMatchObject({
+      metadata: {
+        name: "Export test",
+        description: "A compact validation scene",
+        sceneSize: 24,
+        cellSize: 2
+      }
+    });
     expect(cache.model(result.exportId)).toBeInstanceOf(Uint8Array);
     expect(result.manifestJson).toBe(canonicalJson(result.manifest));
   });

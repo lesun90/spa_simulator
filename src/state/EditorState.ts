@@ -238,14 +238,15 @@ export class EditorState {
   }
 
   async exportEnvironment(options: { chunkSize: number; removeSeamFaces: boolean }) {
-    if (!this.scene) {
+    const scene = this.scene;
+    if (!scene) {
       this.setNotice("Open a scene before exporting an environment");
       return;
     }
     try {
-      const { exportId, manifest, manifestJson } = await this.dependencies.exportEnvironment(this.scene, options);
-      const glb = await this.dependencies.fetchEnvironmentModel(this.scene.id, exportId);
-      await this.dependencies.saveEnvironmentPackage(manifestJson, glb);
+      const { exportId, manifest, manifestJson } = await this.dependencies.exportEnvironment(scene, options);
+      const glb = await this.dependencies.fetchEnvironmentModel(scene.id, exportId);
+      await this.dependencies.saveEnvironmentPackage(scene.name, manifestJson, glb);
       this.setNotice(`Exported environment (${manifest.cells?.length ?? 0} cells)`);
     } catch (error) {
       this.setNotice(error instanceof Error ? error.message : "Environment export failed");
