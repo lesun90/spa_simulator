@@ -2,23 +2,17 @@ import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { CameraRig } from "../../engine/CameraRig";
 import type { ViewportSize } from "../../engine/Viewport";
-import { disposeObject } from "../../features/world/disposeObject";
+import { disposeObject } from "../../engine/disposeObject";
 import { DefaultGround } from "../domain/DefaultGround";
 import type { ScenePackageData } from "../domain/scene";
+import type { ScenePresentation, ScenePresenter } from "../domain/ScenePresentation";
 
-export interface ScenePresentation {
+interface RenderedScenePresentation extends ScenePresentation {
   readonly object: THREE.Object3D;
   readonly bounds: THREE.Box3;
-  dispose(): void;
 }
 
-export interface ScenePresenter {
-  createDefault(): ScenePresentation;
-  prepare(data: ScenePackageData): Promise<ScenePresentation>;
-  show(presentation: ScenePresentation): void;
-}
-
-class OwnedPresentation implements ScenePresentation {
+class OwnedPresentation implements RenderedScenePresentation {
   private disposed = false;
   constructor(readonly object: THREE.Object3D, readonly bounds: THREE.Box3) {}
   dispose(): void {
@@ -95,9 +89,10 @@ export class ScenarioViewport implements ScenePresenter {
 
   show(presentation: ScenePresentation): void {
     if (this.disposed) return;
-    this.scene.add(presentation.object);
-    const center = presentation.bounds.getCenter(new THREE.Vector3());
-    const radius = presentation.bounds.getSize(new THREE.Vector3()).length() / 2;
+    const rendered = presentation as RenderedScenePresentation;
+    this.scene.add(rendered.object);
+    const center = rendered.bounds.getCenter(new THREE.Vector3());
+    const radius = rendered.bounds.getSize(new THREE.Vector3()).length() / 2;
     const distance = Math.max(radius * 1.8, 16);
     this.cameraRig.setMaxZoomDistance(distance * 8);
     this.camera.position.copy(center).add(new THREE.Vector3(distance, distance * 0.9, distance));

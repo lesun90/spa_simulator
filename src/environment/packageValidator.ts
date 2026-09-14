@@ -1,6 +1,6 @@
 import type { ValidationResult } from "../editor-core/validation";
 import { readGlbInfo } from "./glb";
-import { sha256Hex } from "./manifestEncoder";
+import { sha256Hex } from "./manifestHash";
 import type {
   EnvironmentManifest,
   EnvironmentManifestCell,

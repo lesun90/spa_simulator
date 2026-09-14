@@ -1,7 +1,7 @@
 import type { AssetCatalogEntry } from "../editor-core/assets";
 import type { WfcPlanarDirection } from "../wfc/metadata/socketTypes";
 import { oppositeDirections } from "../wfc/metadata/socketTypes";
-import { mergeSemanticPorts, roadTopologyPorts, rotateSemanticPorts } from "../wfc/sceneLayout";
+import { mergeSemanticPorts, roadTopologyPorts, rotateSemanticPorts } from "../wfc/semanticPorts";
 import type { EnvironmentManifestCell, EnvironmentManifestNavigationEdge, EnvironmentManifestNavigationNode, SceneRecipe } from "./types";
 
 const PLANAR_DIRECTIONS: readonly WfcPlanarDirection[] = ["north", "east", "south", "west"];
@@ -70,7 +70,7 @@ function roadChannelsForCell(ports: Partial<Record<WfcPlanarDirection, readonly 
 
 /**
  * Converts the cell's radian rotationY back to the degrees rotateSemanticPorts expects, and merges
- * BOTH sources of road connectivity the real WFC generation pipeline merges (see sceneLayout.ts's
+ * BOTH sources of road connectivity the real WFC generation pipeline merges (see semanticPorts.ts's
  * paletteFromAssets): rotation-aware `semantics.sockets` AND the cell's specific WFC variant's
  * `roadTopology.edges` (which is how every real road-tile asset in this repo actually encodes
  * connectivity — most have no `semantics` field at all).

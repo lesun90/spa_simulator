@@ -1,32 +1,20 @@
+import type { ScenicRecipe } from "./metadata/packTypes";
+import { scenicAssetId, scenicRecipeForPalette } from "./metadata/packCatalog";
 import { directionOffset, oppositeDirection, planarDirections, solvePlanarWfc, type PlanarDirection, type PlanarPolicySpec, type PlanarWfcPalette, type PlanarWfcVariant, type SeededRandom, type SolvedPlanarCell } from "./planarWfc";
 import type { GridCell, PlannedRoadCell, WorldBounds } from "./worldPlan";
 
 const key = (cell: GridCell) => `${cell.column},${cell.row}`;
-const number = (variant: PlanarWfcVariant) => variant.assetId.split("road-tile-")[1];
 const ports = (variant: PlanarWfcVariant, channel: string) => planarDirections.filter((direction) => variant.semanticPorts?.[direction]?.includes(channel));
 const equal = (a: readonly PlanarDirection[], b: readonly PlanarDirection[]) => a.length === b.length && a.every((direction) => b.includes(direction));
-const ramps = new Set(["154", "161", "165", "171", "180"]);
-const terrain = new Set(["163", "036", "037", "140", "151", "152", "012"]);
-// Compare asset numbers, so exclusions cover every rotated variant.
-const excludedWaterTiles = new Set(["168", "176", "215", "242", "244", "264"]);
-const banks = new Set(["195", "196", "205", "206"]);
-const flatApproaches = new Set(["162"]);
-const bridgeStyles = [
-  { id: "197", approaches: ramps, clearance: 4, coreDistance: 3, minimumSpan: 2, raisedBanks: true },
-  { id: "207", approaches: ramps, clearance: 4, coreDistance: 3, minimumSpan: 2, raisedBanks: true },
-  { id: "187", approaches: flatApproaches, clearance: 3, coreDistance: 2, minimumSpan: 1, raisedBanks: false },
-  { id: "188", approaches: flatApproaches, clearance: 3, coreDistance: 2, minimumSpan: 1, raisedBanks: false }
-] as const;
-
 /** A bounded, enclosed lake crossed by a high or low bridge. There are no
  * river corridors or boundary outlets. WFC assembles the rotated shoreline;
  * its perimeter must meet ordinary ground/roads on every side of the patch.
  */
-export function planLake(bounds: WorldBounds, roads: ReadonlyMap<string, PlannedRoadCell>, palette: PlanarWfcPalette, random: SeededRandom, occupied: ReadonlySet<string> = new Set(), elevation: "high" | "low" = "high"): readonly SolvedPlanarCell[] {
-  const ground = palette.variants.find((v) => number(v) === "163")!;
-  const variants = palette.variants.map((variant) => ({ ...variant, weight: variant.weight * (number(variant) === "001" ? 2 : 1) }));
+export function planLake(bounds: WorldBounds, roads: ReadonlyMap<string, PlannedRoadCell>, palette: PlanarWfcPalette, random: SeededRandom, occupied: ReadonlySet<string> = new Set(), elevation: "high" | "low" = "high", recipe: ScenicRecipe = scenicRecipeForPalette(palette)): readonly SolvedPlanarCell[] {
+  const ground = palette.variants.find((v) => scenicAssetId(v.assetId, recipe) === recipe.ground)!;
+  const variants = palette.variants.map((variant) => ({ ...variant, weight: variant.weight * (scenicAssetId(variant.assetId, recipe) === recipe.water.core ? recipe.water.coreWeightMultiplier : 1) }));
   const localPalette = { ...palette, variants };
-  const styles = bridgeStyles.filter((style) => style.raisedBanks === (elevation === "high"));
+  const styles = recipe.water.bridges.filter((style) => style.raisedBanks === (elevation === "high"));
   const { minimumSpan, clearance } = styles[0];
   const candidates: { start: PlannedRoadCell; transpose: boolean; span: number }[] = [];
   for (const start of roads.values()) for (const transpose of [false, true]) for (const span of [1, 2, 3, 4].filter((span) => span >= minimumSpan)) {
@@ -66,29 +54,29 @@ export function planLake(bounds: WorldBounds, roads: ReadonlyMap<string, Planned
         return (roads.get(key({ column: cell.column + delta.column, row: cell.row + delta.row }))?.directions.length ?? 0) >= 3;
       });
       const allowed = variants.filter((variant) => {
-        const id = number(variant);
+        const id = scenicAssetId(variant.assetId, recipe);
         if (!equal(ports(variant, "road"), road?.directions ?? [])) return false;
         if (road) {
           if (deck) { if (id !== style.id) return false; }
-          else if (approach) { if (!style.approaches.has(id) || crosswalk) return false; }
-          else if (road.directions.length >= 3) { if (id !== (road.directions.length === 4 ? "141" : "150")) return false; }
-          else if (crosswalk) { if (id !== "025") return false; }
-          else if (id !== "162" && id !== "153") return false;
+          else if (approach) { if (!style.approaches.includes(id) || crosswalk) return false; }
+          else if (road.directions.length >= 3) { if (id !== (road.directions.length === 4 ? recipe.crossing : recipe.junction)) return false; }
+          else if (crosswalk) { if (id !== recipe.crosswalk) return false; }
+          else if (!recipe.lakeRoads.includes(id)) return false;
         } else {
-          if (!(terrain.has(id) || variant.roles?.includes("terrain.water")) || excludedWaterTiles.has(id)) return false;
+          if (!(recipe.terrain.some((part) => part.assetId === id) || variant.roles?.includes("terrain.water")) || recipe.water.exclusions.includes(id)) return false;
           // Raised bank pieces belong only immediately beside the bridge, not
           // in long canal-like chains across the landscape.
-          if (banks.has(id) && (!style.raisedBanks || Math.abs(x - sx) !== 1 || y < sy || y >= sy + span)) return false;
+          if (recipe.water.banks.includes(id) && (!style.raisedBanks || Math.abs(x - sx) !== 1 || y < sy || y >= sy + span)) return false;
           // An open-water core on both sides of the span makes this a lake,
           // not a chain of bank and shoreline tiles masquerading as one.
-          if (Math.abs(x - sx) === style.coreDistance && y === sy + Math.floor(span / 2) && id !== "001") return false;
+          if (Math.abs(x - sx) === style.coreDistance && y === sy + Math.floor(span / 2) && id !== recipe.water.core) return false;
         }
         for (const direction of planarDirections) {
           const delta = directionOffset[direction];
           const next = { column: cell.column + delta.column, row: cell.row + delta.row };
           if (next.column >= origin.column && next.column < origin.column + width && next.row >= origin.row && next.row < origin.row + depth) continue;
           const reference = road?.directions.includes(direction)
-            ? variants.find((v) => number(v) === "162" && ports(v, "road").includes(direction)) : ground;
+            ? variants.find((v) => scenicAssetId(v.assetId, recipe) === recipe.straightRoad && ports(v, "road").includes(direction)) : ground;
           if (!reference || variant.sockets[direction] !== reference.sockets[direction]) return false;
         }
         return true;
@@ -101,7 +89,7 @@ export function planLake(bounds: WorldBounds, roads: ReadonlyMap<string, Planned
       const result = solvePlanarWfc(localPalette, { width, depth, seed: random.nextInt(0xffffffff), maxBacktracks: 16, policies });
       if (result.status !== "solved") continue;
       const cells = result.cells.map((cell) => ({ ...cell, column: cell.column + origin.column, row: cell.row + origin.row }));
-      const lake = retainLake(cells, palette, ground, cells.filter((cell) => cell.variant.roles?.includes("road.bridge")));
+      const lake = retainLake(cells, palette, ground, cells.filter((cell) => cell.variant.roles?.includes("road.bridge")), recipe);
       if (lake) return lake;
     }
   }
@@ -110,10 +98,10 @@ export function planLake(bounds: WorldBounds, roads: ReadonlyMap<string, Planned
 
 /** Independent lakes use the same shoreline catalog and component validation as
  * bridge lakes, but require only a free land parcel, not an existing road. */
-export function planStandaloneLake(bounds: WorldBounds, roads: ReadonlyMap<string, PlannedRoadCell>, palette: PlanarWfcPalette, random: SeededRandom, occupied: ReadonlySet<string>): readonly SolvedPlanarCell[] {
+export function planStandaloneLake(bounds: WorldBounds, roads: ReadonlyMap<string, PlannedRoadCell>, palette: PlanarWfcPalette, random: SeededRandom, occupied: ReadonlySet<string>, recipe: ScenicRecipe = scenicRecipeForPalette(palette)): readonly SolvedPlanarCell[] {
   if (Math.min(bounds.width, bounds.depth) < 5) return [];
-  const ground = palette.variants.find((v) => number(v) === "163")!;
-  const variants = palette.variants.filter((v) => number(v) === "163" || v.roles?.includes("terrain.water") && !ports(v, "road").length && !banks.has(number(v)) && !excludedWaterTiles.has(number(v)));
+  const ground = palette.variants.find((v) => scenicAssetId(v.assetId, recipe) === recipe.ground)!;
+  const variants = palette.variants.filter((v) => scenicAssetId(v.assetId, recipe) === recipe.ground || v.roles?.includes("terrain.water") && !ports(v, "road").length && !recipe.water.banks.includes(scenicAssetId(v.assetId, recipe)) && !recipe.water.exclusions.includes(scenicAssetId(v.assetId, recipe)));
   for (let attempt = 0; attempt < Math.min(400, bounds.width * bounds.depth); attempt++) {
     const width = 4 + random.nextInt(Math.min(6, bounds.width - 3));
     const depth = 4 + random.nextInt(Math.min(6, bounds.depth - 3));
@@ -126,7 +114,7 @@ export function planStandaloneLake(bounds: WorldBounds, roads: ReadonlyMap<strin
       const core = column === cx && row === cy;
       const cutCorner = width >= 5 && depth >= 5 && (column === 0 || column === width - 1) && (row === 0 || row === depth - 1);
       const allowed = variants.filter((v) => {
-        if (core && number(v) !== "001" || cutCorner && number(v) !== "163") return false;
+        if (core && scenicAssetId(v.assetId, recipe) !== recipe.water.core || cutCorner && scenicAssetId(v.assetId, recipe) !== recipe.ground) return false;
         return planarDirections.every((d) => {
           const next = { column: column + directionOffset[d].column, row: row + directionOffset[d].row };
           return next.column >= 0 && next.column < width && next.row >= 0 && next.row < depth || v.sockets[d] === ground.sockets[d];
@@ -138,7 +126,7 @@ export function planStandaloneLake(bounds: WorldBounds, roads: ReadonlyMap<strin
     if (result.status !== "solved") continue;
     const cells = result.cells.map((cell) => ({ ...cell, column: cell.column + origin.column, row: cell.row + origin.row }));
     const anchor = cells.find((cell) => cell.column === origin.column + cx && cell.row === origin.row + cy)!;
-    const lake = retainLake(cells, palette, ground, [anchor]);
+    const lake = retainLake(cells, palette, ground, [anchor], recipe);
     if (lake) return lake;
   }
   return [];
@@ -148,7 +136,7 @@ export function planStandaloneLake(bounds: WorldBounds, roads: ReadonlyMap<strin
  * preserves every seam. This avoids searching millions of unrelated dry-tile
  * alternatives just to reject a tiny extra puddle after an otherwise good solve.
  */
-function retainLake(cells: readonly SolvedPlanarCell[], palette: PlanarWfcPalette, ground: PlanarWfcVariant, anchors: readonly SolvedPlanarCell[]): readonly SolvedPlanarCell[] | undefined {
+function retainLake(cells: readonly SolvedPlanarCell[], palette: PlanarWfcPalette, ground: PlanarWfcVariant, anchors: readonly SolvedPlanarCell[], recipe: ScenicRecipe): readonly SolvedPlanarCell[] | undefined {
   const byCell = new Map(cells.map((cell) => [key(cell), cell]));
   if (!anchors.length) return;
   const seen = new Set<string>();
@@ -167,7 +155,7 @@ function retainLake(cells: readonly SolvedPlanarCell[], palette: PlanarWfcPalett
   const lake = cells.filter((cell) => seen.has(key(cell)));
   const xs = lake.map((cell) => cell.column), ys = lake.map((cell) => cell.row);
   const width = Math.max(...xs) - Math.min(...xs) + 1, depth = Math.max(...ys) - Math.min(...ys) + 1;
-  const plain = lake.filter((cell) => number(cell.variant) === "001").length;
+  const plain = lake.filter((cell) => scenicAssetId(cell.variant.assetId, recipe) === recipe.water.core).length;
   if (!plain || Math.max(width, depth) > Math.min(width, depth) * 2.5) return;
   const output = cells.map((cell) => ports(cell.variant, "water").length && !seen.has(key(cell)) ? { ...cell, variant: ground } : cell);
   const completed = new Map(output.map((cell) => [key(cell), cell]));

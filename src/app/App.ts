@@ -8,6 +8,7 @@ import { Viewport } from "../engine/Viewport";
 import { HudFeature } from "../features/hud/HudFeature";
 import { WorldFeature } from "../features/world/WorldFeature";
 import { EditorState } from "../state/EditorState";
+import { createBrowserEditorStateDependencies } from "../state/browserEditorStateDependencies";
 import { dprCap } from "./config";
 
 /** Composition root: owns engine services, wires the world/HUD features, starts the single render loop. */
@@ -17,7 +18,10 @@ export class App {
   private readonly renderLoop: RenderLoop;
   private readonly performanceMonitor: PerformanceMonitor;
   private readonly interaction: InteractionSystem;
+  private readonly input: InputManager;
   private readonly assetManager: AssetManager;
+  private readonly unsubscribeViewport: () => void;
+  private disposed = false;
   readonly state: EditorState;
   readonly world: WorldFeature;
   readonly hud: HudFeature;
@@ -29,7 +33,7 @@ export class App {
     this.performanceMonitor = new PerformanceMonitor();
     this.interaction = new InteractionSystem(this.viewport);
     this.assetManager = new AssetManager();
-    this.state = new EditorState();
+    this.state = new EditorState(createBrowserEditorStateDependencies());
 
     this.world = new WorldFeature(canvas, this.assetManager, this.interaction, this.state);
     this.hud = new HudFeature(this.renderer.renderer, this.viewport.size, this.interaction, this.assetManager, this.state, {
@@ -45,7 +49,7 @@ export class App {
       { scene: this.world.scene, camera: this.world.camera }
     ]);
 
-    new InputManager(canvas, {
+    this.input = new InputManager(canvas, {
       onPointerDown: (x, y, event) => this.interaction.handlePointerDown(x, y, event),
       onPointerMove: (x, y, event) => this.interaction.handlePointerMove(x, y, event),
       onPointerUp: (x, y, event) => this.interaction.handlePointerUp(x, y, event),
@@ -66,7 +70,7 @@ export class App {
       }
     });
 
-    this.viewport.subscribe((size) => {
+    this.unsubscribeViewport = this.viewport.subscribe((size) => {
       this.world.resize(size);
       this.hud.resize(size);
     });
@@ -86,5 +90,19 @@ export class App {
       ]);
       this.performanceMonitor.end();
     });
+  }
+
+  dispose(): void {
+    if (this.disposed) return;
+    this.disposed = true;
+    this.renderLoop.stop();
+    this.input.dispose();
+    this.unsubscribeViewport();
+    this.hud.dispose();
+    this.world.dispose();
+    this.performanceMonitor.dispose();
+    this.assetManager.dispose();
+    this.renderer.dispose();
+    this.viewport.dispose();
   }
 }

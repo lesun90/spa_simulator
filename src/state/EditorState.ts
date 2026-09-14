@@ -14,34 +14,16 @@ import {
 import type { PlacementResolution } from "../editor-core/grid";
 import { createId, environmentAssetId, isEnvironmentObject, objectDisplayNames, type Scene, type SceneObject, type SurfaceAppearanceType, type Vector3Data } from "../editor-core/scene";
 import { validateSceneForSave } from "../editor-core/validation";
-import {
-  commitEnvironmentImportRequest,
-  createSceneRequest,
-  deleteSceneRequest,
-  duplicateSceneRequest,
-  exportEnvironmentRequest,
-  fetchExportedEnvironmentModel,
-  importSharedAssetRequest,
-  listAssets,
-  listScenes,
-  openSceneRequest,
-  renameSceneRequest,
-  removeEnvironmentRequest,
-  saveSceneRequest,
-  uploadEnvironmentManifestRequest,
-  uploadEnvironmentModelRequest,
-  type SceneSummary
-} from "../api/client";
-import { pickEnvironmentPackageFiles, saveEnvironmentPackage } from "../features/hud/kit/fileSystemAccess";
 import type { EnvironmentManifest } from "../environment/types";
 import { createTemporaryAsset, selectedObject } from "./editorHelpers";
 import type { EditorTool } from "./types";
-import { generateWfcScene } from "../wfc/sceneGenerator";
 import {
   isGeneratedWfcObject,
   type GenerateWfcLayoutRequest,
   type WfcGenerationProgress
 } from "../wfc/sceneLayout";
+import { createBrowserEditorStateDependencies } from "./browserEditorStateDependencies";
+import type { EditorStateDependencies, SceneSummary } from "./EditorStateDependencies";
 
 export type EditorTopic =
   | "scene"
@@ -92,6 +74,9 @@ export class EditorState {
   /** Session-only, per-scene: objects hidden from the viewport for editing convenience, not persisted. */
   private readonly hiddenObjectIdSet = new Set<string>();
   private environmentRemoval: Promise<void> | null = null;
+
+  /** The optional browser adapter preserves the existing standalone construction seam. */
+  constructor(private readonly dependencies: EditorStateDependencies = createBrowserEditorStateDependencies()) {}
 
   on(topic: EditorTopic, listener: Listener): () => void {
     let set = this.listeners.get(topic);
@@ -153,7 +138,7 @@ export class EditorState {
     this.assetsRefreshing = true;
     this.emit("assetRefresh");
     try {
-      this.assets = await listAssets();
+      this.assets = await this.dependencies.listAssets();
       const resetCategory = this.category !== "all" && !this.categories.includes(this.category);
       if (resetCategory) this.category = "all";
       this.emit(...(resetCategory ? (["assets", "category"] as const) : (["assets"] as const)));
@@ -167,13 +152,13 @@ export class EditorState {
   }
 
   async refreshScenes() {
-    this.scenes = await listScenes();
+    this.scenes = await this.dependencies.listScenes();
     this.emit("scenesList");
     if (!this.history && this.scenes.length === 0) {
-      const defaultScene = await createSceneRequest("Downtown");
+      const defaultScene = await this.dependencies.createScene("Downtown");
       this.history = createHistory(defaultScene);
       this.selectedObjectId = null;
-      this.scenes = await listScenes();
+      this.scenes = await this.dependencies.listScenes();
       this.emit("scene", "selection", "scenesList", "assets");
       this.setNotice(`Created ${defaultScene.name}`);
       return;
@@ -184,9 +169,9 @@ export class EditorState {
   }
 
   async createScene() {
-    const name = window.prompt("Scene name", "Downtown");
+    const name = this.dependencies.prompt("Scene name", "Downtown");
     if (!name) return;
-    const nextScene = await createSceneRequest(name);
+    const nextScene = await this.dependencies.createScene(name);
     this.history = createHistory(nextScene);
     this.selectedObjectId = null;
     this.hiddenObjectIdSet.clear();
@@ -196,7 +181,7 @@ export class EditorState {
   }
 
   async openScene(id: string) {
-    const nextScene = await openSceneRequest(id);
+    const nextScene = await this.dependencies.openScene(id);
     this.history = createHistory(nextScene);
     this.selectedObjectId = null;
     this.hiddenObjectIdSet.clear();
@@ -212,16 +197,16 @@ export class EditorState {
       this.setNotice(result.diagnostics[0]);
       return;
     }
-    await saveSceneRequest(this.scene);
+    await this.dependencies.saveScene(this.scene);
     await this.refreshScenes();
     this.setNotice(`Saved ${this.scene.name}`);
   }
 
   async renameScene() {
     if (!this.scene) return;
-    const name = window.prompt("Scene name", this.scene.name);
+    const name = this.dependencies.prompt("Scene name", this.scene.name);
     if (!name) return;
-    const renamed = await renameSceneRequest(this.scene.id, name);
+    const renamed = await this.dependencies.renameScene(this.scene.id, name);
     this.history = createHistory(renamed);
     this.emit("scene");
     await this.refreshScenes();
@@ -231,7 +216,7 @@ export class EditorState {
   async duplicateScene() {
     if (this.environmentRemoval) await this.environmentRemoval;
     if (!this.scene) return;
-    const copy = await duplicateSceneRequest(this.scene.id);
+    const copy = await this.dependencies.duplicateScene(this.scene.id);
     this.history = createHistory(copy);
     this.selectedObjectId = null;
     this.hiddenObjectIdSet.clear();
@@ -242,8 +227,8 @@ export class EditorState {
 
   async deleteScene() {
     if (!this.scene) return;
-    if (!window.confirm(`Delete ${this.scene.name}? This cannot be undone.`)) return;
-    await deleteSceneRequest(this.scene.id);
+    if (!this.dependencies.confirm(`Delete ${this.scene.name}? This cannot be undone.`)) return;
+    await this.dependencies.deleteScene(this.scene.id);
     this.history = null;
     this.selectedObjectId = null;
     this.hiddenObjectIdSet.clear();
@@ -258,9 +243,9 @@ export class EditorState {
       return;
     }
     try {
-      const { exportId, manifest, manifestJson } = await exportEnvironmentRequest(this.scene, options);
-      const glb = await fetchExportedEnvironmentModel(this.scene.id, exportId);
-      await saveEnvironmentPackage(manifestJson, glb);
+      const { exportId, manifest, manifestJson } = await this.dependencies.exportEnvironment(this.scene, options);
+      const glb = await this.dependencies.fetchEnvironmentModel(this.scene.id, exportId);
+      await this.dependencies.saveEnvironmentPackage(manifestJson, glb);
       this.setNotice(`Exported environment (${manifest.cells?.length ?? 0} cells)`);
     } catch (error) {
       this.setNotice(error instanceof Error ? error.message : "Environment export failed");
@@ -273,15 +258,15 @@ export class EditorState {
       this.setNotice("Open a scene before importing an environment");
       return;
     }
-    if (this.scene.environment && !window.confirm("Replace the current environment package?")) return;
+    if (this.scene.environment && !this.dependencies.confirm("Replace the current environment package?")) return;
 
-    const picked = await pickEnvironmentPackageFiles();
+    const picked = await this.dependencies.pickEnvironmentPackage();
     if (!picked) return;
 
     try {
-      await uploadEnvironmentManifestRequest(this.scene.id, picked.manifestJson);
-      await uploadEnvironmentModelRequest(this.scene.id, picked.glb);
-      const updated = await commitEnvironmentImportRequest(this.scene.id);
+      await this.dependencies.uploadEnvironmentManifest(this.scene.id, picked.manifestJson);
+      await this.dependencies.uploadEnvironmentModel(this.scene.id, picked.glb);
+      const updated = await this.dependencies.commitEnvironmentImport(this.scene.id);
       const manifest = JSON.parse(picked.manifestJson) as EnvironmentManifest;
 
       const existingEnvironmentObjects = this.history.scene.objects.filter((object) => object.assetId === environmentAssetId(this.scene!.id));
@@ -329,7 +314,7 @@ export class EditorState {
 
     this.setWfcProgress({ status: "building-palette" });
     try {
-      const result = await generateWfcScene(this.assets, request, {
+      const result = await this.dependencies.generate(this.assets, request, {
         onProgress: (progress) => this.setWfcProgress(progress)
       });
       if (result.status === "failed") {
@@ -413,7 +398,7 @@ export class EditorState {
   private async removeImportedEnvironment(sceneId: string, objectId: string) {
     this.setNotice("Removing imported environment…");
     try {
-      await removeEnvironmentRequest(sceneId);
+      await this.dependencies.removeEnvironment(sceneId);
       if (!this.history || this.scene?.id !== sceneId) return;
       const scene = this.history.scene;
       this.history = createHistory({
@@ -619,7 +604,7 @@ export class EditorState {
   }
 
   async importDroppedFile(file: File) {
-    if (window.confirm("Add this import to the shared asset library? Cancel reviews it temporarily for this session.")) {
+    if (this.dependencies.confirm("Add this import to the shared asset library? Cancel reviews it temporarily for this session.")) {
       await this.addDroppedFileToSharedLibrary(file);
       return;
     }
@@ -632,18 +617,18 @@ export class EditorState {
 
   private async addDroppedFileToSharedLibrary(file: File) {
     const defaultFolder = file.name.toLowerCase().replace(/\.[^.]+$/, "").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "asset";
-    const categoryName = window.prompt("Asset category", "imports");
+    const categoryName = this.dependencies.prompt("Asset category", "imports");
     if (!categoryName) return;
-    const folderName = window.prompt("Asset folder", defaultFolder);
+    const folderName = this.dependencies.prompt("Asset folder", defaultFolder);
     if (!folderName) return;
-    const label = window.prompt("Asset label", file.name.replace(/\.[^.]+$/, ""));
+    const label = this.dependencies.prompt("Asset label", file.name.replace(/\.[^.]+$/, ""));
     if (!label) return;
-    const id = window.prompt("Stable asset ID", `${categoryName}.${folderName}`.toLowerCase().replace(/[^a-z0-9.]+/g, "-"));
+    const id = this.dependencies.prompt("Stable asset ID", `${categoryName}.${folderName}`.toLowerCase().replace(/[^a-z0-9.]+/g, "-"));
     if (!id) return;
-    const contentBase64 = await fileToBase64(file);
+    const contentBase64 = await this.dependencies.fileToBase64(file);
 
     try {
-      const asset = await importSharedAssetRequest({
+      const asset = await this.dependencies.importSharedAsset({
         id,
         label,
         category: categoryName,
@@ -655,8 +640,8 @@ export class EditorState {
       this.choosePlacement(asset.id);
       this.setNotice(`Added ${asset.label} to shared assets`);
     } catch (error) {
-      if (window.confirm("An asset file already exists. Overwrite it?")) {
-        const asset = await importSharedAssetRequest({
+      if (this.dependencies.confirm("An asset file already exists. Overwrite it?")) {
+        const asset = await this.dependencies.importSharedAsset({
           id,
           label,
           category: categoryName,
@@ -672,15 +657,6 @@ export class EditorState {
       this.setNotice(error instanceof Error ? error.message : "Import failed");
     }
   }
-}
-
-async function fileToBase64(file: File) {
-  const bytes = new Uint8Array(await file.arrayBuffer());
-  let binary = "";
-  for (const byte of bytes) {
-    binary += String.fromCharCode(byte);
-  }
-  return btoa(binary);
 }
 
 function nextObjectName(objects: SceneObject[], assetId: string): string {

@@ -21,7 +21,10 @@ export class LockedEnvironmentFeature {
     const token = ++this.loadToken;
     const manifest = JSON.parse(manifestJson) as EnvironmentManifest;
     const gltf = await loader.parseAsync(glb, "");
-    if (token !== this.loadToken) return;
+    if (token !== this.loadToken) {
+      disposeObject(gltf.scene);
+      return;
+    }
 
     this.clear();
     this.manifest = manifest;

@@ -1,3 +1,4 @@
+import type { WfcPackDeclaration } from "../wfc/metadata/packTypes";
 import type { AssetSemantics, WfcMetadata } from "../wfc/metadata/socketTypes";
 import { environmentAssetId, type Scene } from "./scene";
 
@@ -15,6 +16,7 @@ export interface AssetCatalogEntry {
   modelUrl?: string;
   thumbnailUrl?: string;
   wfc?: WfcMetadata;
+  wfcPack?: WfcPackDeclaration;
   semantics?: AssetSemantics;
   diagnostics?: string[];
 }

@@ -1,3 +1,5 @@
+import { defaultRoadProfile, matchesAsset } from "./packCatalog";
+import type { ReviewedAdjacencyMetadata } from "./packTypes";
 import { oppositeDirection, planarDirections, type PlanarWfcPalette } from "../planarWfc";
 
 /**
@@ -5,9 +7,9 @@ import { oppositeDirection, planarDirections, type PlanarWfcPalette } from "../p
  * are specific model assemblies, never wildcard sockets. The generic catalog
  * retains strict full-boundary matching.
  */
-export function withReviewedRoadTransitions(palette: PlanarWfcPalette): PlanarWfcPalette {
-  const centers = palette.variants.filter((variant) => /\.road-tile-(027|034)$/.test(variant.assetId));
-  const crosswalks = palette.variants.filter((variant) => variant.assetId === "3d-road-tiles.road-tile-025");
+export function withReviewedRoadTransitions(palette: PlanarWfcPalette, rules: ReviewedAdjacencyMetadata = defaultRoadProfile.adjacency!): PlanarWfcPalette {
+  const centers = palette.variants.filter((variant) => matchesAsset(variant.assetId, rules.centers));
+  const crosswalks = palette.variants.filter((variant) => matchesAsset(variant.assetId, rules.crosswalks));
   const adjacency = Object.fromEntries(Object.entries(palette.adjacency).map(([id, edges]) => [id,
     Object.fromEntries(planarDirections.map((direction) => [direction, [...edges[direction]]]))
   ])) as Record<string, Record<(typeof planarDirections)[number], string[]>>;
@@ -16,8 +18,7 @@ export function withReviewedRoadTransitions(palette: PlanarWfcPalette): PlanarWf
   // profile (geometry, materials AND absolute heights) must still match exactly.
   // Broad curves, roundabouts and junctions also have different buried curb
   // geometry. Their visible profiles must match at every sampled height.
-  const structures = new Set(["041", "043", "048", "049", "141", "144", "147", "150", "154", "156", "161", "164", "165", "170", "171", "180", "184", "187", "188", "191", "194", "197", "207", "231"].map((id) => `3d-road-tiles.road-tile-${id}`));
-  for (const source of palette.variants.filter((variant) => structures.has(variant.assetId))) {
+  for (const source of palette.variants.filter((variant) => matchesAsset(variant.assetId, rules.structures))) {
     for (const direction of planarDirections) {
       const profile = source.sockets[direction].split("|e:")[1];
       if (!profile) continue;
@@ -32,15 +33,14 @@ export function withReviewedRoadTransitions(palette: PlanarWfcPalette): PlanarWf
   // 0.375m of curb rises 0.08m above adjacent grass: an intentional curb end,
   // not a gap. Match only reviewed dry grass faces, with shoreline corners
   // oriented toward the mouth's full-water side.
-  const ground = palette.variants.find((variant) => variant.assetId.endsWith("road-tile-163"));
-  const water = palette.variants.find((variant) => variant.assetId.endsWith("road-tile-001"));
-  const caps = new Set(["163", "243", "284", "252"].map((id) => `3d-road-tiles.road-tile-${id}`));
-  for (const mouth of palette.variants.filter((variant) => variant.assetId.endsWith("road-tile-242"))) {
+  const ground = palette.variants.find((variant) => matchesAsset(variant.assetId, rules.ground));
+  const water = palette.variants.find((variant) => matchesAsset(variant.assetId, rules.water));
+  for (const mouth of palette.variants.filter((variant) => matchesAsset(variant.assetId, rules.mouths))) {
     const lake = planarDirections.find((direction) => mouth.sockets[direction] === water?.sockets[direction]);
     if (!lake || !ground) continue;
     for (const direction of planarDirections) {
       if (mouth.semanticPorts?.[direction]?.includes("water")) continue;
-      for (const cap of palette.variants.filter((variant) => caps.has(variant.assetId))) {
+      for (const cap of palette.variants.filter((variant) => matchesAsset(variant.assetId, rules.caps))) {
         const opposite = oppositeDirection[direction];
         if (cap.sockets[opposite] !== ground.sockets[opposite]) continue;
         if (cap.assetId !== ground.assetId && !cap.semanticPorts?.[lake]?.includes("water")) continue;

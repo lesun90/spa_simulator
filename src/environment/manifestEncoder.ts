@@ -1,9 +1,5 @@
-import { createHash } from "node:crypto";
 import type { EnvironmentManifest } from "./types";
-
-export function sha256Hex(data: Uint8Array): string {
-  return createHash("sha256").update(data).digest("hex");
-}
+export { sha256Hex } from "./manifestHash";
 
 /** Sorts every identifier-keyed array so re-exporting the same logical content produces the same manifest. */
 export function encodeManifest(manifest: EnvironmentManifest): EnvironmentManifest {

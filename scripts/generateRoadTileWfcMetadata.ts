@@ -1,3 +1,9 @@
+import type { WfcPackDeclaration } from "../src/wfc/metadata/packTypes";
+import type { AssetCatalogEntry } from "../src/editor-core/assets";
+import { discoverAssetCatalog } from "../server/assetCatalog";
+import { AssetPackFiles } from "../server/assetPackFiles";
+import { validatePackShape } from "../src/wfc/metadata/packShape";
+import { resolvePackProfile } from "../src/wfc/metadata/packCatalog";
 import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
@@ -16,6 +22,7 @@ interface CliOptions {
   assetRoot: string;
   limit?: number;
   dryRun: boolean;
+  packFile?: string;
 }
 
 interface AssetFolder {
@@ -65,6 +72,9 @@ function parseArgs(argv: string[]): CliOptions {
       case "--asset-root":
         options.assetRoot = resolve(next());
         break;
+      case "--pack":
+        options.packFile = resolve(next());
+        break;
       case "--limit":
         options.limit = positiveInt(next(), "--limit");
         break;
@@ -98,6 +108,7 @@ Usage:
 
 Options:
   --asset-root <path>  Tile asset folder. Defaults to ${DEFAULT_ASSET_ROOT}
+  --pack <path>       Version 1 declaration to write once as wfc-pack.json.
   --limit <count>      Only process the first N discovered assets.
   --dry-run            Print a summary without writing asset.json or adjacency output.
 `);
@@ -106,23 +117,37 @@ Options:
 async function main() {
   const options = parseArgs(process.argv);
   const folders = await discoverAssetFolders(options);
+  const declaration: WfcPackDeclaration | undefined = options.packFile ? JSON.parse(await readFile(options.packFile, "utf8")) : undefined;
+  if (declaration) validatePackShape(declaration);
+  const packFiles = new AssetPackFiles(options.assetRoot);
+  const effectivePacks = new Map<AssetFolder, WfcPackDeclaration | undefined>();
+  const authored: { asset: AssetFolder; metadata: Record<string, unknown>; wfc: WfcMetadata }[] = [];
   const allVariants: WfcVariant[] = [];
   const diagnostics: string[] = [];
   let changed = 0;
 
   for (const asset of folders) {
-    const { wfc, variants } = await generateWfcMetadata(asset);
+    const effectivePack = asset.metadata.wfcPack as WfcPackDeclaration | undefined ?? declaration ?? await packFiles.forFolder(asset.folder);
+    effectivePacks.set(asset, effectivePack);
+    const { wfc, variants } = await generateWfcMetadata({ ...asset, metadata: { ...asset.metadata, wfcPack: effectivePack } });
     allVariants.push(...variants);
 
+    authored.push({ asset, wfc, metadata: { ...asset.metadata, wfc: { ...wfc, defaultWeight: existingDefaultWeight(asset.metadata.wfc) } } });
     if (options.dryRun) {
       console.log(`${assetId(asset)}: ${wfc.variants.length} variants, height ${wfc.height}, diagnostics ${wfc.diagnostics.length}`);
       continue;
     }
 
-    const nextMetadata = { ...asset.metadata, wfc: { ...wfc, defaultWeight: existingDefaultWeight(asset.metadata.wfc) } };
-    await writeJson(asset.assetJsonFile, nextMetadata);
-    changed += 1;
+
   }
+
+  if ([...effectivePacks.values()].some(Boolean)) {
+    const catalog = authored.map(({ asset, metadata }) => ({ ...metadata, wfcPack: effectivePacks.get(asset), id: assetId(asset), category: String(metadata.category ?? ""), label: String(metadata.label ?? assetId(asset)), source: "shared", implementation: "glb" }) as AssetCatalogEntry);
+    const completeCatalog = options.limit ? (await discoverAssetCatalog(options.assetRoot)).map((asset) => catalog.find((updated) => updated.id === asset.id) ?? { ...asset, wfcPack: asset.wfcPack ?? declaration }) : catalog;
+    resolvePackProfile(completeCatalog);
+  }
+  if (!options.dryRun && declaration) await writeJson(join(options.assetRoot, "wfc-pack.json"), declaration);
+  if (!options.dryRun) for (const { asset, metadata } of authored) { await writeJson(asset.assetJsonFile, metadata); changed++; }
 
   const adjacency = buildAdjacency(allVariants);
   diagnostics.push(...validateAdjacencyReferences(adjacency, allVariants));
@@ -190,6 +215,10 @@ async function generateWfcMetadata(asset: AssetFolder): Promise<{ wfc: WfcMetada
   const diagnostics: string[] = [];
   const id = assetId(asset);
   const existingRoadTopology = existingRoadTopologies(asset.metadata);
+  const authoredVariants = (asset.metadata.wfc as WfcMetadata | undefined)?.variants ?? [];
+  const dimensions = (asset.metadata.wfcPack as WfcPackDeclaration | undefined)?.dimensions;
+  const sourceWidth = dimensions?.sourceTileWidth ?? DEFAULT_WFC_TILE_SIZE;
+  const sourceDepth = dimensions?.sourceTileDepth ?? DEFAULT_WFC_TILE_SIZE;
 
   if (!asset.modelFile) {
     diagnostics.push("missing GLB model file");
@@ -199,8 +228,8 @@ async function generateWfcMetadata(asset: AssetFolder): Promise<{ wfc: WfcMetada
 
   const baseTile = await loadTileSamples(asset.modelFile);
   const footprint = baseTile.bounds.getSize(new THREE.Vector3());
-  if (Math.abs(footprint.x - DEFAULT_WFC_TILE_SIZE) > 0.001 || Math.abs(footprint.z - DEFAULT_WFC_TILE_SIZE) > 0.001) {
-    diagnostics.push(`Footprint ${round(footprint.x)} × ${round(footprint.z)} does not fill a ${DEFAULT_WFC_TILE_SIZE} × ${DEFAULT_WFC_TILE_SIZE} WFC cell; available for manual placement only.`);
+  if (Math.abs(footprint.x - sourceWidth) > 0.001 || Math.abs(footprint.z - sourceDepth) > 0.001) {
+    diagnostics.push(`Footprint ${round(footprint.x)} × ${round(footprint.z)} does not fill a ${sourceWidth} × ${sourceDepth} WFC cell; available for manual placement only.`);
     return { wfc: { height: round(baseTile.height), variants: [], diagnostics }, variants: [] };
   }
   const variants: WfcVariant[] = [];
@@ -222,6 +251,7 @@ async function generateWfcMetadata(asset: AssetFolder): Promise<{ wfc: WfcMetada
       variantId: `${id}@r${rotationDegrees}`,
       rotationDegrees,
       sockets,
+      ...(authoredVariants.find((variant) => variant.rotationDegrees === rotationDegrees)?.weight !== undefined ? { weight: authoredVariants.find((variant) => variant.rotationDegrees === rotationDegrees)!.weight } : {}),
       ...(existingRoadTopology.get(rotationDegrees) ? { roadTopology: existingRoadTopology.get(rotationDegrees) } : {})
     });
   }

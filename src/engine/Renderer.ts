@@ -10,6 +10,7 @@ export interface RenderLayer {
 export class Renderer {
   readonly renderer: THREE.WebGLRenderer;
   readonly canvas: HTMLCanvasElement;
+  private readonly unsubscribeViewport: () => void;
 
   constructor(canvas: HTMLCanvasElement, viewport: Viewport) {
     this.canvas = canvas;
@@ -17,7 +18,7 @@ export class Renderer {
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.autoClear = false;
     this.renderer.localClippingEnabled = true;
-    viewport.subscribe((size) => {
+    this.unsubscribeViewport = viewport.subscribe((size) => {
       this.renderer.setPixelRatio(size.pixelRatio);
       this.renderer.setSize(size.width, size.height, false);
     });
@@ -32,6 +33,7 @@ export class Renderer {
   }
 
   dispose() {
+    this.unsubscribeViewport();
     this.renderer.dispose();
   }
 }

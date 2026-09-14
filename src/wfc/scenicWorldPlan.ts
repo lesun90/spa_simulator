@@ -1,18 +1,18 @@
+import type { ScenicRecipe, ScenicStage } from "./metadata/packTypes";
+import { scenicRecipeForPalette } from "./metadata/packCatalog";
 import { directionOffset, oppositeDirection, planarDirections, SeededRandom, solvePlanarWfc, type PlanarDirection, type PlanarPolicySpec, type PlanarWfcPalette, type PlanarWfcVariant } from "./planarWfc";
 import { planLake, planStandaloneLake } from "./scenicWaterPlan";
 import { planRoundabout } from "./scenicRoundaboutPlan";
 import type { GridCell, PlannedRoadCell, WorldPlan } from "./worldPlan";
 
-const tileId = (number: string) => `3d-road-tiles.road-tile-${number}`;
 const key = (cell: GridCell) => `${cell.column},${cell.row}`;
 const move = (cell: GridCell, direction: PlanarDirection): GridCell => ({ column: cell.column + directionOffset[direction].column, row: cell.row + directionOffset[direction].row });
 const ports = (variant: PlanarWfcVariant) => planarDirections.filter((direction) => variant.semanticPorts?.[direction]?.includes("road"));
 const samePorts = (a: readonly PlanarDirection[], b: readonly PlanarDirection[]) => a.length === b.length && a.every((direction) => b.includes(direction));
-const terrainTiles = ["163", "036", "037", "140", "151", "152", "012"] as const;
 
 /** Enrich the accepted primary cycle without relaxing its road or seam constraints. */
-export function planScenicWorld(plan: WorldPlan, palette: PlanarWfcPalette, seed: number): WorldPlan {
-  return new ScenicPlan(plan, palette, new SeededRandom(seed)).build();
+export function planScenicWorld(plan: WorldPlan, palette: PlanarWfcPalette, seed: number, recipe: ScenicRecipe = scenicRecipeForPalette(palette)): WorldPlan {
+  return new ScenicPlan(plan, palette, new SeededRandom(seed), recipe).build();
 }
 
 class ScenicPlan {
@@ -21,40 +21,39 @@ class ScenicPlan {
   private readonly occupied = new Set<string>();
   private readonly ground: PlanarWfcVariant | undefined;
 
-  constructor(private readonly plan: WorldPlan, private readonly palette: PlanarWfcPalette, private readonly random: SeededRandom) {
+  constructor(private readonly plan: WorldPlan, private readonly palette: PlanarWfcPalette, private readonly random: SeededRandom, private readonly recipe: ScenicRecipe) {
     for (const corridor of plan.corridors) for (const cell of corridor.cells) this.roads.set(key(cell), { ...cell, directions: [...cell.directions] });
-    this.ground = palette.variants.find((variant) => variant.assetId === tileId("163"));
+    this.ground = palette.variants.find((variant) => variant.assetId === this.recipe.ground);
   }
 
   build(): WorldPlan {
-    if (!this.ground) throw new Error("Scenic road generation requires reviewed ground tile 163.");
+    if (!this.ground) throw new Error(this.recipe.groundDiagnostic);
     const area = this.plan.bounds.width * this.plan.bounds.depth;
-    this.addStreets(1);
-    const earlyBridges = this.bridgeLakes(1);
-    this.growStreets();
-    this.addStreets(Math.max(2, Math.round(area / 180)));
-    this.junctions();
-    this.overpasses(Math.max(1, Math.round(area / 500)));
-    this.bridgeLakes(Math.max(1, Math.round(area / 450)) - earlyBridges, "low");
-    this.roundabouts(Math.max(1, Math.round(area / 350)));
-    this.junctions();
-    this.bendRoads();
-    this.smoothCorners();
-    this.mountainPasses(Math.max(1, Math.round(area / 600)));
-    for (let index = 0; index < Math.max(1, Math.round(area / 600)); index++) {
-      const lake = planStandaloneLake(this.plan.bounds, this.roads, this.palette, this.random, this.occupied);
-      if (!lake.length) break;
-      for (const cell of lake) {
-        if (cell.variant.assetId === this.ground.assetId) continue;
-        this.pin(cell, [cell.variant]);
-        this.occupied.add(key(cell));
-      }
-    }
-    this.terrainFeatures(Math.max(1, Math.round(area / 160)));
+    let earlyBridges = 0;
+    const execute: Record<ScenicStage["operation"], (count: number, stage: ScenicStage) => void> = {
+      addStreets: (count) => this.addStreets(count),
+      bridgeLakes: (count, stage) => { const placed = this.bridgeLakes(count - (stage.subtractEarlyBridges ? earlyBridges : 0), stage.elevation); if (!stage.subtractEarlyBridges) earlyBridges = placed; },
+      growStreets: () => this.growStreets(), junctions: () => this.junctions(),
+      overpasses: (count) => this.overpasses(count), roundabouts: (count) => this.roundabouts(count),
+      bendRoads: () => this.bendRoads(), smoothCorners: () => this.smoothCorners(),
+      mountainPasses: (count) => this.mountainPasses(count),
+      standaloneLakes: (count) => {
+        for (let index = 0; index < count; index++) {
+          const lake = planStandaloneLake(this.plan.bounds, this.roads, this.palette, this.random, this.occupied, this.recipe);
+          if (!lake.length) break;
+          for (const cell of lake) {
+            if (cell.variant.assetId === this.ground!.assetId) continue;
+            this.pin(cell, [cell.variant]); this.occupied.add(key(cell));
+          }
+        }
+      },
+      terrain: (count) => this.terrainFeatures(count)
+    };
+    for (const stage of this.recipe.stages) execute[stage.operation](Math.max(stage.minimum ?? 0, stage.areaDivisor ? Math.round(area / stage.areaDivisor) : 0), stage);
 
     // Unplanned terrain stays ground. Variety comes from connected, bounded
     // features, not independent random water/slope cells that consume the world.
-    const ordinaryRoads = new Set(["162", "031", "153"].map(tileId));
+    const ordinaryRoads = new Set(this.recipe.ordinaryRoads);
     for (let row = 0; row < this.plan.bounds.depth; row++) for (let column = 0; column < this.plan.bounds.width; column++) {
       const cell = { column, row };
       if (this.tiles.has(key(cell))) continue;
@@ -82,13 +81,13 @@ class ScenicPlan {
     let placed = 0;
     while (placed < target) {
       const elevation = placed % 2 === 0 ? firstElevation : firstElevation === "high" ? "low" : "high";
-      let lake = planLake(this.plan.bounds, this.roads, this.palette, this.random, this.occupied, elevation);
-      if (!lake.length) lake = planLake(this.plan.bounds, this.roads, this.palette, this.random, this.occupied, elevation === "high" ? "low" : "high");
+      let lake = planLake(this.plan.bounds, this.roads, this.palette, this.random, this.occupied, elevation, this.recipe);
+      if (!lake.length) lake = planLake(this.plan.bounds, this.roads, this.palette, this.random, this.occupied, elevation === "high" ? "low" : "high", this.recipe);
       if (!lake.length) break;
       for (const cell of lake) {
         // Flat margins may receive streets later; protect shore, banks, ramps
         // and decks before extending the network through the remaining land.
-        if (["163", "162", "153", "025", "150", "141"].some((id) => cell.variant.assetId === tileId(id))) continue;
+        if (this.recipe.lakeMargins.includes(cell.variant.assetId)) continue;
         this.pin(cell, [cell.variant]); this.occupied.add(key(cell));
       }
       placed++;
@@ -218,10 +217,10 @@ class ScenicPlan {
   private junctions() {
     for (const cell of this.roads.values()) {
       if (cell.directions.length < 3 || this.occupied.has(key(cell))) continue;
-      this.pin(cell, this.palette.variants.filter((variant) => variant.assetId === tileId(cell.directions.length === 4 ? "141" : "150") && samePorts(ports(variant), cell.directions)));
+      this.pin(cell, this.palette.variants.filter((variant) => variant.assetId === (cell.directions.length === 4 ? this.recipe.crossing : this.recipe.junction) && samePorts(ports(variant), cell.directions)));
       for (const direction of cell.directions) {
         const neighbor = move(cell, direction);
-        this.pin(neighbor, this.palette.variants.filter((variant) => variant.assetId === tileId("025") && samePorts(ports(variant), [direction, oppositeDirection[direction]])));
+        this.pin(neighbor, this.palette.variants.filter((variant) => variant.assetId === this.recipe.crosswalk && samePorts(ports(variant), [direction, oppositeDirection[direction]])));
       }
     }
   }
@@ -263,7 +262,7 @@ class ScenicPlan {
       const expected = spur ? [] : key(cell) === key(center) ? exits : outward ? [outward, oppositeDirection[outward]] : [];
       return !samePorts(this.roads.get(key(cell))?.directions ?? [], expected);
     })) return false;
-    const assembly = planRoundabout(exits, this.palette, this.random.nextInt(0xffffffff));
+    const assembly = planRoundabout(exits, this.palette, this.random.nextInt(0xffffffff), this.recipe);
     if (!assembly.length) return false;
     const cells = assembly.map((cell) => ({ ...cell, column: center.column - 1 + cell.column, row: center.row - 1 + cell.row }));
     if (cells.some((cell) => planarDirections.some((direction) => {
@@ -298,8 +297,8 @@ class ScenicPlan {
       // Two opposing road cuts meet at their high ends; surrounding slopes
       // close the ridge back down to grass on both sides of the roadway.
       const origin = { column: start.column - (vertical ? 2 : 0), row: start.row - (vertical ? 0 : 2) };
-      if (this.patch(origin, vertical ? 5 : 2, vertical ? 2 : 5, [...terrainTiles, "231"], { cell: start, ids: ["231"] }, (cell, variant) =>
-        variant.assetId === tileId("231") ? key(cell) === key(start) || key(cell) === key(end) : !this.roads.has(key(cell))
+      if (this.patch(origin, vertical ? 5 : 2, vertical ? 2 : 5, [...this.recipe.terrain.map((part) => part.assetId), this.recipe.mountainPass], { cell: start, ids: [this.recipe.mountainPass] }, (cell, variant) =>
+        variant.assetId === this.recipe.mountainPass ? key(cell) === key(start) || key(cell) === key(end) : !this.roads.has(key(cell))
       )) placed++;
     }
   }
@@ -314,15 +313,15 @@ class ScenicPlan {
       const origin = { column: center.column - Math.floor(width / 2), row: center.row - Math.floor(depth / 2) };
       const removed = [center, ...planarDirections.map((direction) => move(center, direction))].map((cell) => this.tiles.get(key(cell))).filter((cell) => cell !== undefined);
       for (const cell of removed) this.tiles.delete(key(cell));
-      const success = this.patch(origin, width, depth, ["025", "162", "154", "161", "165", "171", "180", "164", "170", "191", "231", "194", ...terrainTiles], { cell: center, ids: ["194"] }, (cell, variant) => {
+      const success = this.patch(origin, width, depth, [...this.recipe.overpass.members, ...this.recipe.terrain.map((part) => part.assetId)], { cell: center, ids: [this.recipe.overpass.deck] }, (cell, variant) => {
         const along = transpose ? cell.column - center.column : cell.row - center.row;
         const across = transpose ? cell.row - center.row : cell.column - center.column;
-        const id = variant.assetId.split("road-tile-")[1];
+        const id = variant.assetId;
         if (across === 0 && along === 0) return variant.rotationDegrees === (transpose ? 90 : 0);
-        if (across === 0 && Math.abs(along) === 1) return id === "164" || id === "170";
-        if (across === 0 && Math.abs(along) === 2) return ["154", "161", "165", "171", "180"].includes(id);
-        if (along === 0 && Math.abs(across) === 1) return id === "191" || id === "231";
-        return !ports(variant).length || id === "162" || id === "025";
+        if (across === 0 && Math.abs(along) === 1) return this.recipe.overpass.supports.includes(id);
+        if (across === 0 && Math.abs(along) === 2) return this.recipe.overpass.approaches.includes(id);
+        if (along === 0 && Math.abs(across) === 1) return this.recipe.overpass.transverseCuts.includes(id);
+        return !ports(variant).length || id === this.recipe.straightRoad || id === this.recipe.crosswalk;
       });
       if (success) { placed.push(center); break; }
       for (const cell of removed) this.tiles.set(key(cell), cell);
@@ -368,12 +367,7 @@ class ScenicPlan {
 
   private smoothCorners() {
     const rotate = (d: PlanarDirection, turns: number) => planarDirections[(planarDirections.indexOf(d) + turns) % 4];
-    const assembly = [
-      { id: "041", column: 0, row: -1, before: ["north", "south"] },
-      { id: "144", column: 0, row: 0, before: ["east", "south"] },
-      { id: "147", column: 1, row: -1, before: [] },
-      { id: "156", column: 1, row: 0, before: ["east", "west"] }
-    ] as const;
+    const assembly = this.recipe.smoothCorner;
     for (const corner of this.shuffled([...this.roads.values()])) {
       if (corner.directions.length !== 2 || corner.directions.includes(oppositeDirection[corner.directions[0]])) continue;
       for (let turns = 0; turns < 4; turns++) {
@@ -381,13 +375,13 @@ class ScenicPlan {
         const cells = assembly.map((part) => {
           let column: number = part.column, row: number = part.row;
           for (let turn = 0; turn < turns; turn++) [column, row] = [row, -column];
-          return { column: corner.column + column, row: corner.row + row, before: part.before.map((d) => rotate(d, turns)), variant: this.palette.variants.find((v) => v.assetId === tileId(part.id) && v.rotationDegrees === turns * 90) };
+          return { column: corner.column + column, row: corner.row + row, before: part.before.map((d) => rotate(d, turns)), variant: this.palette.variants.find((v) => v.assetId === part.id && v.rotationDegrees === turns * 90) };
         });
         if (cells.some((cell) => !cell.variant || !this.inside(cell) || this.tiles.has(key(cell)) || !samePorts(this.roads.get(key(cell))?.directions ?? [], cell.before))) continue;
         const byCell = new Map(cells.map((cell) => [key(cell), cell.variant!]));
         const valid = cells.every((cell) => planarDirections.every((d) => {
           const neighbor = move(cell, d);
-          const other = byCell.get(key(neighbor)) ?? this.palette.variants.find((v) => v.assetId === tileId(this.roads.has(key(neighbor)) ? "162" : "163") && samePorts(ports(v), this.roads.get(key(neighbor))?.directions ?? []));
+          const other = byCell.get(key(neighbor)) ?? this.palette.variants.find((v) => v.assetId === (this.roads.has(key(neighbor)) ? this.recipe.straightRoad : this.recipe.ground) && samePorts(ports(v), this.roads.get(key(neighbor))?.directions ?? []));
           return other && this.palette.adjacency[cell.variant!.id][d].includes(other.id);
         }));
         if (!valid) continue;
@@ -400,14 +394,14 @@ class ScenicPlan {
   }
 
   private terrainFeatures(count: number) {
-    const ids = terrainTiles;
+    const ids = this.recipe.terrain.map((part) => part.assetId);
     // Sample corner elevations once per shared vertex, rather than filling a
     // square core. The authored slopes then agree on both sides of every edge.
     // Reviewed NW, NE, SW, SE elevations. Do not parse geometric socket
     // strings here: worker palettes replace those strings with compact IDs.
-    const cornerMasks: Readonly<Record<string, string>> = { "163": "0000", "036": "1111", "037": "1110", "140": "1000", "151": "1000", "152": "1010", "012": "1000" };
-    const masks = new Map(this.palette.variants.filter((v) => ids.some((id) => v.assetId === tileId(id))).map((v) => {
-      let mask = cornerMasks[v.assetId.split("road-tile-")[1]];
+    const cornerMasks = Object.fromEntries(this.recipe.terrain.map((part) => [part.assetId, part.cornerMask]));
+    const masks = new Map(this.palette.variants.filter((v) => ids.some((id) => v.assetId === id)).map((v) => {
+      let mask = cornerMasks[v.assetId];
       for (let turn = 0; turn < v.rotationDegrees / 90; turn++) mask = mask[2] + mask[0] + mask[3] + mask[1];
       return [v.id, mask] as const;
     }));
@@ -441,9 +435,9 @@ class ScenicPlan {
 
   private patch(origin: GridCell, width: number, depth: number, numbers: readonly string[], anchor: { cell: GridCell; ids: readonly string[] }, accepts?: (cell: GridCell, variant: PlanarWfcVariant) => boolean): boolean {
     if (!this.inside(origin) || !this.inside({ column: origin.column + width - 1, row: origin.row + depth - 1 })) return false;
-    const ids = new Set(numbers.map(tileId));
+    const ids = new Set(numbers);
     const variants = this.palette.variants.filter((variant) => ids.has(variant.assetId));
-    const anchorIds = new Set(anchor.ids.map(tileId));
+    const anchorIds = new Set(anchor.ids);
     const policies: PlanarPolicySpec[] = [];
     for (let row = 0; row < depth; row++) for (let column = 0; column < width; column++) {
       const cell = { column: origin.column + column, row: origin.row + row };
@@ -461,7 +455,7 @@ class ScenicPlan {
           // Features return to ordinary grass/road at their perimeter, so a
           // successful local solve cannot impose extra terrain on its neighbors.
           const reference = road?.directions.includes(direction)
-            ? this.palette.variants.find((candidate) => candidate.assetId === tileId("162") && ports(candidate).includes(direction))
+            ? this.palette.variants.find((candidate) => candidate.assetId === this.recipe.straightRoad && ports(candidate).includes(direction))
             : this.ground;
           if (!reference || variant.sockets[direction] !== reference.sockets[direction]) return false;
         }

@@ -5,12 +5,17 @@ import { assetLabelFromId } from "../src/editor-core/assets";
 import type { AssetSemantics, WfcMetadata } from "../src/wfc/metadata/socketTypes";
 import { validateWfcWeights } from "../src/wfc/paletteSelection";
 
+import type { WfcPackDeclaration } from "../src/wfc/metadata/packTypes";
+import { validatePackShape } from "../src/wfc/metadata/packShape";
+import { AssetPackFiles } from "./assetPackFiles";
+
 interface AssetMetadata {
   id?: string;
   label?: string;
   category?: string;
   tags?: string[];
   wfc?: WfcMetadata;
+  wfcPack?: WfcPackDeclaration;
   semantics?: AssetSemantics;
 }
 
@@ -24,10 +29,11 @@ export interface SharedImportRequest {
 }
 
 export async function discoverAssetCatalog(assetRoot: string): Promise<AssetCatalogEntry[]> {
+  const packFiles = new AssetPackFiles(assetRoot);
   const folders = await discoverAssetFolders(assetRoot);
   const rootModels = await discoverRootModelFiles(assetRoot);
   const entries = await Promise.all([
-    ...folders.map((folder) => normalizeAssetFolder(assetRoot, folder)),
+    ...folders.map((folder) => normalizeAssetFolder(assetRoot, folder, packFiles)),
     ...rootModels.map((modelFile) => normalizeRootModelAsset(assetRoot, modelFile))
   ]);
   const duplicateIds = findDuplicateIds(entries);
@@ -138,7 +144,7 @@ async function normalizeRootModelAsset(assetRoot: string, modelFile: string): Pr
   };
 }
 
-async function normalizeAssetFolder(assetRoot: string, folder: string): Promise<AssetCatalogEntry> {
+async function normalizeAssetFolder(assetRoot: string, folder: string, packFiles: AssetPackFiles): Promise<AssetCatalogEntry> {
   const names = await readdir(folder);
   const relativeFolder = relative(assetRoot, folder);
   const defaultId = relativeFolder.split(sep).join(".");
@@ -153,6 +159,7 @@ async function normalizeAssetFolder(assetRoot: string, folder: string): Promise<
     : metadataFile
       ? await readJsonMetadata(join(folder, metadataFile), diagnostics)
       : {};
+  if (metadata.wfcPack !== undefined) validatePackShape(metadata.wfcPack);
   const id = metadata.id ?? defaultId;
   const urlBase = `/assets/${relativeFolder.split(sep).map(encodeURIComponent).join("/")}`;
 
@@ -172,6 +179,7 @@ async function normalizeAssetFolder(assetRoot: string, folder: string): Promise<
     modelUrl: glbFile ? `${urlBase}/${encodeURIComponent(glbFile)}` : undefined,
     thumbnailUrl: pngFile ? `${urlBase}/${encodeURIComponent(pngFile)}` : undefined,
     wfc: metadata.wfc,
+    wfcPack: metadata.wfcPack ?? await packFiles.forFolder(folder),
     semantics: metadata.semantics,
     diagnostics
   };

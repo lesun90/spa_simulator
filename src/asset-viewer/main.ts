@@ -12,7 +12,8 @@ if (!canvas) {
   throw new Error("Asset viewer canvas was not found.");
 }
 
-class AssetViewer {
+/** Asset Viewer application root; bootstrap only supplies its canvas. */
+export class AssetViewer {
   private readonly scene = new THREE.Scene();
   private readonly camera = new THREE.PerspectiveCamera(40, 1, 0.05, 1000);
   private readonly renderer: THREE.WebGLRenderer;
@@ -31,6 +32,8 @@ class AssetViewer {
   private debug = this.params.debug;
   private lastTime = performance.now();
   private animationId = 0;
+  private loadToken = 0;
+  private disposed = false;
 
   constructor(private readonly hostCanvas: HTMLCanvasElement) {
     this.renderer = new THREE.WebGLRenderer({ canvas: hostCanvas, antialias: true, preserveDrawingBuffer: true });
@@ -57,7 +60,7 @@ class AssetViewer {
 
     if (this.params.ui) document.body.appendChild(this.panel.root);
     this.bindPanel();
-    window.addEventListener("resize", () => this.resize());
+    window.addEventListener("resize", this.resize);
     this.resize();
   }
 
@@ -83,6 +86,7 @@ class AssetViewer {
   }
 
   private async loadAsset(asset: AssetCatalogEntry) {
+    const token = ++this.loadToken;
     this.selectedAsset = asset;
     this.panel.asset.value = asset.id;
     this.setAgentStatus("loading");
@@ -90,6 +94,7 @@ class AssetViewer {
 
     clearObject(this.assetRoot);
     const object = await this.assetManager.instantiate(asset);
+    if (this.disposed || token !== this.loadToken) return;
     object.name = asset.label;
     prepareForViewing(object);
     this.assetRoot.add(object);
@@ -197,7 +202,7 @@ class AssetViewer {
     this.panel.debug.setAttribute("aria-pressed", String(this.debug));
   }
 
-  private resize() {
+  private resize = () => {
     const width = window.innerWidth;
     const height = window.innerHeight;
     const pixelRatio = Math.min(window.devicePixelRatio || 1, 2);
@@ -208,6 +213,7 @@ class AssetViewer {
   }
 
   private animate = () => {
+    if (this.disposed) return;
     const now = performance.now();
     const dt = Math.min((now - this.lastTime) / 1000, 0.1);
     this.lastTime = now;
@@ -229,9 +235,14 @@ class AssetViewer {
   }
 
   dispose() {
+    if (this.disposed) return;
+    this.disposed = true;
+    ++this.loadToken;
     cancelAnimationFrame(this.animationId);
+    window.removeEventListener("resize", this.resize);
     this.controls.dispose();
     clearObject(this.assetRoot);
+    this.assetManager.dispose();
     this.renderer.dispose();
     this.panel.root.remove();
   }

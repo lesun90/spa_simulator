@@ -1,5 +1,5 @@
 import type { SceneCatalog } from "../catalog/SceneCatalog";
-import type { ScenePresentation, ScenePresenter } from "../rendering/ScenarioViewport";
+import type { ScenePresentation, ScenePresenter } from "./ScenePresentation";
 import { ScenarioDocument } from "./ScenarioDocument";
 import { sameSceneReference, type SceneReference } from "./scene";
 

@@ -9,10 +9,12 @@ export class WfcPreviewFeature {
   readonly root = new THREE.Group();
   private readonly instances = new Map<string, THREE.Object3D>();
   private requestedIds = new Set<string>();
+  private disposed = false;
 
   constructor(private readonly assetManager: AssetManager) {}
 
   sync(objects: readonly SceneObject[], assets: readonly AssetCatalogEntry[]) {
+    if (this.disposed) return;
     this.requestedIds = new Set(objects.map((object) => object.id));
     const catalog = new Map(assets.map((asset) => [asset.id, asset]));
 
@@ -31,7 +33,7 @@ export class WfcPreviewFeature {
       const asset = catalog.get(object.assetId);
       if (!asset) continue;
       void this.assetManager.instantiate(asset).then((instance) => {
-        if (!this.requestedIds.has(object.id) || this.instances.has(object.id)) return;
+        if (this.disposed || !this.requestedIds.has(object.id) || this.instances.has(object.id)) return;
         centerGroundFootprintOnOrigin(instance);
         applyTransform(instance, object);
         this.instances.set(object.id, instance);
@@ -41,6 +43,8 @@ export class WfcPreviewFeature {
   }
 
   dispose() {
+    this.disposed = true;
+    this.requestedIds.clear();
     this.instances.clear();
     this.root.clear();
   }

@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import type { AssetCatalogEntry } from "../editor-core/assets";
+import { disposeObject } from "./disposeObject";
 
 interface AssetModule {
   createAsset?: (context: { THREE: typeof THREE; directoryUrl: string; modelUrl?: string }) => Promise<THREE.Object3D> | THREE.Object3D;
@@ -14,6 +15,7 @@ interface AssetModule {
 export class AssetManager {
   private readonly templates = new Map<string, Promise<THREE.Object3D>>();
   private readonly loader = new GLTFLoader();
+  private disposed = false;
 
   getTemplate(asset: AssetCatalogEntry): Promise<THREE.Object3D> {
     const key = `${asset.id}:${asset.implementation}:${asset.moduleUrl ?? ""}:${asset.modelUrl ?? ""}`;
@@ -35,6 +37,14 @@ export class AssetManager {
     } catch {
       return createPlaceholder(asset);
     }
+  }
+
+  /** The composition root owns cached template resources; clones remain consumer-owned scene nodes. */
+  dispose(): void {
+    if (this.disposed) return;
+    this.disposed = true;
+    for (const template of this.templates.values()) void template.then(disposeObject, () => {});
+    this.templates.clear();
   }
 
   private async resolve(asset: AssetCatalogEntry): Promise<THREE.Object3D> {

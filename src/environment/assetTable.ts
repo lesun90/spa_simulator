@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import type { AssetCatalogEntry } from "../editor-core/assets";
 import { assetFilePath } from "./assetGeometrySource";
-import { sha256Hex } from "./manifestEncoder";
+import { sha256Hex } from "./manifestHash";
 import type { EnvironmentManifestAsset, SceneRecipe } from "./types";
 
 /** Snapshots every asset referenced by the recipe, hashed by its source file bytes so the snapshot stays stable if the live catalog changes. */

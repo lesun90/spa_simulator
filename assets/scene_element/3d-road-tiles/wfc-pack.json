@@ -1,0 +1,555 @@
+{
+  "dimensions": {
+    "sourceTileWidth": 3,
+    "sourceTileDepth": 3
+  },
+  "triggerCategory": "3d-road-tiles",
+  "inferredRoles": [
+    "road.surface"
+  ],
+  "profiles": {
+    "road-scene": {
+      "requires": [
+        "tiling",
+        "road",
+        "scenic"
+      ],
+      "eligibility": {
+        "exclude": {
+          "assetIdSuffixes": [
+            ".road-tile-027",
+            ".road-tile-034"
+          ]
+        },
+        "requireTopologyOrRole": "terrain.ground"
+      },
+      "adjacency": {
+        "structures": {
+          "assetIds": [
+            "3d-road-tiles.road-tile-041",
+            "3d-road-tiles.road-tile-043",
+            "3d-road-tiles.road-tile-048",
+            "3d-road-tiles.road-tile-049",
+            "3d-road-tiles.road-tile-141",
+            "3d-road-tiles.road-tile-144",
+            "3d-road-tiles.road-tile-147",
+            "3d-road-tiles.road-tile-150",
+            "3d-road-tiles.road-tile-154",
+            "3d-road-tiles.road-tile-156",
+            "3d-road-tiles.road-tile-161",
+            "3d-road-tiles.road-tile-164",
+            "3d-road-tiles.road-tile-165",
+            "3d-road-tiles.road-tile-170",
+            "3d-road-tiles.road-tile-171",
+            "3d-road-tiles.road-tile-180",
+            "3d-road-tiles.road-tile-184",
+            "3d-road-tiles.road-tile-187",
+            "3d-road-tiles.road-tile-188",
+            "3d-road-tiles.road-tile-191",
+            "3d-road-tiles.road-tile-194",
+            "3d-road-tiles.road-tile-197",
+            "3d-road-tiles.road-tile-207",
+            "3d-road-tiles.road-tile-231"
+          ]
+        },
+        "centers": {
+          "assetIdSuffixes": [
+            ".road-tile-027",
+            ".road-tile-034"
+          ]
+        },
+        "crosswalks": {
+          "assetIds": [
+            "3d-road-tiles.road-tile-025"
+          ]
+        },
+        "ground": {
+          "assetIdSuffixes": [
+            "road-tile-163"
+          ]
+        },
+        "water": {
+          "assetIdSuffixes": [
+            "road-tile-001"
+          ]
+        },
+        "mouths": {
+          "assetIdSuffixes": [
+            "road-tile-242"
+          ]
+        },
+        "caps": {
+          "assetIds": [
+            "3d-road-tiles.road-tile-163",
+            "3d-road-tiles.road-tile-243",
+            "3d-road-tiles.road-tile-284",
+            "3d-road-tiles.road-tile-252"
+          ]
+        }
+      },
+      "scenic": {
+        "ground": "3d-road-tiles.road-tile-163",
+        "groundDiagnostic": "Scenic road generation requires reviewed ground tile 163.",
+        "straightRoad": "3d-road-tiles.road-tile-162",
+        "ordinaryRoads": [
+          "3d-road-tiles.road-tile-162",
+          "3d-road-tiles.road-tile-031",
+          "3d-road-tiles.road-tile-153"
+        ],
+        "lakeRoads": [
+          "3d-road-tiles.road-tile-162",
+          "3d-road-tiles.road-tile-153"
+        ],
+        "lakeMargins": [
+          "3d-road-tiles.road-tile-163",
+          "3d-road-tiles.road-tile-162",
+          "3d-road-tiles.road-tile-153",
+          "3d-road-tiles.road-tile-025",
+          "3d-road-tiles.road-tile-150",
+          "3d-road-tiles.road-tile-141"
+        ],
+        "crosswalk": "3d-road-tiles.road-tile-025",
+        "junction": "3d-road-tiles.road-tile-150",
+        "crossing": "3d-road-tiles.road-tile-141",
+        "terrain": [
+          {
+            "assetId": "3d-road-tiles.road-tile-163",
+            "cornerMask": "0000"
+          },
+          {
+            "assetId": "3d-road-tiles.road-tile-036",
+            "cornerMask": "1111"
+          },
+          {
+            "assetId": "3d-road-tiles.road-tile-037",
+            "cornerMask": "1110"
+          },
+          {
+            "assetId": "3d-road-tiles.road-tile-140",
+            "cornerMask": "1000"
+          },
+          {
+            "assetId": "3d-road-tiles.road-tile-151",
+            "cornerMask": "1000"
+          },
+          {
+            "assetId": "3d-road-tiles.road-tile-152",
+            "cornerMask": "1010"
+          },
+          {
+            "assetId": "3d-road-tiles.road-tile-012",
+            "cornerMask": "1000"
+          }
+        ],
+        "mountainPass": "3d-road-tiles.road-tile-231",
+        "roundabout": {
+          "island": "3d-road-tiles.road-tile-039",
+          "corner": "3d-road-tiles.road-tile-049",
+          "entrance": "3d-road-tiles.road-tile-043",
+          "closedExit": "3d-road-tiles.road-tile-048"
+        },
+        "smoothCorner": [
+          {
+            "id": "3d-road-tiles.road-tile-041",
+            "column": 0,
+            "row": -1,
+            "before": [
+              "north",
+              "south"
+            ]
+          },
+          {
+            "id": "3d-road-tiles.road-tile-144",
+            "column": 0,
+            "row": 0,
+            "before": [
+              "east",
+              "south"
+            ]
+          },
+          {
+            "id": "3d-road-tiles.road-tile-147",
+            "column": 1,
+            "row": -1,
+            "before": []
+          },
+          {
+            "id": "3d-road-tiles.road-tile-156",
+            "column": 1,
+            "row": 0,
+            "before": [
+              "east",
+              "west"
+            ]
+          }
+        ],
+        "overpass": {
+          "deck": "3d-road-tiles.road-tile-194",
+          "members": [
+            "3d-road-tiles.road-tile-025",
+            "3d-road-tiles.road-tile-162",
+            "3d-road-tiles.road-tile-154",
+            "3d-road-tiles.road-tile-161",
+            "3d-road-tiles.road-tile-165",
+            "3d-road-tiles.road-tile-171",
+            "3d-road-tiles.road-tile-180",
+            "3d-road-tiles.road-tile-164",
+            "3d-road-tiles.road-tile-170",
+            "3d-road-tiles.road-tile-191",
+            "3d-road-tiles.road-tile-231",
+            "3d-road-tiles.road-tile-194"
+          ],
+          "supports": [
+            "3d-road-tiles.road-tile-164",
+            "3d-road-tiles.road-tile-170"
+          ],
+          "approaches": [
+            "3d-road-tiles.road-tile-154",
+            "3d-road-tiles.road-tile-161",
+            "3d-road-tiles.road-tile-165",
+            "3d-road-tiles.road-tile-171",
+            "3d-road-tiles.road-tile-180"
+          ],
+          "transverseCuts": [
+            "3d-road-tiles.road-tile-191",
+            "3d-road-tiles.road-tile-231"
+          ]
+        },
+        "water": {
+          "core": "3d-road-tiles.road-tile-001",
+          "coreWeightMultiplier": 2,
+          "banks": [
+            "3d-road-tiles.road-tile-195",
+            "3d-road-tiles.road-tile-196",
+            "3d-road-tiles.road-tile-205",
+            "3d-road-tiles.road-tile-206"
+          ],
+          "exclusions": [
+            "3d-road-tiles.road-tile-168",
+            "3d-road-tiles.road-tile-176",
+            "3d-road-tiles.road-tile-215",
+            "3d-road-tiles.road-tile-242",
+            "3d-road-tiles.road-tile-244",
+            "3d-road-tiles.road-tile-264"
+          ],
+          "bridges": [
+            {
+              "id": "3d-road-tiles.road-tile-197",
+              "approaches": [
+                "3d-road-tiles.road-tile-154",
+                "3d-road-tiles.road-tile-161",
+                "3d-road-tiles.road-tile-165",
+                "3d-road-tiles.road-tile-171",
+                "3d-road-tiles.road-tile-180"
+              ],
+              "clearance": 4,
+              "coreDistance": 3,
+              "minimumSpan": 2,
+              "raisedBanks": true
+            },
+            {
+              "id": "3d-road-tiles.road-tile-207",
+              "approaches": [
+                "3d-road-tiles.road-tile-154",
+                "3d-road-tiles.road-tile-161",
+                "3d-road-tiles.road-tile-165",
+                "3d-road-tiles.road-tile-171",
+                "3d-road-tiles.road-tile-180"
+              ],
+              "clearance": 4,
+              "coreDistance": 3,
+              "minimumSpan": 2,
+              "raisedBanks": true
+            },
+            {
+              "id": "3d-road-tiles.road-tile-187",
+              "approaches": [
+                "3d-road-tiles.road-tile-162"
+              ],
+              "clearance": 3,
+              "coreDistance": 2,
+              "minimumSpan": 1,
+              "raisedBanks": false
+            },
+            {
+              "id": "3d-road-tiles.road-tile-188",
+              "approaches": [
+                "3d-road-tiles.road-tile-162"
+              ],
+              "clearance": 3,
+              "coreDistance": 2,
+              "minimumSpan": 1,
+              "raisedBanks": false
+            }
+          ]
+        },
+        "stages": [
+          {
+            "operation": "addStreets",
+            "minimum": 1
+          },
+          {
+            "operation": "bridgeLakes",
+            "minimum": 1
+          },
+          {
+            "operation": "growStreets"
+          },
+          {
+            "operation": "addStreets",
+            "minimum": 2,
+            "areaDivisor": 180
+          },
+          {
+            "operation": "junctions"
+          },
+          {
+            "operation": "overpasses",
+            "minimum": 1,
+            "areaDivisor": 500
+          },
+          {
+            "operation": "bridgeLakes",
+            "minimum": 1,
+            "areaDivisor": 450,
+            "subtractEarlyBridges": true,
+            "elevation": "low"
+          },
+          {
+            "operation": "roundabouts",
+            "minimum": 1,
+            "areaDivisor": 350
+          },
+          {
+            "operation": "junctions"
+          },
+          {
+            "operation": "bendRoads"
+          },
+          {
+            "operation": "smoothCorners"
+          },
+          {
+            "operation": "mountainPasses",
+            "minimum": 1,
+            "areaDivisor": 600
+          },
+          {
+            "operation": "standaloneLakes",
+            "minimum": 1,
+            "areaDivisor": 600
+          },
+          {
+            "operation": "terrain",
+            "minimum": 1,
+            "areaDivisor": 160
+          }
+        ],
+        "aliases": {
+          "3d-road-tiles.road-tile-001": {
+            "assetIdSuffixes": [
+              "road-tile-001"
+            ]
+          },
+          "3d-road-tiles.road-tile-012": {
+            "assetIdSuffixes": [
+              "road-tile-012"
+            ]
+          },
+          "3d-road-tiles.road-tile-025": {
+            "assetIdSuffixes": [
+              "road-tile-025"
+            ]
+          },
+          "3d-road-tiles.road-tile-036": {
+            "assetIdSuffixes": [
+              "road-tile-036"
+            ]
+          },
+          "3d-road-tiles.road-tile-037": {
+            "assetIdSuffixes": [
+              "road-tile-037"
+            ]
+          },
+          "3d-road-tiles.road-tile-039": {
+            "assetIdSuffixes": [
+              "road-tile-039"
+            ]
+          },
+          "3d-road-tiles.road-tile-043": {
+            "assetIdSuffixes": [
+              "road-tile-043"
+            ]
+          },
+          "3d-road-tiles.road-tile-048": {
+            "assetIdSuffixes": [
+              "road-tile-048"
+            ]
+          },
+          "3d-road-tiles.road-tile-049": {
+            "assetIdSuffixes": [
+              "road-tile-049"
+            ]
+          },
+          "3d-road-tiles.road-tile-140": {
+            "assetIdSuffixes": [
+              "road-tile-140"
+            ]
+          },
+          "3d-road-tiles.road-tile-141": {
+            "assetIdSuffixes": [
+              "road-tile-141"
+            ]
+          },
+          "3d-road-tiles.road-tile-150": {
+            "assetIdSuffixes": [
+              "road-tile-150"
+            ]
+          },
+          "3d-road-tiles.road-tile-151": {
+            "assetIdSuffixes": [
+              "road-tile-151"
+            ]
+          },
+          "3d-road-tiles.road-tile-152": {
+            "assetIdSuffixes": [
+              "road-tile-152"
+            ]
+          },
+          "3d-road-tiles.road-tile-153": {
+            "assetIdSuffixes": [
+              "road-tile-153"
+            ]
+          },
+          "3d-road-tiles.road-tile-154": {
+            "assetIdSuffixes": [
+              "road-tile-154"
+            ]
+          },
+          "3d-road-tiles.road-tile-161": {
+            "assetIdSuffixes": [
+              "road-tile-161"
+            ]
+          },
+          "3d-road-tiles.road-tile-162": {
+            "assetIdSuffixes": [
+              "road-tile-162"
+            ]
+          },
+          "3d-road-tiles.road-tile-163": {
+            "assetIdSuffixes": [
+              "road-tile-163"
+            ]
+          },
+          "3d-road-tiles.road-tile-165": {
+            "assetIdSuffixes": [
+              "road-tile-165"
+            ]
+          },
+          "3d-road-tiles.road-tile-168": {
+            "assetIdSuffixes": [
+              "road-tile-168"
+            ]
+          },
+          "3d-road-tiles.road-tile-171": {
+            "assetIdSuffixes": [
+              "road-tile-171"
+            ]
+          },
+          "3d-road-tiles.road-tile-176": {
+            "assetIdSuffixes": [
+              "road-tile-176"
+            ]
+          },
+          "3d-road-tiles.road-tile-180": {
+            "assetIdSuffixes": [
+              "road-tile-180"
+            ]
+          },
+          "3d-road-tiles.road-tile-187": {
+            "assetIdSuffixes": [
+              "road-tile-187"
+            ]
+          },
+          "3d-road-tiles.road-tile-188": {
+            "assetIdSuffixes": [
+              "road-tile-188"
+            ]
+          },
+          "3d-road-tiles.road-tile-195": {
+            "assetIdSuffixes": [
+              "road-tile-195"
+            ]
+          },
+          "3d-road-tiles.road-tile-196": {
+            "assetIdSuffixes": [
+              "road-tile-196"
+            ]
+          },
+          "3d-road-tiles.road-tile-197": {
+            "assetIdSuffixes": [
+              "road-tile-197"
+            ]
+          },
+          "3d-road-tiles.road-tile-205": {
+            "assetIdSuffixes": [
+              "road-tile-205"
+            ]
+          },
+          "3d-road-tiles.road-tile-206": {
+            "assetIdSuffixes": [
+              "road-tile-206"
+            ]
+          },
+          "3d-road-tiles.road-tile-207": {
+            "assetIdSuffixes": [
+              "road-tile-207"
+            ]
+          },
+          "3d-road-tiles.road-tile-215": {
+            "assetIdSuffixes": [
+              "road-tile-215"
+            ]
+          },
+          "3d-road-tiles.road-tile-242": {
+            "assetIdSuffixes": [
+              "road-tile-242"
+            ]
+          },
+          "3d-road-tiles.road-tile-244": {
+            "assetIdSuffixes": [
+              "road-tile-244"
+            ]
+          },
+          "3d-road-tiles.road-tile-264": {
+            "assetIdSuffixes": [
+              "road-tile-264"
+            ]
+          }
+        }
+      },
+      "worldPlan": {
+        "roadCoverage": 0.5,
+        "scenic": true
+      }
+    },
+    "tiling": {
+      "requires": [
+        "tiling"
+      ]
+    }
+  },
+  "defaultProfile": "road-scene",
+  "id": "3d-road-tiles",
+  "version": 1,
+  "capabilities": [
+    "tiling",
+    "road",
+    "scenic"
+  ],
+  "catalogProfiles": {
+    "generic": "tiling",
+    "automatic": "road-scene"
+  },
+  "independentPlacementDimensions": true
+}
