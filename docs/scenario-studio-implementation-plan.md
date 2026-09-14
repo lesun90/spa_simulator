@@ -1,6 +1,6 @@
 # Scenario Studio implementation plan
 
-**Progress:** 1/11 complete. Step 1: `98cf824`, reviewed 2026-09-14. Steps 2–11 not started. **Next: Step 2**, including the physics abstraction.
+**Progress:** 2/11 complete. Step 1: `98cf824`; Step 2: `b5a5000`, reviewed 2026-09-14. Steps 3–11 not started. **Next: Step 3**, New/Open/Save.
 
 [Design requirements](scenario-studio-design.md) · [Commands and evidence](scenario-studio-review.md)
 
@@ -40,7 +40,7 @@ Keep Scenario Studio separate from `WorldFeature`/`EditorState`. AssetManager ow
 
 ## Step 2 — Physical agent placement and physics abstraction
 
-- [ ] **Complete and reviewed**
+- [x] **Complete and reviewed:** agent-only catalog/API, Rapier worker abstraction, transformed solid/non-supporting geometry, physical placement, instance authoring, transactional cleanup and review evidence. Physics remains placement-only until Step 4; surface presets/water dynamics remain Step 5.
 
 Design: [agents](scenario-studio-design.md#agents-and-inspector), [physics](scenario-studio-design.md#physics-surfaces-and-activation), [replacement](scenario-studio-design.md#environment-and-replacement).
 
@@ -48,10 +48,10 @@ Design: [agents](scenario-studio-design.md#agents-and-inspector), [physics](scen
 
 **Contract:** immutable `Vector3Value{x,y,z}`, `Ray3{origin,direction}`, `PlacementHit{point,normal}`. `PlacementSurface.pickSurface(ray: Ray3): Promise<PlacementHit|null>`; `PhysicsWorld` extends it with `dispose(): Promise<void>`. `PhysicsEngineFactory` has open string `key` and `create(): Promise<PhysicsWorld>`; register Rapier. `AgentDraft` carries asset/name/pose, positive mass, collision and placement settings. `ScenarioSession.placeAgent(draft: AgentDraft, ray: Ray3): Promise<void>` validates before commit; population allocates IDs, viewport consumes snapshots/events.
 
-- [ ] Discover only agent assets via the new `/agents` API; preserve URL bases, parse metadata, diagnose duplicates/malformed assets.
-- [ ] Pin Rapier; extract neutral transformed/meter-scaled geometry and support colliders in its worker. Default collider exists only for null scene; keep descriptions usable by MuJoCo.
-- [ ] Add independent browser tabs/drafts, inspector contexts, Add/drop ghost, validated transforms/duplicate/delete and selection. Reject stale/invalid picks; scripts/suspension remain hidden.
-- [ ] Commit/release agent visuals/colliders together; extend scene replacement with population cleanup and accurate warning counts.
+- [x] Discover only agent assets via the new `/agents` API; preserve URL bases, parse metadata, diagnose duplicates/malformed assets.
+- [x] Pin Rapier; extract neutral transformed/meter-scaled geometry and support colliders in its worker. Default collider exists only for null scene; keep descriptions usable by MuJoCo.
+- [x] Add independent browser tabs/drafts, inspector contexts, Add/drop ghost, validated transforms/duplicate/delete and selection. Reject stale/invalid picks; scripts/suspension remain hidden.
+- [x] Commit/release agent visuals/colliders together; extend scene replacement with population cleanup and accurate warning counts.
 
 **Review:** two vehicle types at correct scale; road/bridge placement; reject water/outside/overlap/steep support; independent defaults/instance edits; duplicate/delete; canceled/failed replacement preserves agents, successful replacement clears them. Common gate.
 

@@ -1,6 +1,6 @@
 # Scenario Studio design
 
-Updated 2026-09-14. **Step 1 complete** (`98cf824`); Steps 2–11 unimplemented.
+Updated 2026-09-14. **Steps 1–2 complete** (`98cf824`, `b5a5000`); Steps 3–11 unimplemented.
 [Plan](scenario-studio-implementation-plan.md) · [Review and evidence](scenario-studio-review.md)
 
 This document owns product requirements; the plan owns delivery tasks, and the review guide owns verification commands/results. Sections below describe the release target unless marked current.
@@ -15,11 +15,11 @@ Excluded: local Python service, native Python packages/ML integration, source as
 
 ## Current implementation
 
-- Separate route/composition root, scene-only document/session, injected `SceneCatalog`/`ScenePresenter`, owned presentations and generation-guarded replacement.
-- Green default ground/grid; imported GLBs scale by `1 / unitsPerMeter`, fit the camera, and replace the default presentation. Empty geometry fails without fallback. No colliders, agents, playback, scenario persistence, physics or language runtimes yet; reload starts on default ground.
-- Left scene actions, right scene inspector, bottom scene browser: search by label/key, Refresh, generated static/hover previews, candidate selection, named confirmation, diagnostics, orbit/zoom/reset. Search and candidate survive filtering/Refresh; empty catalog and no matches differ. Long search text stays contained; long candidate names cannot hide warnings.
+- Separate route/composition root, authored scene/agent document and transactional session, injected catalog/presentation/physics boundaries, owned presentations and generation-guarded replacement.
+- Green default ground/grid and collider; imported GLBs scale by `1 / unitsPerMeter`, fit the camera, and contribute transformed triangle support. Water geometry is retained as a non-supporting placement blocker, and imports never receive the default fallback. Rapier owns placement queries and agent colliders in a dedicated worker through an open engine registry. No playback, scenario persistence, surface dynamics or language runtimes yet; reload starts on default ground.
+- Left scene/agent inspector, independent bottom Scenes/Agents browsers, search/Refresh/previews, Add/drag ghost, viewport selection, validated transform/duplicate/delete, named replacement warnings and orbit/zoom/reset. Per-asset and per-instance drafts survive context switches; successful scene replacement clears agents and scene drafts.
 - `assets/scenes/sample` and `scene2` contain version-1 packages at one unit/meter. No root pair currently; discovery supports it as `.`. Vehicle assets include models, thumbnails, metadata, chassis bounds and wheels, not complete driving configurations.
-- Shared dev/preview middleware serves scene catalog/package APIs and contained `/scenario-assets/{scenes,agents}/*` sources. The agent source route is not an agent catalog. Existing stack: TypeScript, Vite/Node, Three.js, HUD primitives, canvas, stats.js; the FPS overlay is not simulation performance evidence.
+- Shared dev/preview middleware serves scene and agent catalogs, scene package APIs and contained `/scenario-assets/{scenes,agents}/*` sources. Agent discovery is confined to `assets/agents` and reports malformed/duplicate metadata. Existing stack adds pinned Rapier to TypeScript, Vite/Node, Three.js, HUD primitives, canvas and stats.js; the FPS overlay is not simulation performance evidence.
 - Cards borrow thumbnail textures; renderer owns/prunes targets and cancels stale work. Model templates remain cached until app teardown. Shared text fields preserve parent scroll clipping; scaled/rotated bounds normalize raised previews. Search retains the existing field's end-of-text editing limitation.
 
 ## Workspace and authoring
