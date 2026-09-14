@@ -6,6 +6,8 @@ import { disposeObject } from "../../engine/disposeObject";
 import { DefaultGround } from "../domain/DefaultGround";
 import type { ScenePackageData } from "../domain/scene";
 import type { ScenePresentation, ScenePresenter } from "../domain/ScenePresentation";
+import type { Ray3 } from "../domain/agent";
+import { SceneGeometrySource } from "./SceneGeometrySource";
 
 interface RenderedScenePresentation extends ScenePresentation {
   readonly object: THREE.Object3D;
@@ -14,7 +16,7 @@ interface RenderedScenePresentation extends ScenePresentation {
 
 class OwnedPresentation implements RenderedScenePresentation {
   private disposed = false;
-  constructor(readonly object: THREE.Object3D, readonly bounds: THREE.Box3) {}
+  constructor(readonly object: THREE.Object3D, readonly bounds: THREE.Box3, readonly geometry: import("../physics/PhysicsWorld").SceneGeometryDescription) {}
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
@@ -28,6 +30,7 @@ export class ScenarioViewport implements ScenePresenter {
   readonly camera = new THREE.PerspectiveCamera(48, 1, 0.05, 3000);
   private readonly cameraRig: CameraRig;
   private readonly loader = new GLTFLoader();
+  private readonly geometrySource = new SceneGeometrySource();
   private disposed = false;
 
   constructor(canvas: HTMLCanvasElement) {
@@ -69,7 +72,7 @@ export class ScenarioViewport implements ScenePresenter {
     mesh.position.y = ground.y;
     root.name = "Default ground grid";
     root.add(grid, mesh);
-    return new OwnedPresentation(root, new THREE.Box3().setFromObject(root));
+    return new OwnedPresentation(root, new THREE.Box3().setFromObject(root), this.geometrySource.defaultGround(ground));
   }
 
   async prepare(data: ScenePackageData): Promise<ScenePresentation> {
@@ -80,11 +83,21 @@ export class ScenarioViewport implements ScenePresenter {
       gltf.scene.updateMatrixWorld(true);
       const bounds = new THREE.Box3().setFromObject(gltf.scene);
       if (bounds.isEmpty()) throw new Error("The scene model has no visible geometry.");
-      return new OwnedPresentation(gltf.scene, bounds);
+      return new OwnedPresentation(gltf.scene, bounds, this.geometrySource.fromObject(gltf.scene));
     } catch (error) {
       disposeObject(gltf.scene);
       throw error;
     }
+  }
+
+  rayFromCanvasPoint(x: number, y: number, width: number, height: number): Ray3 {
+    const pointer = new THREE.Vector2(x / Math.max(width, 1) * 2 - 1, -(y / Math.max(height, 1)) * 2 + 1);
+    const raycaster = new THREE.Raycaster();
+    raycaster.setFromCamera(pointer, this.camera);
+    return {
+      origin: { x: raycaster.ray.origin.x, y: raycaster.ray.origin.y, z: raycaster.ray.origin.z },
+      direction: { x: raycaster.ray.direction.x, y: raycaster.ray.direction.y, z: raycaster.ray.direction.z }
+    };
   }
 
   show(presentation: ScenePresentation): void {

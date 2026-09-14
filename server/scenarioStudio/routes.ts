@@ -2,16 +2,21 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { extname, join } from "node:path";
 import type { SceneReference } from "../../src/scenario-studio/domain/scene";
 import { PublishedScenes } from "./publishedScenes";
+import { PublishedAgents } from "./agentCatalog";
 
 export function scenarioStudioRoutes(assetRoot: string) {
   const scenes = new PublishedScenes(join(assetRoot, "scenes"));
-  const agents = new PublishedScenes(join(assetRoot, "agents"));
+  const agents = new PublishedAgents(join(assetRoot, "agents"));
   return async (request: IncomingMessage, response: ServerResponse): Promise<boolean> => {
     const url = new URL(request.url ?? "/", "http://localhost");
     if (request.method !== "GET") return false;
     try {
       if (url.pathname === "/api/scenario-studio/scenes") {
         json(response, { scenes: await scenes.list() });
+        return true;
+      }
+      if (url.pathname === "/api/scenario-studio/agents") {
+        json(response, { agents: await agents.list() });
         return true;
       }
       const match = url.pathname.match(/^\/api\/scenario-studio\/scene-package\/(manifest|model)$/);

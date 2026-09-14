@@ -3,28 +3,19 @@ import { assetTileSize, narrowAssetTileSize, shellLayout } from "../../app/confi
 import { theme } from "../../app/theme";
 import type { InteractionSystem } from "../../engine/InteractionSystem";
 import { BasePanel } from "../../features/hud/kit/BasePanel";
-import { Button } from "../../features/hud/kit/Button";
 import type { Rect } from "../../features/hud/kit/layout";
-import { Panel } from "../../features/hud/kit/Panel";
-import { ScrollRegion } from "../../features/hud/kit/ScrollRegion";
-import { TextField } from "../../features/hud/kit/TextField";
 import { Tile } from "../../features/hud/kit/Tile";
 import type { LiveThumbnailHandle } from "../../features/hud/thumbnails/ThumbnailRenderer";
 import { layoutAssetTiles } from "../../features/hud/panels/assetBrowserLayout";
 import type { SceneChoice, SceneReference } from "../domain/scene";
 import type { ScenarioSceneThumbnails } from "../rendering/ScenarioSceneThumbnails";
-import { HudText } from "./HudText";
+import { CatalogBrowserChrome } from "./CatalogBrowserChrome";
 
 /** Scene Studio's bottom asset browser chrome and tile grid, backed by published scenes. */
 export class SceneBrowserPanel extends BasePanel {
-  private readonly heading: HudText;
-  private readonly empty: HudText;
-  private readonly refreshButton: Button;
-  private readonly search: TextField;
+  private readonly chrome: CatalogBrowserChrome;
   private query = "";
   private disposed = false;
-  private readonly divider: Panel;
-  private readonly scroll: ScrollRegion;
   private rows: { choice: SceneChoice; tile: Tile; texture: THREE.Texture | null }[] = [];
   private choices: readonly SceneChoice[] = [];
   private selected: SceneReference | null = null;
@@ -48,17 +39,8 @@ export class SceneBrowserPanel extends BasePanel {
       shadow: "lg",
       z: -0.2
     }, interaction);
-    this.heading = new HudText({ x: rect.x + 18, y: rect.y + 17, width: 220 }, { size: 12, weight: "700", color: theme.text.css });
-    this.heading.setText("SCENES");
-    this.empty = new HudText({ x: rect.x + 18, y: rect.y + 72, width: Math.max(rect.width - 36, 1) }, { size: 12.5, color: theme.textMuted.css });
-    this.refreshButton = new Button(this.refreshRect(), interaction, { icon: "refresh", label: "Refresh", onClick: onRefresh });
-    this.search = new TextField(this.searchRect(), interaction, {
-      placeholder: "Search scenes…",
-      onChange: (value) => { this.query = value; this.rebuild(); }
-    });
-    this.divider = new Panel(this.dividerRect(), { fill: theme.borderSubtle.hex, radius: 0 });
-    this.scroll = new ScrollRegion(this.gridRect(), interaction, { axis: "vertical" });
-    this.root.add(this.heading.root, this.refreshButton.root, this.search.root, this.divider.root, this.scroll.root, this.empty.root);
+    this.chrome = new CatalogBrowserChrome(rect, interaction, "", "Search scenes…", onRefresh, (value) => { this.query = value; this.rebuild(); }, onVisualChange);
+    this.root.add(this.chrome.root);
   }
 
   setChoices(choices: readonly SceneChoice[]): void {
@@ -73,18 +55,8 @@ export class SceneBrowserPanel extends BasePanel {
   }
 
   setRefreshing(refreshing: boolean): void {
-    this.refreshButton.setDisabled(refreshing);
-    this.refreshButton.setLabel(refreshing ? "Refreshing" : "Refresh");
+    this.chrome.setRefreshing(refreshing);
   }
-
-  private searchRect(): Rect {
-    const x = this.rect.x + 90;
-    return { x, y: this.rect.y + 9, width: Math.max(Math.min(this.rect.width - 226, 320), 70), height: 34 };
-  }
-
-  private refreshRect(): Rect { return { x: this.rect.x + this.rect.width - 124, y: this.rect.y + 9, width: 108, height: 34 }; }
-  private dividerRect(): Rect { return { x: this.rect.x + 16, y: this.rect.y + 52, width: this.rect.width - 32, height: 1 }; }
-  private gridRect(): Rect { return { x: this.rect.x + 16, y: this.rect.y + 53, width: this.rect.width - 32, height: Math.max(this.rect.height - 53, 1) }; }
 
   private rebuild(): void {
     ++this.refreshGeneration;
@@ -92,12 +64,12 @@ export class SceneBrowserPanel extends BasePanel {
     this.releaseHover();
     for (const row of this.rows) row.tile.dispose();
     this.rows = [];
-    this.scroll.clearContent();
-    const grid = this.gridRect();
+    this.chrome.scroll.clearContent();
+    const grid = this.chrome.gridRect();
     const tileSize = this.rect.width < shellLayout.narrowBreakpoint ? narrowAssetTileSize : assetTileSize;
     const query = this.query.trim().toLowerCase();
     const visible = this.choices.filter((choice) => `${choice.label} ${choice.reference.key}`.toLowerCase().includes(query));
-    this.empty.setText(!this.choices.length ? "No published scenes found in assets/scenes." : !visible.length ? "No matching scenes. Change or clear your search." : "");
+    this.chrome.setEmpty(!this.choices.length ? "No published scenes found in assets/scenes." : !visible.length ? "No matching scenes. Change or clear your search." : "");
     const layout = layoutAssetTiles({ assetCount: visible.length, grid, tile: tileSize });
     visible.forEach((choice, index) => {
       const tile = new Tile(layout.tiles[index], this.interaction, {
@@ -108,7 +80,7 @@ export class SceneBrowserPanel extends BasePanel {
         onLeave: () => this.endHover(choice)
       });
       tile.setActive(choice.reference.key === this.selected?.key);
-      this.scroll.content.add(tile.root);
+      this.chrome.scroll.content.add(tile.root);
       const row = { choice, tile, texture: null as THREE.Texture | null };
       this.rows.push(row);
       const generation = this.refreshGeneration;
@@ -119,23 +91,18 @@ export class SceneBrowserPanel extends BasePanel {
         this.onVisualChange();
       }).catch(() => {});
     });
-    this.scroll.setContentSize(layout.contentSize);
-    this.scroll.applyClipping();
+    this.chrome.scroll.setContentSize(layout.contentSize);
+    this.chrome.scroll.applyClipping();
     this.onVisualChange();
   }
 
   protected layout(): void {
-    this.heading?.setFrame({ x: this.rect.x + 18, y: this.rect.y + 17, width: 220 });
-    this.empty?.setFrame({ x: this.rect.x + 18, y: this.rect.y + 72, width: Math.max(this.rect.width - 36, 1), maxLines: 2 });
-    this.refreshButton?.setRect(this.refreshRect());
-    this.search?.setRect(this.searchRect());
-    this.divider?.setRect(this.dividerRect());
-    this.scroll?.setRect(this.gridRect());
-    if (this.scroll) this.rebuild();
+    this.chrome?.setRect(this.rect);
+    if (this.chrome) this.rebuild();
   }
 
   update(dt: number): void {
-    this.search.update(dt);
+    this.chrome.update(dt);
     if (this.interaction.hasFocus()) this.onVisualChange();
     if (this.hoveredHandle) {
       this.thumbnails.update(dt);
@@ -180,12 +147,7 @@ export class SceneBrowserPanel extends BasePanel {
     ++this.refreshGeneration;
     this.releaseHover();
     for (const row of this.rows) row.tile.dispose();
-    this.heading.dispose();
-    this.empty.dispose();
-    this.refreshButton.dispose();
-    this.search.dispose();
-    this.divider.dispose();
-    this.scroll.dispose();
+    this.chrome.dispose();
     super.dispose();
   }
 }

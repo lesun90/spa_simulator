@@ -20,6 +20,7 @@
     "test": "vitest"
   },
   "dependencies": {
+    "@dimforge/rapier3d-compat": "0.20.0",
     "canvas": "^3.2.3",
     "stats.js": "^0.17.0",
     "three": "0.185.1"

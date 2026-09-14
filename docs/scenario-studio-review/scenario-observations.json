@@ -5,6 +5,10 @@
       "available": true
     },
     {
+      "key": "review-bridge",
+      "available": true
+    },
+    {
       "key": "review-empty",
       "available": true
     },
@@ -21,6 +25,14 @@
       "available": true
     },
     {
+      "key": "review-steep",
+      "available": true
+    },
+    {
+      "key": "review-water",
+      "available": true
+    },
+    {
       "key": "sample",
       "available": true
     },
@@ -29,9 +41,43 @@
       "available": true
     }
   ],
+  "agents": [
+    {
+      "id": "road-car-pack.compact",
+      "key": "compact",
+      "available": true
+    },
+    {
+      "id": "road-car-pack.coupe",
+      "key": "coupe",
+      "available": true
+    },
+    {
+      "id": "review.duplicate",
+      "key": "duplicate-a",
+      "available": false
+    },
+    {
+      "id": "review.duplicate",
+      "key": "duplicate-b",
+      "available": false
+    },
+    {
+      "id": "malformed",
+      "key": "malformed",
+      "available": false
+    }
+  ],
   "result": "PASS",
   "checks": [
     "default ground",
+    "agent-only catalog with duplicate/malformed diagnostics",
+    "two agent types at asset scale",
+    "agent drag ghost and placement",
+    "bridge placement above water",
+    "overlap, water, and steep-surface rejection",
+    "instance selection, transform, duplicate and delete",
+    "scene warning count and successful population cleanup",
     "case-insensitive search and no matches",
     "selection preserved through filtering/refresh",
     "named confirmation, cancel/Escape/backdrop",
@@ -48,6 +94,6 @@
   ],
   "browser": "151.0.7922.34",
   "rendering": "headless Chromium / SwiftShader; functional evidence only, no FPS claim",
-  "manifestRequests": 6,
+  "manifestRequests": 10,
   "browserErrors": []
 }

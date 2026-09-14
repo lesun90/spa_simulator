@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { theme } from "../../../app/theme";
 import type { InteractionSystem } from "../../../engine/InteractionSystem";
+import type { InteractionEvent } from "../../../engine/InteractionSystem";
 import type { Rect } from "./layout";
 import { hudBasicMaterial } from "./materials";
 import { Panel, unitPlane } from "./Panel";
@@ -13,6 +14,9 @@ export interface TileOptions {
   onClick(): void;
   onHover?(): void;
   onLeave?(): void;
+  onPointerDown?(event: InteractionEvent): void;
+  onPointerMove?(event: InteractionEvent): void;
+  onPointerUp?(event: InteractionEvent): void;
 }
 
 /** An asset-browser grid tile: thumbnail + label + tag, click arms placement (see AssetBrowserPanel). */
@@ -48,6 +52,9 @@ export class Tile {
     this.panel.root.add(this.thumbnail);
 
     this.unregister = interaction.register(this.hitArea, {
+      onPointerDown: options.onPointerDown,
+      onPointerMove: options.onPointerMove,
+      onPointerUp: options.onPointerUp,
       onClick: () => options.onClick(),
       onHover: () => {
         this.setHovered(true);

@@ -10,6 +10,7 @@ import { scenarioStudioPlugin } from "../server/scenarioStudioPlugin";
 import { exportGlb } from "../src/environment/glbExporter";
 import { disposeObject } from "../src/engine/disposeObject";
 import type { SceneChoice } from "../src/scenario-studio/domain/scene";
+import type { AgentChoice } from "../src/scenario-studio/domain/agent";
 
 // Built-client walkthrough: real files and middleware, normal canvas clicks/keys.
 // Canvas text is observed for assertions; no application modules/state are injected.
@@ -24,6 +25,16 @@ try {
   await mkdir(output, { recursive: true });
   await cp("assets/scenes", scenes, { recursive: true });
   await cp("assets/agents/vehicles/compact", join(assetRoot, "agents", "compact"), { recursive: true });
+  await cp("assets/agents/vehicles/coupe", join(assetRoot, "agents", "coupe"), { recursive: true });
+  for (const name of ["duplicate-a", "duplicate-b"]) {
+    const folder = join(assetRoot, "agents", name);
+    await cp("assets/agents/vehicles/compact", folder, { recursive: true });
+    await writeFile(join(folder, "asset.json"), JSON.stringify({ id: "review.duplicate", label: name, category: "review" }));
+  }
+  const malformedAgent = join(assetRoot, "agents", "malformed");
+  await mkdir(malformedAgent, { recursive: true });
+  await writeFile(join(malformedAgent, "vehicle.json"), "{");
+  await writeFile(join(malformedAgent, "malformed.glb"), "not a glb");
   const template = JSON.parse(await readFile(join(scenes, "sample", "environment.json"), "utf8"));
   const fixture = async (name: string, empty = false) => {
     const root = new THREE.Group();
@@ -43,6 +54,59 @@ try {
   };
   await fixture("review-groundless"); // Deliberately retains manifest.ground; GLB has only a raised box.
   await fixture("review-empty", true);
+  {
+    const root = new THREE.Group();
+    root.name = "SteerlabEnvironment";
+    const ground = new THREE.Mesh(new THREE.BoxGeometry(20, 1, 20), new THREE.MeshStandardMaterial({ name: "Stone", color: 0x8f8b80 }));
+    ground.position.y = -0.5;
+    const water = new THREE.Mesh(new THREE.PlaneGeometry(12, 12), new THREE.MeshStandardMaterial({ name: "Water", color: 0x3c83b8 }));
+    water.name = "Water";
+    water.rotation.x = -Math.PI / 2;
+    water.position.y = 0.4;
+    root.add(ground, water);
+    const glb = await exportGlb(root);
+    disposeObject(root);
+    const manifest = { ...template, model: { ...template.model, sha256: createHash("sha256").update(glb).digest("hex") }, chunks: [], assets: [], cells: [], objects: [], navigation: { nodes: [], edges: [] } };
+    const folder = join(scenes, "review-water");
+    await mkdir(folder, { recursive: true });
+    await writeFile(join(folder, "environment.json"), JSON.stringify(manifest));
+    await writeFile(join(folder, "environment.glb"), glb);
+  }
+  {
+    const root = new THREE.Group();
+    root.name = "SteerlabEnvironment";
+    const ground = new THREE.Mesh(new THREE.BoxGeometry(20, 1, 20), new THREE.MeshStandardMaterial({ name: "Stone", color: 0x8f8b80 }));
+    ground.position.y = -0.5;
+    const water = new THREE.Mesh(new THREE.PlaneGeometry(16, 16), new THREE.MeshStandardMaterial({ name: "Water", color: 0x3c83b8 }));
+    water.name = "Water";
+    water.rotation.x = -Math.PI / 2;
+    water.position.y = 0.4;
+    const bridge = new THREE.Mesh(new THREE.BoxGeometry(6, 0.5, 16), new THREE.MeshStandardMaterial({ name: "Asphalt", color: 0x4d5158 }));
+    bridge.name = "Bridge deck";
+    bridge.position.y = 1.25;
+    root.add(ground, water, bridge);
+    const glb = await exportGlb(root);
+    disposeObject(root);
+    const manifest = { ...template, model: { ...template.model, sha256: createHash("sha256").update(glb).digest("hex") }, chunks: [], assets: [], cells: [], objects: [], navigation: { nodes: [], edges: [] } };
+    const folder = join(scenes, "review-bridge");
+    await mkdir(folder, { recursive: true });
+    await writeFile(join(folder, "environment.json"), JSON.stringify(manifest));
+    await writeFile(join(folder, "environment.glb"), glb);
+  }
+  {
+    const root = new THREE.Group();
+    root.name = "SteerlabEnvironment";
+    const slope = new THREE.Mesh(new THREE.BoxGeometry(20, 0.2, 20), new THREE.MeshStandardMaterial({ name: "Stone", color: 0x8f8b80 }));
+    slope.rotation.z = 50 * Math.PI / 180;
+    root.add(slope);
+    const glb = await exportGlb(root);
+    disposeObject(root);
+    const manifest = { ...template, model: { ...template.model, sha256: createHash("sha256").update(glb).digest("hex") }, chunks: [], assets: [], cells: [], objects: [], navigation: { nodes: [], edges: [] } };
+    const folder = join(scenes, "review-steep");
+    await mkdir(folder, { recursive: true });
+    await writeFile(join(folder, "environment.json"), JSON.stringify(manifest));
+    await writeFile(join(folder, "environment.glb"), glb);
+  }
   await fixture(""); // Optional root package, key ".".
   await mkdir(join(scenes, "review-invalid"));
   await writeFile(join(scenes, "review-invalid", "environment.json"), "{");
@@ -97,6 +161,7 @@ try {
     await settle();
   };
   const catalog = async () => (await (await page.request.get("http://127.0.0.1:4174/api/scenario-studio/scenes")).json()).scenes as SceneChoice[];
+  const agentCatalog = async () => (await (await page.request.get("http://127.0.0.1:4174/api/scenario-studio/agents")).json()).agents as AgentChoice[];
   await page.goto("http://127.0.0.1:4174/scenario_studio");
   await saw("scene");
   await page.waitForTimeout(1200);
@@ -104,19 +169,77 @@ try {
   assert(choices.some((item) => item.reference.key === "." && item.available));
   assert(choices.some((item) => item.reference.key === "sample" && item.available));
   assert(choices.some((item) => item.reference.key === "scene2" && item.available));
+  const waterChoice = choices.find((item) => item.reference.key === "review-water");
+  assert(waterChoice?.available, JSON.stringify(waterChoice));
+  assert(choices.some((item) => item.reference.key === "review-steep" && item.available));
+  assert(choices.some((item) => item.reference.key === "review-bridge" && item.available));
   assert(choices.some((item) => item.reference.key === "review-invalid" && !item.available));
   const source = await page.request.get("http://127.0.0.1:4174/scenario-assets/agents/compact/compact.glb");
   assert.equal(source.status(), 200);
+  const agents = await agentCatalog();
+  assert(agents.some((item) => item.asset.id === "road-car-pack.compact" && item.available));
+  assert(agents.some((item) => item.asset.id === "road-car-pack.coupe" && item.available));
+  assert.equal(agents.filter((item) => item.asset.id === "review.duplicate" && !item.available).length, 2);
+  assert(agents.some((item) => item.asset.key === "malformed" && !item.available && item.diagnostics.some((diagnostic) => diagnostic.includes("not valid JSON"))));
+  assert(agents.every((item) => item.asset.modelUrl.startsWith("/scenario-assets/agents/")));
   observations.packages = choices.map((item) => ({ key: item.reference.key, available: item.available }));
+  observations.agents = agents.map((item) => ({ id: item.asset.id, key: item.asset.key, available: item.available }));
   await shot("01-default-ground");
   const initial = await active();
+  await page.mouse.click(550, 736); // Agents tab.
+  await saw("Search agents");
+  await page.mouse.click(80, 810); // Compact asset.
+  await saw("NEW AGENT");
+  await page.mouse.move(80, 810);
+  await page.mouse.down();
+  await page.mouse.move(683, 450, { steps: 8 });
+  await saw("Click to place");
+  await page.mouse.up();
+  await saw("Compact placed.");
+  await page.mouse.click(140, 677); // Add another Compact.
+  await page.mouse.move(683, 450);
+  await saw("overlaps another agent");
+  await shot("01b-overlap-rejected");
+  await page.keyboard.press("Escape");
+  await page.mouse.click(150, 736); // Agent search has independent state.
+  await page.keyboard.type("coupe");
+  await page.keyboard.press("Enter");
+  await settle();
+  await page.mouse.click(80, 810);
+  await saw("Coupe");
+  await page.mouse.move(80, 810);
+  await page.mouse.down();
+  await page.mouse.move(810, 450, { steps: 8 });
+  await page.mouse.up();
+  await saw("Coupe placed.");
+  await shot("01a-agent-placed");
+  await page.mouse.click(683, 447); // Select the placed instance.
+  await saw("EXISTING AGENT");
+  await page.mouse.click(184, 313); // Heading.
+  await page.keyboard.press("Backspace");
+  await page.keyboard.type("45");
+  await page.keyboard.press("Enter");
+  await page.mouse.click(140, 677); // Apply Changes.
+  await settle();
+  await page.mouse.click(76, 639); // Duplicate; the copy becomes selected.
+  await settle();
+  await page.mouse.click(202, 639); // Delete copy, retaining the original.
+  await settle();
+  await page.mouse.click(470, 736); // Scenes tab.
+  await select("review empty");
+  await use();
+  await saw("removes 2 agents.");
+  await confirm("review-empty");
+  await saw("The scene model has no visible geometry.");
+  await shot("01c-failed-replacement-preserved");
+  const requestsAfterFailedReplacement = manifestRequests;
   await select("SaMpLe");
   await saw("Package: sample");
   assert.deepEqual(await active(), initial, "Selecting a card changed the active environment");
-  assert.equal(manifestRequests, 0);
+  assert.equal(manifestRequests, requestsAfterFailedReplacement);
   await use();
   await saw("“sample”");
-  await saw("removes 0 agents.");
+  await saw("removes 2 agents.");
   await shot("02-named-confirmation");
   await page.mouse.click(680, 536); // Cancel.
   assert.deepEqual(await active(), initial);
@@ -149,6 +272,7 @@ try {
   await saw("Package: scene2");
   assert.deepEqual(await active(), sample);
   await use();
+  await shot("04a-zero-agent-warning");
   await page.mouse.click(680, 536);
   assert.deepEqual(await active(), sample);
   // Change a real fixture after selection: both old content hashes must be rejected.
@@ -185,6 +309,46 @@ try {
   await confirm("review-groundless");
   await saw("review groundless loaded.");
   await shot("08-groundless-no-fallback");
+  await select("review water");
+  await saw("Package: review-water");
+  await use();
+  await saw("“review water”");
+  await confirm("review-water");
+  await saw("review water loaded.");
+  await page.mouse.click(550, 736); // Agents tab; its independent search still contains Coupe.
+  await page.mouse.click(80, 810);
+  await page.mouse.click(140, 677);
+  await page.mouse.move(683, 450);
+  await saw("Choose a solid surface inside the environment.");
+  await shot("08a-water-rejected");
+  await page.keyboard.press("Escape");
+  await page.mouse.click(470, 736); // Scenes tab.
+  await select("review bridge");
+  await use();
+  await confirm("review-bridge");
+  await saw("review bridge loaded.");
+  await page.mouse.click(550, 736);
+  await page.mouse.click(80, 810);
+  await page.mouse.click(140, 677);
+  await page.mouse.move(683, 450);
+  await saw("Click to place this agent.");
+  await page.mouse.click(683, 450);
+  await saw("Coupe placed.");
+  await shot("08b-bridge-placement");
+  await page.mouse.click(470, 736);
+  await select("review steep");
+  await use();
+  await saw("removes 1 agent.");
+  await confirm("review-steep");
+  await saw("review steep loaded.");
+  await page.mouse.click(550, 736);
+  await page.mouse.click(80, 810);
+  await page.mouse.click(140, 677);
+  await page.mouse.move(683, 450);
+  await saw("This surface is too steep.");
+  await shot("08c-steep-rejected");
+  await page.keyboard.press("Escape");
+  await page.mouse.click(470, 736);
   await page.mouse.move(600, 400);
   await page.mouse.down();
   await page.mouse.move(700, 430, { steps: 8 });
@@ -234,7 +398,7 @@ try {
   await page.waitForTimeout(600);
   assert.deepEqual(errors, [], "Browser errors");
   observations.result = "PASS";
-  observations.checks = ["default ground", "case-insensitive search and no matches", "selection preserved through filtering/refresh", "named confirmation, cancel/Escape/backdrop", "unchanged reference no-op", "sample and scene2 loading", "stale content rejected without replacement", "invalid package disabled", "empty geometry preserves previous scene", "groundless geometry without fallback", "orbit/zoom/reset and narrow layout", "root package and source routes", "catalog additions/removals", "rapid hover/refresh/resize"];
+  observations.checks = ["default ground", "agent-only catalog with duplicate/malformed diagnostics", "two agent types at asset scale", "agent drag ghost and placement", "bridge placement above water", "overlap, water, and steep-surface rejection", "instance selection, transform, duplicate and delete", "scene warning count and successful population cleanup", "case-insensitive search and no matches", "selection preserved through filtering/refresh", "named confirmation, cancel/Escape/backdrop", "unchanged reference no-op", "sample and scene2 loading", "stale content rejected without replacement", "invalid package disabled", "empty geometry preserves previous scene", "groundless geometry without fallback", "orbit/zoom/reset and narrow layout", "root package and source routes", "catalog additions/removals", "rapid hover/refresh/resize"];
   observations.browser = await browser.version();
   observations.rendering = "headless Chromium / SwiftShader; functional evidence only, no FPS claim";
   observations.manifestRequests = manifestRequests;

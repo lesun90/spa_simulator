@@ -14,7 +14,7 @@ export class HudText {
   private text = "";
   private meshes: THREE.Mesh<THREE.PlaneGeometry, THREE.MeshBasicMaterial>[] = [];
 
-  constructor(private frame: TextFrame, private readonly style: TextOptions = {}) {}
+  constructor(private frame: TextFrame, private style: TextOptions = {}) {}
 
   setText(text: string): void {
     if (this.text === text) return;
@@ -24,6 +24,11 @@ export class HudText {
 
   setFrame(frame: TextFrame): void {
     this.frame = frame;
+    this.render();
+  }
+
+  setStyle(style: TextOptions): void {
+    this.style = { ...this.style, ...style };
     this.render();
   }
 

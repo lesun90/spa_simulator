@@ -9,7 +9,7 @@ import type { WfcPackDeclaration } from "../src/wfc/metadata/packTypes";
 import { validatePackShape } from "../src/wfc/metadata/packShape";
 import { AssetPackFiles } from "./assetPackFiles";
 
-interface AssetMetadata {
+export interface AssetMetadata {
   id?: string;
   label?: string;
   category?: string;
@@ -157,7 +157,7 @@ async function normalizeAssetFolder(assetRoot: string, folder: string, packFiles
   const metadata = moduleFile
     ? await readModuleMetadata(join(folder, moduleFile), diagnostics)
     : metadataFile
-      ? await readJsonMetadata(join(folder, metadataFile), diagnostics)
+      ? await readJsonAssetMetadata(join(folder, metadataFile), diagnostics)
       : {};
   if (metadata.wfcPack !== undefined) validatePackShape(metadata.wfcPack);
   const id = metadata.id ?? defaultId;
@@ -201,7 +201,7 @@ async function readModuleMetadata(filePath: string, diagnostics: string[]): Prom
   }
 }
 
-async function readJsonMetadata(filePath: string, diagnostics: string[]): Promise<AssetMetadata> {
+export async function readJsonAssetMetadata(filePath: string, diagnostics: string[]): Promise<AssetMetadata> {
   try {
     return JSON.parse(await readFile(filePath, "utf8")) as AssetMetadata;
   } catch {
@@ -221,7 +221,7 @@ async function fileContainsCreateAsset(filePath: string) {
   }
 }
 
-function findDuplicateIds(entries: AssetCatalogEntry[]) {
+export function findDuplicateIds<T extends { id: string }>(entries: readonly T[]) {
   const seen = new Set<string>();
   const duplicates = new Set<string>();
 
