@@ -1,539 +1,188 @@
-# Scenario Studio Implementation Plan
+# Scenario Studio implementation plan
 
-> **For agentic workers:** Use the `executing-plans` skill to implement this plan feature by feature. Execute inline unless the user explicitly requests delegation. Track the feature steps and their implementation checklist with `- [ ]` syntax. Read the design spec before starting.
+**Progress:** 1/11 complete. Step 1: `98cf824`, reviewed 2026-09-14. Steps 2–11 not started. **Next: Step 2**, including the physics abstraction.
 
-**Goal:** Deliver Scenario Studio with confirmed scene selection, physical agent placement, editable/importable JavaScript and Python scripts, automatic agent lifecycle handling, production Rapier and MuJoCo backends, and smooth simulation of 100 active agents.
+[Design requirements](scenario-studio-design.md) · [Commands and evidence](scenario-studio-review.md)
 
-**Architecture:** Extend the existing `ScenarioDocument`, `ScenarioSession`, and injected `SceneCatalog`/`ScenePresenter` boundaries. The target adds domain-owned agent and playback lifecycle, replaceable physics/input/scripting/persistence adapters, a registered engine in one physics worker, and bounded JavaScript/Python worker pools. Those simulation subsystems do not exist yet.
+## Execution rules
 
-**Tech Stack:** Existing TypeScript, Vite, Three.js, Node server integration, HUD controls, and stats.js FPS monitoring. Planned additions: Rapier and official MuJoCo WebAssembly bindings behind separate physics adapters, Pyodide in browser workers, and a native multiline script-editing surface. Resolve and pin new package/runtime versions during the feature that first needs them, using official documentation and the repository's Docker workflow.
+Use `executing-plans`, inline unless delegation is requested. The design is authoritative; this plan specifies delivery order and work locations. Every step inherits its requirements. Deliver working UI/domain/adapters/persistence/error handling together; hide controls until usable. Preserve user work/assets and existing flows. Install/pin dependencies and build in Docker. No new unit tests unless requested.
 
-**Spec:** [Scenario Studio design](scenario-studio-design.md).
+To reduce implementation context:
 
-**Synchronized:** 2026-09-14 after completing Step 1 on `scenario-studio-step-1`. See the [review guide and evidence](scenario-studio-review.md) for build/browser/regression results. No simulation-performance acceptance is claimed.
+1. Read this status/rules section, the current step, and its linked design sections. Read other steps only for an actual dependency; skip completed-step history and evidence unless investigating a regression.
+2. Use CodeGraph first where indexed. Query exact symbols/call paths; read focused source ranges and relevant repository instructions. Batch independent queries; avoid whole-directory dumps, rereading unchanged files, or copying source into the plan.
+3. Reuse existing types/adapters. Keep the change within the step; resolve ordinary implementation choices without reopening settled design. Avoid speculative abstractions and broad rewrites.
+4. Run the common gate once on the finished change. Repeat only checks affected by a subsequent edit/failure; widen checks when shared code or evidence warrants it. Do not skip a required check to save tokens.
+5. Record only status, commit, concise outcome/limits and evidence links here. Put logs/screenshots in the review artifacts. Handoffs contain current step, changed files, decisions, failed/passed checks and next action—not the full history.
 
-## Implementation baseline and next work
+**Common completion gate:** use normal controls in development and built client; capture evidence; run Docker `build:check`, `review:build`, `git diff --check`, and relevant existing/browser regressions. Review ownership, stale results, failures and Scene Studio compatibility. Record results/limits in the review guide; commit the complete feature. Preview shares Scenario Studio middleware; it is not a production host or proof of Scene Studio preview API support. From Step 3, isolate review writes with `STEERLAB_SCENARIOS_DIR`.
 
-Step 1's scene-browser implementation landed in `57e1fd1` and has since been extended/refactored. The route, scene transaction, green default presentation, package APIs, generated thumbnails, HUD cache, basic FPS overlay, and development/preview integration exist. Step 1 is now complete, including search, candidate-specific confirmation, thumbnail lifecycle fixes, the review guide, and built-client acceptance evidence. Steps 2–11 have not started.
+## Existing owners
 
-The current published packages are `assets/scenes/sample` and `assets/scenes/scene2`, each containing `environment.json` and `environment.glb`. Discovery also supports a root pair, but none is currently present. The default ground is visual only; there are no scene colliders, agent domain objects/catalog UI, playback controls, scenario persistence, language runtimes, or physics-engine dependencies.
+Paths below are relative to `src/scenario-studio/` unless prefixed `src/`, `server/`, `scripts/` or `docs/`. Planned files are introduced only with their working feature; use CodeGraph to find equivalents first.
 
-Next: implement Step 2 against the existing classes; its physics abstraction and Rapier placement adapter are not present yet. A checked implementation item means its code is present; **Feature complete and reviewed** additionally requires the product verification gate. Do not recreate delivered files or interpret an unchecked feature gate as an absent implementation.
-
-## Global constraints
-
-- Scenario Studio at `/scenario_studio` assembles a published scene and agents, then previews their physics and scripted behavior. Scene Studio remains the environment-authoring app at `/scene_studio`.
-- The first release targets 100 active agents with smooth playback.
-- Physics is an explicitly replaceable subsystem. Production must include both **Rapier** and **MuJoCo** backends.
-- Additional engines integrate by implementing the physics contract and registering an adapter, without changing scenario, agent, script, or UI consumers.
-- Show the default empty green flat ground only when no scene is selected. Imported scenes never receive this fallback surface or collider.
-- Python targets Pyodide's supported standard library; a local Python service, native package support, and ML integrations are outside this release.
-- Users choose assets, edit settings and scripts, and control playback. Instance IDs, worker placement, lifecycle transitions, resource ownership, and cleanup are internal responsibilities.
-- Domain objects own private state and enforce legal transitions. Transport records may be plain data; domain behavior must not be a collection of public mutable records.
-- Do not add unit tests unless explicitly requested. Use build/type checks and direct browser verification, with repeatable browser scripts where useful.
-- Do not rely on distance suspension to pass the 100-active-agent acceptance case.
-- Keep the user's existing changes and assets intact. Commit only the files belonging to the completed feature.
-- Run dependency installation and project builds inside Docker, following `README.md`.
-
----
-
-## What counts as a completed step
-
-Each numbered step is a complete, independently reviewable product feature. Its domain changes, adapters, UI, persistence updates, error handling, and documentation ship together. Internal setup is part of that feature's checklist, never a separate milestone.
-
-At the end of each step, the reviewer can open the real application, use real assets through its normal controls, and observe the promised behavior without a console command, mock server, manually injected state, or another unfinished step. Earlier features continue to work. Controls for features not yet delivered remain absent; do not ship inert buttons or language choices that cannot execute.
-
-Review the built client as well as the development app. The existing Scenario Studio plugin already shares middleware between development and local release-build review. A Vite preview is a local review server, not a production hosting strategy. Each feature must use the same API contracts in the production host; this plan does not authorize deployment or invent new hosting infrastructure.
-
-Before marking any step complete:
-
-1. Run that step's browser walkthrough against the actual app and collect a screenshot or short recording of its result.
-2. Run `docker compose exec -T app npm run build:check` and `git diff --check`.
-3. Run relevant existing regression checks only when the changed shared code warrants them. Do not add unit tests.
-4. Review the diff for resource ownership, cross-module coupling, failure behavior, and regressions in `/scene_studio`.
-5. Record the commands/results and any measured limitations in the feature's commit or review description. Commit the complete feature as a review boundary.
-
-For local release-build review, `package.json` already provides these scripts:
-
-```text
-npm run review:build
-  tsc --noEmit && vite build --outDir /tmp/steerlab-review-dist --emptyOutDir
-
-npm run review:serve
-  vite preview --outDir /tmp/steerlab-review-dist --host 0.0.0.0 --port 4173
-```
-
-Run both inside the Compose app container. The preview hook already mounts the same Scenario Studio APIs and read-only asset routes as development. `compose.yaml` publishes only 5173; use an available host-port mapping for 4173 or a browser inside the container. Do not interrupt the existing port-5173 app or alter its saved data. Pass a separate `STEERLAB_SCENARIOS_DIR` for review writes from Step 3 onward; that override is not implemented today.
-
-Existing browser probes can be run inside Docker when validating runtime changes:
-
-```bash
-docker compose exec -T app npx --no-install vite-node scripts/verifyApplicationWorkflows.ts
-docker compose exec -T app npx --no-install vite-node scripts/verifyResourceLifecycle.ts
-```
-
-These require Playwright Chromium and its browser libraries in the container. They start temporary development servers on container ports 5198 and 5199, respectively, and isolate Scene Studio persistence. The workflow script writes screenshots and observations to `/tmp/lean-modular-workflows` (override: `WORKFLOW_ARTIFACT_DIR`); the lifecycle script writes to `/tmp/lean-modular-lifecycle` (override: `LIFECYCLE_ARTIFACT_DIR`). Both instrument the browser; some workflow checks invoke application methods. Reuse them for regressions, but retain a separate normal-control built-client walkthrough for each feature gate. Neither is a hardware FPS benchmark.
-
-## File ownership and reuse map
-
-Paths below distinguish existing owners from planned additions. Before creating a file, use CodeGraph to check for an equivalent. Extend existing types and update this map when responsibilities change.
-
-| Path or group | Current state and responsibility |
+| Existing files | Extend/reuse for |
 | --- | --- |
-| `src/scenario-studio/main.ts`, `ScenarioStudioApp.ts` | **Existing:** route entry, concrete adapter composition, render loop, input wiring, and shutdown. |
-| `src/scenario-studio/domain/ScenarioDocument.ts`, `ScenarioSession.ts` | **Existing:** authored scene reference and transactional presentation replacement. Extend with agents, persistence records, and playback/run generation in their owning steps. |
-| `src/scenario-studio/domain/scene.ts`, `ScenePresentation.ts`, `DefaultGround.ts` | **Existing:** scene transport records, `ScenePresenter`/owned `ScenePresentation` boundary, and fixed green-ground definition. |
-| `src/scenario-studio/catalog/SceneCatalog.ts`, `HttpSceneCatalog.ts` | **Existing:** published-scene catalog port and HTTP adapter. |
-| `src/scenario-studio/ui/ScenarioHudFeature.ts`, `SceneBrowserPanel.ts`, `HudText.ts` | **Existing:** canvas shell, scene actions/details/confirmation, scrolling scene cards, and text. Extend these for search/tabs; do not create a parallel `ScenarioWorkspace` or `SceneBrowserTab`. Extract focused panels as working features need them. |
-| `src/scenario-studio/rendering/ScenarioViewport.ts`, `ScenarioSceneThumbnails.ts`, `ScenarioHudCache.ts` | **Existing:** owned scene rendering and camera, generated/static and live scene previews, cached HUD composition. |
-| `src/engine/PerformanceMonitor.ts` | **Existing shared component:** stats.js FPS overlay and toggle. Reuse alongside future simulation metrics; this is not the planned simulation Performance panel. |
-| `server/scenarioStudioPlugin.ts`, `server/scenarioStudio/routes.ts`, `publishedScenes.ts` | **Existing:** shared dev/preview HTTP composition, published-package discovery/validation, hash-checked loading, contained read-only scene/agent source access. |
-| `scripts/verifyApplicationWorkflows.ts`, `scripts/verifyResourceLifecycle.ts` | **Existing:** instrumented browser workflows and lifecycle probes. Extend relevant coverage instead of duplicating their infrastructure. |
-| `src/scenario-studio/domain/agent.ts`, `AgentInstance.ts`, `AgentPopulation.ts` | **Planned, Step 2:** agent transport records, validated configuration and automatic population lifecycle. |
-| `src/scenario-studio/catalog/AgentCatalog.ts`, `HttpAgentCatalog.ts`, `server/scenarioStudio/agentCatalog.ts` | **Planned, Step 2:** agent discovery/metadata boundary and HTTP adapter. Reuse `server/assetCatalog.ts` with an explicit URL base. |
-| `src/scenario-studio/ui/AgentBrowserTab.ts`, `AgentInspectorPanel.ts` | **Planned, Step 2:** agent cards and inspector contexts, integrated into the existing HUD/browser. |
-| `src/scenario-studio/rendering/SceneGeometrySource.ts`, `AgentVisuals.ts` | **Planned, Step 2:** engine-free geometry extraction and agent rendering/selection; interpolation added with playback. |
-| `src/scenario-studio/physics/PhysicsWorld.ts`, `PhysicsWorkerClient.ts`, `physics.worker.ts`, `RapierPhysicsWorld.ts`, `PhysicsEngineRegistry.ts` | **Planned, Step 2 onward:** physics boundary, registered factory, worker transport, Rapier world and placement; extend for playback in Step 4. |
-| `src/scenario-studio/domain/scenario.ts`, `persistence/ScenarioRepository.ts`, `HttpScenarioRepository.ts`, `server/scenarioStudio/scenarioStore.ts` | **Planned, Step 3:** persisted scenario records, repository boundary/client, and atomic document store. |
-| `src/scenario-studio/ui/PlaybackToolbar.ts`, `input/ScenarioInput.ts`, `physics/VehicleController.ts`, `simulation/SimulationMetrics.ts` | **Planned, Step 4:** playback controls, focus-aware input, driving, and runtime measurements. |
-| `src/scenario-studio/physics/SurfacePresets.ts`, `WaterRegions.ts`, `ui/ScenePhysicsPanel.ts` | **Planned, Step 5:** surface settings, water-region behavior and inspection. |
-| `src/scenario-studio/scripts/ScriptProgram.ts`, `ScriptRuntime.ts`, `ScriptScheduler.ts`, `ScriptContext.ts`, `JavaScriptRuntime.ts`, `javascript.worker.ts`, `JavaScriptCompiler.ts`, `ui/ScriptEditorPanel.ts` | **Planned, Step 6:** script source/editor, validated commands, scheduling and JavaScript runtime. |
-| `src/scenario-studio/scripts/CreatorContext.ts`, `ui/ScenarioScriptPanel.ts` | **Planned, Step 7:** creator API and editor context. |
-| `src/scenario-studio/scripts/PythonRuntime.ts`, `python.worker.ts` | **Planned, Step 8:** Python runtime and language registration. |
-| `src/scenario-studio/simulation/DistanceActivation.ts` | **Planned, Step 9:** opt-in activation policy. |
-| `src/scenario-studio/physics/mujoco/MujocoPhysicsWorld.ts`, `MujocoModelCompiler.ts`, `MujocoAgentSlots.ts`, `MujocoVehicleController.ts`, `src/scenario-studio/ui/PhysicsEnginePanel.ts` | **Planned, Step 10:** MuJoCo model/collision/lifecycle adaptation and engine-selection UI. |
-| `src/scenario-studio/ui/PerformancePanel.ts`, `scripts/benchmarkScenarioStudio.mjs`, `docs/scenario-studio-performance.md` | **Planned, Step 11:** simulation metrics UI and measured performance capture for both backends. |
-| `scripts/verifyScenarioStudio.ts`, `docs/scenario-studio-review.md`, `docs/scenario-studio-review/` | **Existing, Step 1:** isolated built-client walkthrough, reviewer instructions, screenshots and observed results. |
-
-Reuse `Renderer`, `RenderLoop`, `Viewport`, `CameraRig`, `InteractionSystem`, HUD kit primitives, and `ThumbnailRenderer` where their contracts fit. Keep the Scenario Studio viewport separate from `WorldFeature`, which depends on `EditorState` and terrain-authoring behavior. Reuse or extend `AssetManager` for model caching with explicit ownership; its clones share geometry/materials and must not be individually disposed as owners.
-
-Do not create empty versions of every file in this map. Introduce each file with its first working feature.
-
-## Delivery sequence
-
-| Step | Status | Complete feature | Reviewer sees |
-| --- | --- | --- | --- |
-| 1 | Complete and reviewed | Browse and confirm a published scene | Real scene cards and an interactive loaded viewport. |
-| 2 | Not started | Add, inspect, edit, and remove agents | Shared browser tabs, physical placement, and left Agent Inspector. |
-| 3 | Not started | Save and reopen scenarios | A complete authored setup survives page refresh and reopening. |
-| 4 | Not started | Play, pause, reset, and control a vehicle | Physical motion, collisions, driving, and reliable restoration. |
-| 5 | Not started | Physical surface interactions | Observable asphalt/grass/stone behavior and water-region drag. |
-| 6 | Not started | Write/import JavaScript agent behavior | A script edited in the inspector controls a placed agent. |
-| 7 | Not started | Create populations with a scenario script | Startup/timed spawning and despawning without manual lifecycle work. |
-| 8 | Not started | Write/import Python behavior and creator scripts | Python and JavaScript agents execute together in the browser. |
-| 9 | Not started | Suspend selected agents when distant | A working opt-in setting with visible activation status. |
-| 10 | Not started | Select and use the MuJoCo production backend | The existing app and scripts work with either registered engine. |
-| 11 | Not started | Run and inspect 100 agents smoothly | Repeatable 100-agent playback and measured results for both engines. |
-
----
-
-## Step 1 — Browse and confirm a published scene
-
-- [x] **Feature complete and reviewed** — 2026-09-14. Docker build/type checks, built-client walkthrough, application/lifecycle probes, and relevant existing regressions passed. Evidence: [Scenario Studio review](scenario-studio-review.md).
-
-**Deliverable:** `/scenario_studio` opens on the green default ground with a usable viewport and Scenes browser. Clicking a card selects a candidate; **Use Scene** loads its package after confirmation. No agent or playback controls are exposed. The existing camera reset button only restores the view.
-
-**Files delivered:** Extended `ui/ScenarioHudFeature.ts`, `SceneBrowserPanel.ts`, input wiring in `ScenarioStudioApp.ts`, and `ScenarioSceneThumbnails.ts`. Fixed shared `TextField.ts`, `ThumbnailRenderer.ts`, `previewMath.ts` and thumbnail failure handling in Scene Studio panels. Added injectable review asset roots to the existing plugin, `scripts/verifyScenarioStudio.ts`, the review guide and evidence; extended existing workflow/lifecycle probes and corrected README links.
-
-**Existing boundary:** `domain/scene.ts` and `catalog/SceneCatalog.ts` already define these records and interface. `EnvironmentManifest` is the existing engine-free type from `src/environment/types.ts`.
-
-```ts
-export interface SceneReference {
-  readonly key: string;
-  readonly modelSha256: string;
-  readonly manifestSha256: string;
-  readonly formatVersion: number;
-}
-export interface SceneChoice {
-  readonly label: string;
-  readonly reference: SceneReference;
-  readonly thumbnailUrl: string | null;
-  readonly available: boolean;
-  readonly diagnostics: readonly string[];
-}
-export interface ScenePackageData {
-  readonly reference: SceneReference;
-  readonly manifest: EnvironmentManifest;
-  readonly glb: Uint8Array;
-}
-export interface SceneCatalog {
-  list(): Promise<readonly SceneChoice[]>;
-  load(reference: SceneReference): Promise<ScenePackageData>;
-}
-export interface ScenePresentation { dispose(): void; }
-export interface ScenePresenter {
-  createDefault(): ScenePresentation;
-  prepare(data: ScenePackageData): Promise<ScenePresentation>;
-  show(presentation: ScenePresentation): void;
-}
-```
-
-`ScenePresentation`/`ScenePresenter` live in `domain/ScenePresentation.ts`. `ScenarioSession.replaceScene(reference: SceneReference): Promise<void>` already prepares an owned presentation through the injected catalog/presenter, checks request generation, shows and commits the new reference, then disposes the old presentation. A failed or obsolete preparation releases its staged presentation and leaves the current document/presentation intact. The UI owns confirmation; the domain does not call DOM APIs. Extend this transaction with physics and population resources in Step 2.
-
-**Implemented checklist (source inspected):**
-
-- [x] Discover nested packages under `assets/scenes` and support a root pair with key `.`. Use canonical relative keys; check path containment, manifest/package validation, both content hashes and positive finite units. Unavailable packages retain diagnostics in the catalog.
-- [x] Serve `GET /api/scenario-studio/scenes`, `/api/scenario-studio/scene-package/manifest`, and `/api/scenario-studio/scene-package/model`, with contained source routes under `/scenario-assets/scenes/*` and `/scenario-assets/agents/*`. Attach the plugin to both Vite development and preview.
-- [x] Compose the existing rendering/input/HUD facilities with a separate Scenario Studio session and viewport. Scale imported GLBs by inverse units-per-meter, fit the camera to bounds, support orbit/zoom/resize/reset-view, and render static/hover previews through `ScenarioSceneThumbnails`.
-- [x] Render the 100 m × 100 m green default ground at Y=0 with a grid, owned through the scene presentation. Dispose it on an imported-scene commit; never add fallback ground under the imported geometry. No colliders exist at this step.
-- [x] Implement candidate selection, **Use Scene**, confirmation/cancel/Escape, loading/refresh status, and error feedback. The unchanged active reference is disabled/no-op; the default environment also requires confirmation. The current warning has a fixed zero-agent count.
-- [x] Guard scene commits and catalog refresh with generation/disposal checks. Dispose the app's session, HUD/cache, thumbnails, input, viewport, renderer and FPS monitor on shutdown. Existing browser probes cover portions of failure/disposal behavior.
-- [x] Add `review:build` and `review:serve` in `package.json`, plus README's basic Scenario Studio/review instructions.
-
-**Completion checklist (verified 2026-09-14):**
+| `main.ts`, `ScenarioStudioApp.ts` | Route/composition, adapters, render loop/input/shutdown. |
+| `domain/ScenarioDocument.ts`, `ScenarioSession.ts` | Scene-only authored state and transactional replacement; add agents/playback/persistence. |
+| `domain/scene.ts`, `ScenePresentation.ts`, `DefaultGround.ts`; `catalog/SceneCatalog.ts`, `HttpSceneCatalog.ts` | Existing scene records, catalog/presenter ports and visual default ground. Read source for exact implemented contracts. |
+| `ui/ScenarioHudFeature.ts`, `SceneBrowserPanel.ts`, `HudText.ts` | Existing shell/search/cards/confirmation. Extend for tabs; avoid parallel workspace/browser implementations. |
+| `rendering/ScenarioViewport.ts`, `ScenarioSceneThumbnails.ts`, `ScenarioHudCache.ts` | Owned presentations, camera, preview cache and HUD invalidation. |
+| `server/scenarioStudioPlugin.ts`, `server/scenarioStudio/{routes,publishedScenes}.ts` | Shared dev/preview discovery, validation and contained source routes. |
+| Shared `src/engine/` and HUD primitives | Renderer/RenderLoop/Viewport, CameraRig, InteractionSystem/InputManager, AssetManager, ThumbnailRenderer, TextField, PerformanceMonitor. |
 
-- [x] Add scene search to `SceneBrowserPanel`, filtering by label/key while preserving candidate selection and handling no matches separately from an empty catalog. Preserve the query across Refresh. Integrate the existing HUD text-input control; keep typing from moving the viewport. Step 2 will preserve independent scene/agent queries when adding tabs.
-- [x] Make the replacement dialog name the candidate and use the design's **Switch Scene** action. Keep the zero-agent warning at this stage; add real counts in Step 2 and creator-script copy in Step 7 when those behaviors exist. Verify cancel, Escape, backdrop dismissal, and confirmation from both default and imported environments.
-- [x] Create the missing review guide with exact Docker/browser commands, port access, fixture setup/cleanup, screenshots and observed results. Fix README's design/plan links to the current filenames. Preserve the existing development server and user assets.
-- [x] Run the built-client walkthrough below, including cancellation, stale/failed loading, changed content, invalid/groundless packages, search, rapid refresh/resize/hover, and disposal during pending loads. Check thumbnail handle/texture ownership across refresh and disposal. Fix observed failures before closing the gate; the existing instrumented development probes alone are insufficient.
+Keep Scenario Studio separate from `WorldFeature`/`EditorState`. AssetManager owns cached geometry/materials; clones/cards borrow them. Existing FPS monitoring does not replace future simulation metrics. Reuse the three browser probes listed in the review guide.
 
-**Production review:** Build and serve with the existing review scripts. Open the app and observe the green flat ground. Select `sample`, verify selection alone changes nothing, and confirm the named dialog. Verify actual geometry loads and the default surface disappears. Orbit/zoom/resize; select `scene2`, cancel, then confirm. Search and refresh while preserving the intended selection. Use isolated review fixtures for root discovery, unavailable packages, a valid package without ground geometry, and content changed after selection; remove only fixtures created for the review. A failed load must keep the current scene visible. Verify repeated hover/refresh and disposal do not resurrect removed UI/resources. Check `/scene_studio` in its existing supported development environment; Scenario Studio's preview middleware does not establish Scene Studio preview API support.
+## Step 1 — Published-scene browsing
 
-**Exit gate:** Real package geometry renders; selection alone never replaces it; named confirmation/search work; cancellation/failure is nondestructive; the built client reaches the same catalog/source files. Run the common build/diff checks and record evidence in the review guide. The original feature commit is `57e1fd1` (`feat: browse published scenes in Scenario Studio`); this completed follow-up adds search, confirmation details, lifecycle fixes and recorded review evidence.
+- [x] **Complete and reviewed:** route/default ground, real package loading, search, named confirmation, failure preservation, previews/camera, lifecycle fixes and review evidence. Details: [Step 1 results](scenario-studio-review.md#results-and-evidence). No physics or agents delivered.
 
-## Step 2 — Add, inspect, edit, and remove agents on physical surfaces
+## Step 2 — Physical agent placement and physics abstraction
 
-- [ ] **Feature complete and reviewed**
+- [ ] **Complete and reviewed**
 
-**Deliverable:** The shared browser now has Scenes and Agents tabs. Users add or drag agents onto real colliders and edit/remove them through the left Agent Inspector. Scene replacement removes the complete population after the warning.
+Design: [agents](scenario-studio-design.md#agents-and-inspector), [physics](scenario-studio-design.md#physics-surfaces-and-activation), [replacement](scenario-studio-design.md#environment-and-replacement).
 
-**Files:** Create `domain/agent.ts`, `AgentInstance.ts`, `AgentPopulation.ts`, agent catalog adapters, `ui/AgentBrowserTab.ts`, `AgentInspectorPanel.ts`, `rendering/SceneGeometrySource.ts`, `AgentVisuals.ts`, and the physics boundary/registry/worker/adapter files. Extend existing `ScenarioHudFeature.ts`, `SceneBrowserPanel.ts`, `ScenarioStudioApp.ts`, document/session, server routes, and `server/assetCatalog.ts` where reuse needs a configurable URL base. Update `package.json`, lockfile, and the review guide. Extract shared browser chrome only when the working Agents tab needs it; preserve existing scene previews, HUD invalidation, and selection behavior.
+**Add:** `domain/{agent,AgentInstance,AgentPopulation}.ts`; `catalog/{AgentCatalog,HttpAgentCatalog}.ts`; `server/scenarioStudio/agentCatalog.ts`; `ui/{AgentBrowserTab,AgentInspectorPanel}.ts`; `rendering/{SceneGeometrySource,AgentVisuals}.ts`; `physics/{PhysicsWorld,PhysicsEngineRegistry,PhysicsWorkerClient,physics.worker,RapierPhysicsWorld}.ts`. Extend existing owners, `server/assetCatalog.ts`, package/lockfile. Extract shared browser chrome only when the Agents tab needs it.
 
-**Consumes:** Step 1 scene/session contracts and existing `AssetCatalogEntry` metadata. **Produces:** `AgentDraft` with asset key, display name, position/heading, positive mass, collision configuration, and placement settings; `AgentInstance` owns validated state. Define engine-free geometry records and placement contracts in `physics/PhysicsWorld.ts`:
+**Contract:** immutable `Vector3Value{x,y,z}`, `Ray3{origin,direction}`, `PlacementHit{point,normal}`. `PlacementSurface.pickSurface(ray: Ray3): Promise<PlacementHit|null>`; `PhysicsWorld` extends it with `dispose(): Promise<void>`. `PhysicsEngineFactory` has open string `key` and `create(): Promise<PhysicsWorld>`; register Rapier. `AgentDraft` carries asset/name/pose, positive mass, collision and placement settings. `ScenarioSession.placeAgent(draft: AgentDraft, ray: Ray3): Promise<void>` validates before commit; population allocates IDs, viewport consumes snapshots/events.
 
-```ts
-export interface Vector3Value { readonly x: number; readonly y: number; readonly z: number; }
-export interface Ray3 { readonly origin: Vector3Value; readonly direction: Vector3Value; }
-export interface PlacementHit { readonly point: Vector3Value; readonly normal: Vector3Value; }
-export interface PlacementSurface {
-  pickSurface(ray: Ray3): Promise<PlacementHit | null>;
-}
-export interface PhysicsWorld extends PlacementSurface {
-  dispose(): Promise<void>;
-}
-export interface PhysicsEngineFactory {
-  readonly key: string;
-  create(): Promise<PhysicsWorld>;
-}
-```
+- [ ] Discover only agent assets via the new `/agents` API; preserve URL bases, parse metadata, diagnose duplicates/malformed assets.
+- [ ] Pin Rapier; extract neutral transformed/meter-scaled geometry and support colliders in its worker. Default collider exists only for null scene; keep descriptions usable by MuJoCo.
+- [ ] Add independent browser tabs/drafts, inspector contexts, Add/drop ghost, validated transforms/duplicate/delete and selection. Reject stale/invalid picks; scripts/suspension remain hidden.
+- [ ] Commit/release agent visuals/colliders together; extend scene replacement with population cleanup and accurate warning counts.
 
-`ScenarioSession.placeAgent(draft: AgentDraft, ray: Ray3): Promise<void>` validates support/overlap before committing. `AgentPopulation` allocates identity internally and exposes behavior for adding, editing, selecting, duplicating, and removing instances. The viewport receives snapshots/events rather than owning domain state.
+**Review:** two vehicle types at correct scale; road/bridge placement; reject water/outside/overlap/steep support; independent defaults/instance edits; duplicate/delete; canceled/failed replacement preserves agents, successful replacement clears them. Common gate.
 
-Register the Rapier factory through `PhysicsEngineRegistry`; the explicit replacement requirement justifies this boundary from the first physics feature. Extend `PhysicsWorld` with complete body/control/step operations in Step 4 and implement both backends against that same contract. The contract uses engine-neutral shapes, units, commands, and snapshots; engine keys are open registered strings.
+## Step 3 — New/Open/Save
 
-**Implementation checklist:**
+- [ ] **Complete and reviewed**
 
-- [ ] Scan only `assets/agents`; preserve public model/thumbnail URLs when catalog parsing is reused. Read vehicle metadata, reject duplicate keys, and present unavailable assets with diagnostics. Add `GET /api/scenario-studio/agents`.
-- [ ] Pin Rapier in Docker and register its worker adapter behind the placement boundary. Extract all mesh groups/instances with world transforms and convert scene units consistently to physics meters. Keep collider descriptors independent of Rapier classes so the MuJoCo compiler can consume the same scene definition in Step 10.
-- [ ] Create a static support collider from `DefaultGround` only for the null-scene environment. Imported packages get colliders from actual geometry, not from the mere presence of `manifest.ground`. Dispose the default collider when loading an import, and exercise placement both before and after that transition.
-- [ ] Implement thumbnail cards, independent tab searches/selections, and the **New agent** versus **Existing agent** inspector contexts. Browser settings become per-asset placement drafts; instance edits stay local to that instance. Hide the Script and suspension controls until their complete features arrive.
-- [ ] Implement Add/click and drag/drop with a valid/invalid ghost, Escape cancellation, and stale-pick rejection. Use collision bounds and a small contact clearance to seat the body; reject unsupported, overlapping, or excessively steep placement. Exclude agents and water-tagged geometry from support targets.
-- [ ] Add instance selection, name/position/heading/mass editing, duplicate, and delete actions with finite-value/positive-mass checks. Moving/duplicating reruns support and overlap validation. Read source unit metadata rather than automatically shrinking vehicles to fit a tile.
-- [ ] Own render instances and colliders as one placement transaction. Dispose both on failure/removal; keep shared model resources alive while referenced. Integrate population clearing into scene replacement, including the accurate warning count.
+Design: [persistence](scenario-studio-design.md#assets-and-persistence).
 
-**Production review:** Select a car in the browser and observe the left inspector; set a name/default, add it on a road, drag a second onto a bridge, and try dropping outside the world, on water, and on another agent. Edit one instance and verify the other stays unchanged. Duplicate/delete it. Switch scenes: Cancel preserves all agents, Confirm clears them, and a failed scene load preserves them. Verify at least two agent types at correct physical scale.
+**Add:** `domain/scenario.ts`, `persistence/{ScenarioRepository,HttpScenarioRepository}.ts`, `server/scenarioStudio/scenarioStore.ts`, scenario picker/toolbar. Extend document/session/routes.
 
-**Exit gate:** Placement uses actual supporting geometry and automatic lifecycle cleanup; the two inspector contexts cannot overwrite each other. Commit: `feat: place and inspect scenario agents`.
+**Contract:** versioned `ScenarioRecord` starts with ID/name, scene/null-ground settings, open engine key and authored agents; later steps extend/normalize it. `ScenarioSummary{id,name,updatedAt}`. Repository: `list(): Promise<readonly ScenarioSummary[]>`, `open(id: string): Promise<ScenarioRecord>`, `save(record: ScenarioRecord): Promise<void>`.
 
-## Step 3 — Save, reopen, and create scenarios
+- [ ] Implement `/scenarios` routes, isolated store, schema/identity/numeric validation and atomic failure-safe writes.
+- [ ] Add naming, dirty/discard handling and staged Open through validating constructors; retain recoverable data when assets/engine are unavailable.
+- [ ] Separate session drafts, authored edits and live snapshots; scene replacement marks dirty without auto-save.
 
-- [ ] **Feature complete and reviewed**
+**Review:** save two configured agents, reload/reopen exact authored state on imported/default ground; replace scene then reopen saved copy; failed write and missing asset preserve data. Common gate.
 
-**Deliverable:** Users can create, name, save, and reopen an authored scenario through the toolbar, including its scene and agent settings.
+## Step 4 — Playback and driving
 
-**Files:** Create `domain/scenario.ts`, persistence boundary/client files, `server/scenarioStudio/scenarioStore.ts`, and a scenario document picker in the UI. Modify document/session, toolbar/workspace, shared routes, and review documentation.
+- [ ] **Complete and reviewed**
 
-**Boundary:** Define `ScenarioRecord` in `domain/scenario.ts` with format/version, document ID/name, `SceneReference | null`, default-ground settings, an open registered physics-engine key (default `rapier`), and authored agent records. A null scene reference selects the built-in green ground and remains runnable. Each following feature adds its own fields with normalization defaults and updates save/open in the same feature. Older documents remain readable. Unavailable engine keys remain recoverable document data and block Play with a diagnostic; do not silently replace them.
+Design: [playback](scenario-studio-design.md#domain-ownership-and-playback), [scheduling](scenario-studio-design.md#script-execution-and-scheduling), [vehicles](scenario-studio-design.md#physics-surfaces-and-activation).
 
-```ts
-export interface ScenarioSummary {
-  readonly id: string;
-  readonly name: string;
-  readonly updatedAt: string;
-}
-export interface ScenarioRepository {
-  list(): Promise<readonly ScenarioSummary[]>;
-  open(id: string): Promise<ScenarioRecord>;
-  save(record: ScenarioRecord): Promise<void>;
-}
-```
+**Add:** `ui/PlaybackToolbar.ts`, `input/ScenarioInput.ts`, `physics/VehicleController.ts`, `simulation/SimulationMetrics.ts`. Extend population/session, physics worker/world, visuals, inspector and persistence.
 
-**Implementation checklist:**
+**Contract:** `PlaybackState = ready|preparing|running|paused|error`; `RunStamp{generation,step}`; `PHYSICS_STEP_SECONDS=1/60`; validated `DriveCommand`. Session `play(): Promise<void>`, `pause(): void`, `reset(): Promise<void>`. Extend physics with commands/step/reset and stamped snapshots containing time, transforms, velocities and wheel poses.
 
-- [ ] Add scenario list/open/save routes below `/api/scenario-studio/scenarios`, using a dedicated `STEERLAB_SCENARIOS_DIR` override and `~/.steerlab/scenarios` default. Validate route IDs, schema versions, scene references, numeric values, and duplicate instance identities before writing.
-- [ ] Reuse the existing atomic temporary-file/rename convention. Preserve the prior file on validation or write failure; report the error in the product.
-- [ ] Add New/Open/Save, scenario naming, and unsaved-change tracking. Confirm discarding unsaved work on New/Open or navigation away. Scene replacement marks the working document dirty but does not auto-save it.
-- [ ] Reconstruct domain objects through validating constructors when loading. Stage the scene and all initial agents before replacing the current setup. If assets are missing, retain the document/source data in a recoverable, non-runnable state with specific diagnostics.
-- [ ] Preserve inspector placement drafts in the session and committed instance edits in the document. Distinguish document state from renderer/physics snapshots so future playback cannot leak runtime positions into saves.
+- [ ] Implement legal transitions, preparation, authored baseline, bounded worker stepping and render interpolation.
+- [ ] Build vehicle/generic bodies and wheel animation; add controlled-agent input through the common drive boundary.
+- [ ] Enforce ready-only authoring; Reset clears live state/stale snapshots; save authored state during runs. Track body/instance counts and persist eligibility/configuration.
 
-**Production review:** Place two different agents, rename/configure them, save, reload the page, and reopen the scenario. Confirm the scene and exact authored transforms/settings return. Repeat with the default green ground and verify it remains the selected environment. Replace its scene and verify the agent list is empty but reopening the saved copy restores the previous setup. Exercise a failed write and a missing-asset document without losing the last good saved file.
+**Review:** gravity/contact on flat/sloped support, drive/steer/brake, held-key Pause/blur, camera responsiveness, repeated Reset, save while running and scene replacement during playback. Common gate.
 
-**Exit gate:** A saved setup survives a new browser session; failures preserve recoverable data. Commit: `feat: save and reopen scenarios`.
+## Step 5 — Surfaces and water
 
-## Step 4 — Play, pause, reset, and drive a physical vehicle
+- [ ] **Complete and reviewed**
 
-- [ ] **Feature complete and reviewed**
+Design: [physics/surfaces](scenario-studio-design.md#physics-surfaces-and-activation).
 
-**Deliverable:** Users press Play to see physical motion/collisions, pause without losing camera control, reset to the authored setup, and use **Control this agent** to drive a vehicle.
+**Add:** `physics/{SurfacePresets,WaterRegions}.ts`, `ui/ScenePhysicsPanel.ts`. Extend geometry, vehicle/world adapters and persistence.
 
-**Files:** Create `ui/PlaybackToolbar.ts`, `input/ScenarioInput.ts`, `physics/VehicleController.ts`, and `simulation/SimulationMetrics.ts`. Extend session/population, physics worker/adapter, `AgentVisuals.ts`, document persistence, and the inspector/review guide.
+- [ ] Resolve material groups/instances to validated `SurfacePreset` value objects/policies, honoring explicit mappings and documented fallbacks.
+- [ ] Add ready-state Scene Physics mapping/override UI; implement contact/traction/rolling effects and footprint-correct water depth/drag.
+- [ ] Persist settings; validate malformed regions and release sensors with scene/reset lifecycle.
 
-**Boundary:** Define engine-free `DriveCommand` with throttle/steering in `[-1, 1]` and brake in `[0, 1]`. Extend the physics interface with step, control-command, snapshot, reset, and disposal operations. Each logical step consumes exactly 1/60 second; adapters can internally substep without changing script time or exposing solver types. Snapshots carry generation, step index, simulation time, transforms, velocities, and wheel pose data. The session exposes `play(): Promise<void>`, `pause(): void`, and `reset(): Promise<void>`.
+**Review:** comparable asphalt/grass driving, edited coefficients, water entry, bridge/shore exclusions, unknown-material diagnostics and save/reopen. Common gate.
 
-```ts
-export const PHYSICS_STEP_SECONDS = 1 / 60;
-export type PlaybackState = "ready" | "preparing" | "running" | "paused" | "error";
-export interface RunStamp { readonly generation: number; readonly step: number; }
-```
+## Step 6 — JavaScript agent scripts
 
-**Implementation checklist:**
+- [ ] **Complete and reviewed**
 
-- [ ] Implement legal playback transitions, authored-baseline capture, generation invalidation, and bounded fixed-step advancement in the physics worker. Render interpolated snapshots through the existing single render loop; do not run physics on the rendering thread.
-- [ ] Construct chassis bodies and wheel controls from `vehicle.json`; apply steering/braking/throttle through an injected vehicle adapter. Animate wheel steering, spin, and suspension from simulation snapshots. Assets without vehicle metadata use validated generic bodies.
-- [ ] Add **Control this agent**, input eligibility, and visible control bindings. Clear input on blur, Pause, Reset, and text focus. In this step the built-in controller uses the same drive-command boundary that scripts will consume.
-- [ ] Restrict authored edits to ready state. A paused run remains inspectable, and Reset restores editability. Prevent duplicate Play starts and hold preparing state until models/physics are ready.
-- [ ] Reset replaces all live transforms/velocities/control state from the authored baseline. Ignore delayed snapshots from prior generations; release bodies/vehicle controls on removal and scene change. Save during playback serializes only the authored document.
-- [ ] Extend persisted settings with input eligibility and physics configuration, normalizing older files. Record live body/instance counts internally for leak verification from this step onward.
+Design: [editor](scenario-studio-design.md#script-editor-and-creator), [execution](scenario-studio-design.md#script-execution-and-scheduling).
 
-**Production review:** Place cars on flat and sloped support, Play, and observe gravity/collisions. Control one car, drive/steer/brake, pause while holding a key, move the camera, resume, and verify no stuck input. Reset repeatedly and confirm exact authored positions and zero velocities. Save during a run and reopen: the original setup returns. Change scene during playback and verify the old world cannot reappear.
+**Add:** `scripts/{ScriptProgram,ScriptContext,ScriptRuntime,ScriptScheduler,JavaScriptRuntime,JavaScriptCompiler,javascript.worker}.ts`, `ui/ScriptEditorPanel.ts`. Extend inspector/session, persistence and browser workflows.
 
-**Exit gate:** Visible physical driving and reliable Play/Pause/Reset work in the built app; resource counts return to baseline. Commit: `feat: preview and control scenario physics`.
+**Contract:** ScriptProgram owns name/language/enablement/validated source. `ScriptBatch{stamp: RunStamp, instanceKeys: readonly string[], elapsedSeconds: number}`. Runtime `prepare(program: ScriptProgram, instanceKeys: readonly string[]): Promise<void>`, `run(batch: ScriptBatch): Promise<void>`, `release(instanceKeys: readonly string[]): Promise<void>`, `dispose(): Promise<void>`. Inject observation/input source and command sink; run resolves after delivery or failure.
 
-## Step 5 — Drive across physical surfaces and water regions
+- [ ] Implement editor/import limits, draft protection, focus and filename/location diagnostics.
+- [ ] Pin a syntax parser (e.g. Acorn), compile supported exports into per-instance closures, implement worker affinity/batching, frequencies, command validation and watchdog.
+- [ ] Integrate acknowledged Pause/step ordering, recovery/disposal and persistence. Enabled scripts replace built-in control; Python remains hidden.
 
-- [ ] **Feature complete and reviewed**
+**Review:** imported `on_step` with W/A/D/Space drive input and constant-throttle variant; independent counters in shared programs; bad syntax, exception, endless hook and recovery; save/reopen defaults/overrides. Common gate.
 
-**Deliverable:** Scene surfaces produce observable physical differences, and users can inspect/change their preset mapping in a Scene Physics section reached from the active scene's details.
+## Step 7 — Creator scripts and populations
 
-**Files:** Create `physics/SurfacePresets.ts`, `physics/WaterRegions.ts`, and `ui/ScenePhysicsPanel.ts`. Extend geometry extraction, physics/vehicle adapters, scene loading, document persistence, and the review guide.
+- [ ] **Complete and reviewed**
 
-**Boundary:** Define `SurfacePreset` as a validated value object for a solid surface or water region. A solid preset owns contact friction, restitution, and rolling-resistance settings; a water preset owns depth and drag. Concrete surface behaviors implement the physics adapter's surface-policy contract, keeping engine types out of the document.
+Design: [creator](scenario-studio-design.md#script-editor-and-creator), [lifecycle](scenario-studio-design.md#domain-ownership-and-playback).
 
-**Implementation checklist:**
+**Add:** `scripts/CreatorContext.ts`, `ui/ScenarioScriptPanel.ts`; extend program collection, population, preload/scheduler and persistence.
 
-- [ ] Preserve primitive/material identity through geometry extraction, including multi-material and instanced meshes. Resolve explicit package mappings first, recognized normalized material names second, and a generic-solid default with diagnostics last.
-- [ ] Centralize named Asphalt, Grass, Stone, Generic Solid, and Water presets. Treat coefficients as configurable simulation defaults, not measured real-world material constants. Apply road/grass traction and rolling behavior through the vehicle adapter as well as rigid-body contacts.
-- [ ] Add a Scene Physics view listing discovered surface names and their presets, editable only in ready state. Validate nonnegative finite coefficients and positive water depth; persist overrides with the scene reference.
-- [ ] Build finite water regions from the actual water footprint, defaulting to two meters below the surface, and apply drag to overlapping body portions. Keep water non-supporting and preserve solid geometry beneath. Do not use one broad bounding box that swallows adjacent roads or bridges.
-- [ ] Include water behavior in the same scene-change transaction and release sensors on replacement/reset. A malformed footprint disables the affected mapping with a diagnostic rather than silently turning water into road.
+**Contract:** `SpawnRequest` contains asset/name/physical pose, named behavior reference and validated overrides; `spawn(request)` returns an opaque generation-bound queued reference. Creator context supports despawn/configuration; no user IDs or engine handles.
 
-**Production review:** Drive the same vehicle with the same control input across asphalt and grass; inspect the mappings and modify a preset to observe the change. Enter water and observe drag/no supporting water floor. Cross a bridge and drive beside a water boundary without false water activation. Save/reopen the overrides and verify unknown materials show their fallback diagnostic.
+- [ ] Reuse editor; add named behaviors, enablement/dependencies, startup/update and simulation-time scheduling.
+- [ ] Stage/validate resources before between-step spawn/despawn; release partial failures, reject stale references and support undeclared cold-asset preparation.
+- [ ] Keep runtime mutations out of saves. Reset restores authored population; scene replacement uses authored/live union count, retains/disables creator source and clears scene drafts/overrides. Persist authored creator/collection settings.
 
-**Exit gate:** Surface mappings affect the actual simulation and survive persistence; water boundaries match visible geometry. Commit: `feat: simulate scene surface interactions`.
+**Review:** startup group plus spawn every two simulation seconds, assigned driving behavior; Pause without burst/repeated startup; complete despawn cleanup; repeated Reset/Play; replacement remains empty with creator disabled. Common gate.
 
-## Step 6 — Write and import JavaScript agent behavior
+## Step 8 — Python and mixed-language scripting
 
-- [ ] **Feature complete and reviewed**
+- [ ] **Complete and reviewed**
 
-**Deliverable:** Selecting a catalog or placed agent opens an editable Script section. Imported `.js` source appears in the editor and controls that agent on Play, automatically or using viewport input.
+Design: [execution](scenario-studio-design.md#script-execution-and-scheduling).
 
-**Files:** Create script program/context/runtime/scheduler files, JavaScript adapter/compiler/worker, and `ui/ScriptEditorPanel.ts`. Extend inspector, session, persistence, diagnostics, package/lockfile, the review guide, and existing `scripts/verifyApplicationWorkflows.ts` coverage. Extract a focused browser workflow script only if the expanded Scenario Studio walkthrough warrants it; reuse the existing Docker/Playwright setup.
+**Add:** `scripts/{PythonRuntime,python.worker}.ts`. Extend language registration/editor, scheduler, same-origin runtime serving, dependencies and workflows; preserve Step 6 runtime/command contracts.
 
-**Boundary:** `ScriptProgram` owns name, language, enabled state, and validated source. Define the following in `scripts/ScriptRuntime.ts`; transfer records contain only values and validated command records, with `RunStamp` from Step 4.
+- [ ] Pin/package lazy-loaded Pyodide; one interpreter per worker, instance namespaces/proxy disposal, progress and recoverable load errors.
+- [ ] Implement hook/creator/input/command parity, affinity, batching, watchdog and generation handling. Register adapters at composition root, without language branches in session.
+- [ ] Enable `.py` imports/language choice with draft retention and supported-library guidance; actual import exceptions stay visible. Persist and reopen mixed assignments.
 
-```ts
-export interface ScriptBatch {
-  readonly stamp: RunStamp;
-  readonly instanceKeys: readonly string[];
-  readonly elapsedSeconds: number;
-}
-export interface ScriptRuntime {
-  prepare(program: ScriptProgram, instanceKeys: readonly string[]): Promise<void>;
-  run(batch: ScriptBatch): Promise<void>;
-  release(instanceKeys: readonly string[]): Promise<void>;
-  dispose(): Promise<void>;
-}
-```
+**Review:** `math`-based driving, seeded random creator, mixed agents and both creator/behavior language combinations, editor focus, syntax/import failure, stuck hook, cold load and repeated Reset. Common gate.
 
-The runtime receives observation/input records through an injected snapshot source and sends command batches to an injected command sink; `run` resolves only after that batch is delivered or fails. `ScriptContext` exposes private-per-instance state, simulation time, input sampling, bounded observations, and `drive`, force, and impulse commands. It never exposes a Rapier body or Three.js object.
+## Step 9 — Distance suspension
 
-Example source that must work when imported:
+- [ ] **Complete and reviewed**
 
-```js
-export function on_step(ctx, dt) {
-  ctx.drive({
-    throttle: ctx.input.isDown("KeyW") ? 0.5 : 0,
-    steering: ctx.input.isDown("KeyA") ? -0.5 : ctx.input.isDown("KeyD") ? 0.5 : 0,
-    brake: ctx.input.isDown("Space") ? 1 : 0
-  });
-}
-```
+Design: [activation](scenario-studio-design.md#physics-surfaces-and-activation).
 
-**Implementation checklist:**
+**Add:** `simulation/DistanceActivation.ts`; extend population/world/scheduler, inspector/settings/persistence. Policy consumes neutral bounds, current state, focus/radii and emits transition intentions.
 
-- [ ] Integrate a native multiline editor with language label, enable/disable, source validation, and Import Script. Preserve the prior text on cancel/read failure; confirm replacement of a modified nonempty draft. Enforce a documented 256 KiB UTF-8 source limit and report syntax locations. Stop propagation of editing shortcuts to simulation input.
-- [ ] Define the supported single-file JavaScript hook format: named `on_start`, `on_step`, optional `on_stop`, local helper declarations, and standard JavaScript facilities. Compile with syntax-aware parsing into a fresh closure per instance; reject external module imports/re-exports and asynchronous hooks with useful errors. Use a parser such as Acorn, pinned with the feature; do not rewrite exports with regex or share mutable module globals among instances.
-- [ ] Implement one persistent JavaScript worker initially, bounded request queues, instance state, and batch execution. Update hooks default to 20 Hz with an optional 60 Hz setting. Validate/normalize every command before physics consumes it; keep continuous controls until replaced.
-- [ ] Integrate script boundaries into fixed-step simulation: await the scheduled outputs, apply their commands in stable order, then advance the dependent step. Keep rendering/camera responsive while waiting. Stamp all work so Pause/Reset and scene changes cannot apply late results; Pause must not advance hook state past its acknowledged boundary.
-- [ ] Add hook exceptions and a 250 ms unresponsive-batch watchdog to the visible error flow. A timeout pauses the run and terminates the stuck worker; mark its contexts invalid and require Reset. Native cleanup always runs even if `on_stop` fails.
-- [ ] Persist source/filename/language, script frequency, enabled state, instance assignment, and catalog placement drafts where committed to the scenario. Existing-agent edits are independent; duplication creates independent runtime state. An enabled script replaces the built-in drive controller for that agent to avoid competing inputs.
-- [ ] Add repeatable browser walkthroughs for import, editing, automatic driving, keyboard control, error recovery, and Reset using normal UI operations. Do not expose Python selection until Step 8 can execute it.
+- [ ] Add persisted off-by-default setting, explanatory copy and visible active/suspended/blocked status; validate focus/radii.
+- [ ] Coordinate boundary-safe dynamics/hooks/collision suspension and separation-checked resumption; clear stale controls and lifecycle state. Keep controlled agents active, camera independent, Pause stable.
 
-**Production review:** Import the example into a selected instance and drive it. Modify the source to use constant throttle and observe automatic movement. Give two instances the same program with an incrementing `ctx.state` counter and verify separate state. Import malformed code, cause a hook exception, and exercise a nonterminating hook: the camera stays usable and the error identifies the script/agent. Reset, fix, and rerun; old commands cannot affect the new run. Save/reopen both browser defaults and instance overrides.
+**Review:** opted-in versus always-active agent, both radii, camera-only movement, blocked reactivation/control, normal resumed `dt`, save/reopen. Common gate.
 
-**Exit gate:** Inspector editing/import is connected to real worker execution, physics, input, persistence, and error handling. Commit: `feat: author JavaScript agent behavior`.
+## Step 10 — Selectable production MuJoCo
 
-## Step 7 — Create populations with a scenario script
+- [ ] **Complete and reviewed**
 
-- [ ] **Feature complete and reviewed**
+Design: [MuJoCo](scenario-studio-design.md#mujoco-adapter), [physics](scenario-studio-design.md#physics-surfaces-and-activation).
 
-**Deliverable:** **Scenario Script** opens an editor whose startup/update hooks create and despawn agents automatically, including timed spawns and assigned behaviors.
+**Add:** `physics/mujoco/{MujocoPhysicsWorld,MujocoModelCompiler,MujocoAgentSlots,MujocoVehicleController}.ts`, `ui/PhysicsEnginePanel.ts`. Extend registry/worker composition, capabilities/cache/runtime serving and persistence.
 
-**Files:** Create `ui/ScenarioScriptPanel.ts` and `scripts/CreatorContext.ts`. Extend population/instance/session, script scheduler/context, script collection UI, preload/disposal paths, persistence, and browser review scripts.
+- [ ] Pin/package official bindings; implement the accumulated PhysicsWorld contract, collision compilation, surfaces, vehicles, water and activation. Keep domain/scripts unchanged.
+- [ ] Implement automatic capacity/topology preparation, stable-ID state transfer, cache keys, transactional model replacement, borrowed-memory invalidation and exact native cleanup. Verify available model-edit APIs.
+- [ ] Enumerate registry choices (Rapier/MuJoCo) in ready-state UI; commit engine selection only after successful preparation and persist it.
 
-**Boundary:** `CreatorContext` extends script capabilities with `spawn`, `despawn`, and agent configuration commands. Define `SpawnRequest` with asset key, optional display name, physical position/heading, named behavior-program reference, and validated physics overrides. `spawn(request)` returns an opaque agent reference tied to the current generation. A queued reference cannot be mistaken for an active body; invalid/stale targets produce diagnostics.
+**Review:** run Steps 2–9 on MuJoCo and regress Rapier; compare contract behavior, not trajectories. Include initialization/conversion failure, topology changes, stale worker output, repeated switching, source preservation and native/body/worker resource counts. Common gate.
 
-**Implementation checklist:**
+## Step 11 — Smooth 100-agent playback
 
-- [ ] Reuse the same source editor/import component for the creator context. Add a named behavior-script collection so creator scripts can assign saved programs without embedding or duplicating their source.
-- [ ] Add creator enablement, declared asset dependencies, startup/update hooks, and simulation-time scheduling. Preload declared assets before Play; an undeclared cold asset temporarily enters preparing state until ready, without blocking the camera.
-- [ ] Queue creation/removal/configuration between physics steps. Allocate IDs internally, validate asset/program references and transforms, and stage render/physics/script resources together. Failed spawns release every partial resource and produce an actionable error.
-- [ ] Make runtime creation/deletion temporary. Reset restores authored instances, drops all runtime-only instances, invalidates references, and recreates creator state on the next Play. Pause/resume does not repeat startup.
-- [ ] Finalize scene replacement semantics: show the authored/live union count, clear both sets, retain creator text but disable it, and clear scene-specific overrides/drafts. Cancel/failure preserves the prior setup; warn that creator enablement changes on confirmation.
-- [ ] Persist the creator source, named behavior collection, dependencies, and enabled state in the authored scenario. Never persist runtime-only population changes as initial agents during Save.
+- [ ] **Complete and reviewed**
 
-**Production review:** Create a script that spawns a named group at startup on valid road positions and another agent every two seconds of simulation time. Assign the JavaScript driving program from Step 6. Pause for several seconds and resume: no wall-time burst occurs and startup does not repeat. Despawn an agent and verify its visual, collisions, script updates, and input references disappear. Reset and Play twice with stable counts. Replace the scene and verify the retained creator script is disabled and the new agent list stays empty.
+Design: [performance acceptance](scenario-studio-design.md#acceptance).
 
-**Exit gate:** The reviewer creates dynamic populations entirely through product scripting; no ID allocation or cleanup code is required in user scripts. Commit: `feat: create agents with scenario scripts`.
+**Add:** `ui/PerformancePanel.ts`, `scripts/benchmarkScenarioStudio.mjs`, `docs/scenario-studio-performance.md`, examples in `assets/scenarios/examples/`; extend SimulationMetrics, measured bottlenecks and scenario picker.
 
-## Step 8 — Run Python agent and creator scripts alongside JavaScript
-
-- [ ] **Feature complete and reviewed**
-
-**Deliverable:** The existing editor/import flow accepts Python and executes it in-browser for both individual agents and the scenario creator. A mixed-language scenario plays, pauses, resets, and saves correctly.
-
-**Files:** Create `scripts/PythonRuntime.ts` and `python.worker.ts`. Extend script compiler/validation registration, editor/import, scheduler, runtime asset serving/build configuration, package/lockfile, and browser review scripts.
-
-**Consumes:** The exact `ScriptRuntime`, `RunStamp`, command, input, and creator contracts already used by JavaScript. Register language implementations at the composition root; the session does not acquire language branches.
-
-Example Python source that must work when imported:
-
-```python
-import math
-
-def on_start(ctx):
-    ctx.state["elapsed"] = 0.0
-
-def on_step(ctx, dt):
-    ctx.state["elapsed"] += dt
-    ctx.drive({
-        "throttle": 0.3,
-        "steering": math.sin(ctx.state["elapsed"]) * 0.2,
-        "brake": 0.0,
-    })
-```
-
-**Implementation checklist:**
-
-- [ ] Pin Pyodide and package its required runtime files for same-origin loading through the built app. Initialize it in a module worker, once per worker. Expose preparation progress and a recoverable runtime-load error; JavaScript-only scenarios must not download Python unnecessarily.
-- [ ] Compile Python source with filename-aware diagnostics and create a separate namespace/context per instance. Bridge standard-library results, input, state, and commands through value records. Dispose Python proxies and instance namespaces on release.
-- [ ] Implement equivalent startup/update/shutdown, creator commands, batching, timeouts, generation rejection, and 20/60 Hz scheduling. Give each instance persistent worker affinity; never create a Python interpreter per agent.
-- [ ] Enable Python/JavaScript selection and `.py` imports in both editor contexts. Preserve text on language changes, validate before execution, and show a concise supported-standard-library note. Reject unsupported imports with their actual exception; do not imply arbitrary desktop Python compatibility.
-- [ ] On a stuck Python worker, pause and invalidate its contexts, terminate it, and prepare a fresh runtime on Reset. A failed cleanup hook cannot retain bodies/visuals or block Reset.
-- [ ] Round-trip Python source and mixed assignments through Save/Open. Run Python creator/JavaScript behavior and JavaScript creator/Python behavior combinations through the same named-program references.
-
-**Production review:** Import the Python example and observe motion. Add a JavaScript-controlled agent to the same scene and use Play/Pause/Reset. Verify a Python input script cannot receive keys while the editor is focused. Use standard-library math/random with a fixed seed in creator scripts. Exercise syntax/import errors, a stuck Python hook, repeated Reset, and a cold runtime load without freezing the UI. Reopen the saved mixed scenario in the built client.
-
-**Exit gate:** Both languages deliver the same product capabilities and automatic lifecycle behavior; Python works without a local Python service. Commit: `feat: support Python scenario and agent scripts`.
-
-## Step 9 — Suspend selected agents when distant
-
-- [ ] **Feature complete and reviewed**
-
-**Deliverable:** The Agent Inspector exposes **Suspend when distant**, off by default, with visible active/suspended status and a configurable simulation focus in scenario settings.
-
-**Files:** Create `simulation/DistanceActivation.ts`. Extend agent settings, population/session, scheduler, physics adapter, inspector, scenario settings/persistence, and browser reviews.
-
-**Boundary:** Define a pure activation policy over engine-free agent bounds, current activation state, a focus point, and validated radii. It issues suspend/resume intentions; population/physics perform transitions at simulation boundaries.
-
-**Implementation checklist:**
-
-- [ ] Add the per-instance/default checkbox and explanatory copy: distant agents pause movement and behavior; this mode does not maintain continuous traffic. Persist the choice and normalize existing scenarios to false.
-- [ ] Use the controlled agent as focus, or the saved fixed focus point when none is controlled. Default activation radius to 40 m and deactivation radius to 50 m; require positive values with exit radius greater than entry radius.
-- [ ] On suspension, stop hooks and dynamics, exclude the body from active collision participation, retain its visible pose/state, and clear stale input/control commands. Suspended hooks receive normal scheduler `dt` on resumption, not a catch-up interval spanning their suspension.
-- [ ] Reactivate only at a safe simulation boundary after separation/overlap checks. If occupied, remain suspended with a visible reason and retry with bounded work. Controlled agents must be active; reject taking control of a blocked instance until safe activation succeeds.
-- [ ] Ensure camera motion does not move the simulation focus. Reset/replacement/disposal remove all activation state. Paused simulation never changes activation underneath the inspector.
-
-**Production review:** Enable suspension on one agent and leave another unchecked. Move the controlled focus beyond the exit radius and back inside the entry radius; inspect pose/script counters and status. Move only the camera and verify no activation changes. Occupy the reactivation location and verify the blocked diagnostic instead of an overlap impulse. Save/Open and confirm opt-in state and radii persist.
-
-**Exit gate:** The opt-in feature has explicit, observable semantics and does not affect always-active agents. Commit: `feat: suspend distant scenario agents`.
-
-## Step 10 — Select and use the MuJoCo production backend
-
-- [ ] **Feature complete and reviewed**
-
-**Deliverable:** Scenario settings expose **Physics Engine: Rapier / MuJoCo**. Selecting either backend produces a complete working scenario with physical placement, driving, both script languages, creator lifecycle, surfaces, suspension, persistence, and playback controls. MuJoCo is a production implementation, not a demo or unavailable menu option.
-
-**Files:** Create `physics/mujoco/MujocoPhysicsWorld.ts`, `MujocoModelCompiler.ts`, `MujocoAgentSlots.ts`, `MujocoVehicleController.ts`, and `ui/PhysicsEnginePanel.ts`. Extend the existing engine registry, worker composition, capability diagnostics, persistence, source-asset cache/build serving, package/lockfile, and browser walkthroughs. Shared domain/script consumers retain their existing engine-neutral contracts.
-
-**Consumes/produces:** Implement Step 2's `PhysicsEngineFactory`/`PhysicsWorld` contract, including operations added in Steps 4–9. Register key `mujoco` alongside `rapier`. Registry entries provide a display label and capabilities; selection UI enumerates registrations. A new engine is an added adapter/registration, not another branch inside `ScenarioSession`, agents, input, or scripts.
-
-**Implementation checklist:**
-
-- [ ] Pin the official `@mujoco/mujoco` bindings and bundle their WASM/JS assets for same-origin release-build loading. Start with the single-threaded build inside the dedicated physics worker. Record the tested binding version and required API coverage; expose initialization failures without falling back to Rapier. MuJoCo runtime ownership is independent of Pyodide. [Official browser bindings](https://github.com/google-deepmind/mujoco/blob/main/wasm/README.md)
-- [ ] Compile the neutral world/agent descriptions into MuJoCo model data. Convert coordinate conventions and units inside the adapter. Preserve convex/concave geometry correctly using primitives, suitable heightfields, and convex decomposition as needed; keep bridge passages and water boundaries open. Cache collision/model artifacts by source hash and compiler/backend version. Reject a conversion with unsupported geometry rather than silently enclosing it in a scene-wide convex hull. [Collision representations](https://mujoco.readthedocs.io/en/latest/computation/)
-- [ ] Implement body observations, surface queries, contact/material behavior, forces/impulses, stable substeps, and wheel/chassis controls behind the existing interfaces. Shared throttle/brake/steering semantics remain available even if the underlying vehicle implementations differ. Port water-region and distance-activation behavior through backend methods, not MuJoCo checks in the domain.
-- [ ] Make lifecycle automatic despite compiled topology: reserve reusable inactive slots for expected templates where useful; batch structural changes and prepare model replacements when capacity/shape changes require them. Preserve active agents' positions, velocities, controls, and script references by stable domain identity. Pause advancement while structural preparation is pending; keep the old world intact until a valid replacement can commit. Measure structural-change stalls separately in Step 11. [Model editing](https://mujoco.readthedocs.io/en/latest/programming/modeledit.html)
-- [ ] Verify the pinned browser bindings actually expose the chosen model-editing operations. Use validated model reconstruction and state transfer if those operations are unavailable. Refresh all views/indices after model replacement, and release owned model/data/native handles exactly once; never retain borrowed WASM memory across destruction or reallocation.
-- [ ] Add engine selection in ready-state scenario settings. Preserve authored scene, agents, and scripts while preparing the chosen engine; commit the engine key only on success. Switching engines does not clear agents or perform scene replacement. Changes during running/paused playback require Reset first. Save/Open retains the selected key and validated settings.
-- [ ] Run every prior feature walkthrough on MuJoCo and rerun Rapier after shared changes. Check behavioral contract parity rather than requiring identical trajectories. Include failed engine preparation, invalid collision conversion, resource disposal, repeated engine switching, creator spawns/despawns, and stale messages from a replaced engine worker.
-
-**Production review:** Open a saved scripted scenario, select MuJoCo, place an agent, and Play. Drive it across surfaces, run Python and JavaScript behavior, execute timed creator spawns, pause/reset, and use distance suspension. Save/reopen and verify MuJoCo remains selected. Reset and switch to Rapier: authored agents and scripts remain. Check body/worker/native-resource counts across repeated switches.
-
-**Exit gate:** Both registered backends support the complete product through the same domain and script contracts. Neither is silently substituted for the other. Commit: `feat: add selectable MuJoCo physics backend`.
-
-## Step 11 — Run and inspect 100 agents smoothly
-
-- [ ] **Feature complete and reviewed**
-
-**Deliverable:** A 100-agent example scenario runs smoothly through the normal UI on both Rapier and MuJoCo, and a Performance panel explains render, physics, and scripting costs. This step includes measured optimizations, not just a final test pass.
-
-**Files:** Create `ui/PerformancePanel.ts`, `scripts/benchmarkScenarioStudio.mjs`, `docs/scenario-studio-performance.md`, and named example scenarios under `assets/scenarios/examples/`. Extend metrics, scheduler/pools, rendering batches, caching, and review scripts as indicated by measurements. Add **Open Example** to the existing scenario picker so users can run the examples without copying files into their user-data directory.
-
-**Boundary:** `SimulationMetrics` collects bounded samples and produces immutable aggregate records for FPS/frame intervals, physics/script time, worker backlog, active/total instances, resource counts, and simulation/wall-time ratio. Sampling and aggregation must not add a per-agent UI update loop.
-
-**Implementation checklist:**
-
-- [ ] Author a correctly scaled, adequately sized review scene through the existing scene pipeline, or select an existing published scene with room for 100 non-overlapping vehicles. Do not shrink physics bodies or silently change scene units just to fit the benchmark. Add examples for 100 JavaScript agents, 100 Python agents, and a 50/50 mix using representative movement and contact behavior; all suspension flags are false.
-- [ ] Expose examples in the product and save opened copies into user data rather than modifying source-controlled examples. Include one user-controlled vehicle and timed population changes for lifecycle review; use a stable 100-active population during the timed performance sample.
-- [ ] Add the Performance panel and record a baseline before optimization. Bound JavaScript/Python worker pools independently; begin with one worker each and cap total script workers according to measured hardware capacity while reserving capacity for rendering and the physics worker. Worker count does not grow with agent count.
-- [ ] Optimize measured bottlenecks: batch transferable snapshots/commands, reuse buffers and model resources, avoid whole-world observations per agent, batch compatible visuals, keep wheel updates incremental, and cap live thumbnails. Preserve stable step ordering and bounded queues. Pool membership changes only between runs so stateful agents do not silently migrate.
-- [ ] Run a foreground, hardware-accelerated 60-second sample after preload/warmup for each language mix on each engine: six cases in total. Capture camera movement/input, frame intervals, physics/script costs, memory/resource counts, worker counts, viewport/DPR, browser, CPU/GPU, selected engine/version, solver substeps, and simulation-time ratio. Report loading and model compilation separately.
-- [ ] Meet the design targets on both engines: approximately 60 FPS, at least 58 FPS average, p95 frame interval at most 25 ms, and simulation/wall-time ratio at least 0.95 for the representative workload. Do not mask slow simulation with smooth rendering alone. If either engine misses the target, identify and fix its limiting subsystem before closing the step.
-- [ ] Profile MuJoCo topology changes and inactive-slot overhead with representative timed spawn/despawn bursts. Separate active agents from reserved capacity in the panel. Tune automatic capacity/preparation so routine lifecycle work does not introduce repeated visible stalls; do not hide model rebuild costs inside the script timing aggregate. Only enable MuJoCo's internally multithreaded build if measurements warrant it and the release host supplies the required cross-origin-isolation headers; verify all app/script assets under those headers.
-- [ ] Run repeated Play/Pause/Reset, scripted spawn/despawn, scene replacement, and route disposal. Verify tracked bodies, visuals, event registrations, and worker contexts return to their expected baseline; explain intentional cache retention separately from leaked live instances.
-- [ ] Record actual measurements and environment in the performance document, and run the full functional walkthrough on the built client. Headless/software-rendered runs establish behavior only; they are not evidence that the hardware FPS requirement is met.
-
-**Production review:** Open the 100-agent mixed example from Scenario Studio, Play, orbit/zoom and control a vehicle while viewing the performance panel. Repeat the all-Python and all-JavaScript examples on Rapier and MuJoCo. Pause/reset/switch scenes and engines, and watch the population/resource counts recover. Review all six recorded hardware results against the stated thresholds.
-
-**Exit gate:** All 100 agents remain active on each production engine, simulation keeps pace with wall time, rendering meets the measured target, and lifecycle/resource behavior remains stable. Commit: `feat: deliver smooth 100-agent scenario playback`.
-
-## Coverage and review record
-
-| Design requirement | Delivering steps |
-| --- | --- |
-| Separate app route, reusable viewport/HUD, green default environment only without a scene | 1; physical support in 2 and persistence in 3 |
-| Scene browsing/search, named confirmation, failure preservation | 1; agent/script cleanup completed in 2, 4, 7 |
-| Shared Scenes/Agents tabs and left Agent Inspector | 2 |
-| Add/drop on actual physical surfaces; correct units | 2 |
-| Independent placement defaults/instance edits | 2; script parity in 6 and 8 |
-| New/Open/Save and recoverable missing assets | 3; schema extensions accompany 4–9 |
-| Play/Pause/Reset, driving, input focus | 4 |
-| Physical surface mapping, water, vehicle traction | 5 |
-| Script editor/import, diagnostics, auto/input behavior | 6 and 8 |
-| Creator script and automatic spawn/despawn | 7 and 8 |
-| Bounded workers, separate instance state, stale-result rejection | 4, 6–8; scaling in 11 |
-| Optional distance suspension | 9 |
-| Open physics contract, production Rapier and MuJoCo adapters | Boundary in 2/4; complete second backend and selection in 10 |
-| 100 active agents, smooth rendering and real-time simulation on both engines | 11 |
-| Lifecycle ownership, disposal, failure cleanup | Each owning feature; repeated-run evidence in 11 |
-| Reviewable production behavior after every step | Every step's built-client walkthrough and exit gate |
-
-### Completion record — 2026-09-14
-
-- Step 1 is complete. Scene search, named confirmation, failure preservation, real imported geometry, root/nested discovery, generated previews, camera controls, and narrow layouts were reviewed in the built client.
-- Both Docker build commands passed. The built-client and application browser walkthroughs reported zero browser errors. Lifecycle probes returned zero retained app listeners/animation frames and zero renders after pending-thumbnail disposal. All 18 relevant existing tests passed; no unit tests were added.
-- Review found and corrected borrowed-texture disposal, stale thumbnail completion, missing shared-consumer rejection handling, raised-model preview centering, search overflow/parent clipping, and long-name warning truncation. Model templates remain cached until app teardown, as documented.
-- The missing historical refactor baseline is now an explicit optional `WORKFLOW_BASELINE` input. The review does not claim historical byte equivalence; actual editing/save/export/import checks passed.
-- Commands, selected screenshots and JSON observations are in [Scenario Studio review](scenario-studio-review.md). Headless/SwiftShader results establish functional behavior only.
-- Steps 2–11 remain unimplemented. Begin Step 2 with the engine-neutral physics boundary, registered Rapier adapter, and physical agent placement; the default ground still has no collider.
+- [ ] Create adequately sized, correctly scaled 100-JS/100-Python/50–50 examples with suspension off; Open Example saves user copies, preserving sources. Include controlled driving/timed lifecycle changes, but hold 100 active agents steady during samples.
+- [ ] Record baseline; expose bounded aggregate metrics; tune worker caps, transfers/buffers, queries, batching/caches and incremental visuals only from measurements.
+- [ ] Run all six hardware cases with camera/input and specified thresholds. Separately profile preload, compilation, reserved slots and spawn/despawn topology stalls; optimize failing backends before closing.
+- [ ] Verify repeated runs/replacement/engine switches/disposal and baseline resource recovery. Record environment, actual results, limits and full built-client walkthrough in the performance document. Common gate.
