@@ -1,0 +1,53 @@
+{
+  "packages": [
+    {
+      "key": ".",
+      "available": true
+    },
+    {
+      "key": "review-empty",
+      "available": true
+    },
+    {
+      "key": "review-groundless",
+      "available": true
+    },
+    {
+      "key": "review-invalid",
+      "available": false
+    },
+    {
+      "key": "review-long scene name long scene name long scene name long scene name long scene name long scene name long scene name long scene name long scene name long scene name",
+      "available": true
+    },
+    {
+      "key": "sample",
+      "available": true
+    },
+    {
+      "key": "scene2",
+      "available": true
+    }
+  ],
+  "result": "PASS",
+  "checks": [
+    "default ground",
+    "case-insensitive search and no matches",
+    "selection preserved through filtering/refresh",
+    "named confirmation, cancel/Escape/backdrop",
+    "unchanged reference no-op",
+    "sample and scene2 loading",
+    "stale content rejected without replacement",
+    "invalid package disabled",
+    "empty geometry preserves previous scene",
+    "groundless geometry without fallback",
+    "orbit/zoom/reset and narrow layout",
+    "root package and source routes",
+    "catalog additions/removals",
+    "rapid hover/refresh/resize"
+  ],
+  "browser": "151.0.7922.34",
+  "rendering": "headless Chromium / SwiftShader; functional evidence only, no FPS claim",
+  "manifestRequests": 6,
+  "browserErrors": []
+}

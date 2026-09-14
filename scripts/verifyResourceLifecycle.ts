@@ -89,6 +89,69 @@ try {
     observations.push(result);
     await page.close();
   }
+  // Exercise real GPU/cache ownership at the async thumbnail boundary, including
+  // disposal before network completion and pruning while preparation is pending.
+  const thumbnailsPage = await browser.newPage();
+  await thumbnailsPage.route("http://127.0.0.1:5199/thumbnail-lifecycle", (route) => route.fulfill({ contentType: "text/html", body: "<!doctype html><html><body></body></html>" }));
+  await thumbnailsPage.goto("http://127.0.0.1:5199/thumbnail-lifecycle");
+  const thumbnailErrors: string[] = [];
+  thumbnailsPage.on("pageerror", (error) => thumbnailErrors.push(error.message));
+  const thumbnailResult = await thumbnailsPage.evaluate(async () => {
+    const load = new Function("path", "return import(path)");
+    const THREE = await load("/node_modules/three/build/three.module.js");
+    const { AssetManager } = await load("/src/engine/AssetManager.ts");
+    const { ThumbnailRenderer } = await load("/src/features/hud/thumbnails/ThumbnailRenderer.ts");
+    const { scenes } = await (await fetch("/api/scenario-studio/scenes")).json();
+    const reference = scenes.find((scene: { available: boolean }) => scene.available).reference;
+    const query = new URLSearchParams({ key: reference.key, modelSha256: reference.modelSha256, manifestSha256: reference.manifestSha256 });
+    const asset = { id: "lifecycle-scene", label: "Published scene", category: "scenes", source: "shared", implementation: "glb", modelUrl: `/api/scenario-studio/scene-package/model?${query}` };
+    const renderer = new THREE.WebGLRenderer();
+    const assets = new AssetManager();
+    let thumbnails = new ThumbnailRenderer(renderer, assets);
+    let disposed = false;
+    let lateRenders = 0;
+    const render = renderer.render.bind(renderer);
+    renderer.render = (...args: unknown[]) => { if (disposed) lateRenders++; return render(...args); };
+    const staticPending = thumbnails.getStaticThumbnail(asset).then(() => "completed", () => "expired");
+    const livePending = thumbnails.acquireLiveThumbnail(asset);
+    thumbnails.dispose();
+    thumbnails.dispose();
+    disposed = true;
+    const expired = await staticPending;
+    const live = await livePending;
+    if (expired !== "expired" || live !== null || lateRenders !== 0) throw new Error("Pending thumbnail rendered after disposal");
+    disposed = false;
+    thumbnails = new ThumbnailRenderer(renderer, assets);
+    const old = thumbnails.getStaticThumbnail(asset).then(() => "completed", () => "expired");
+    thumbnails.pruneStatic(new Set());
+    const replacement = thumbnails.getStaticThumbnail(asset);
+    const [oldResult, texture] = await Promise.all([old, replacement]);
+    if (oldResult !== "expired" || !texture.isTexture) throw new Error("Pruning invalidated the replacement thumbnail");
+    let failures = 0;
+    for (let attempt = 0; attempt < 5; attempt++) {
+      try { await thumbnails.acquireLiveThumbnail({ ...asset, id: "missing", modelUrl: "/scenario-assets/scenes/missing/environment.glb" }); }
+      catch { failures++; }
+    }
+    const first = await thumbnails.acquireLiveThumbnail(asset);
+    if (!first || failures !== 5) throw new Error("Failed thumbnail loads retained live slots");
+    first.dispose();
+    const second = await thumbnails.acquireLiveThumbnail(asset);
+    first.dispose();
+    if (!second) throw new Error("Live slot was not reusable");
+    const remaining = await Promise.all(Array.from({ length: 3 }, () => thumbnails.acquireLiveThumbnail(asset)));
+    const handles = [second, ...remaining];
+    if (handles.some((handle) => !handle) || new Set(handles.map((handle) => handle.texture)).size !== 4) throw new Error("Duplicate disposal released another live handle's slot");
+    if (await thumbnails.acquireLiveThumbnail(asset)) throw new Error("Live pool exceeded its bounded capacity");
+    for (const handle of handles) handle.dispose();
+    thumbnails.dispose();
+    assets.dispose();
+    renderer.dispose();
+    renderer.forceContextLoss();
+    return { pendingStatic: expired, pendingLive: live, lateRenders, pruning: "replacement retained", failedLoadsReleased: failures, repeatedHandleDisposal: "passed" };
+  });
+  assert.deepEqual(thumbnailErrors, [], "Thumbnail lifecycle browser errors");
+  observations.push({ application: "thumbnails", ...thumbnailResult });
+  await thumbnailsPage.close();
   const viewerCycles = [];
   for (let cycle = 0; cycle < 3; cycle++) {
     const page = await browser.newPage({ viewport: { width: 1366, height: 900 } });

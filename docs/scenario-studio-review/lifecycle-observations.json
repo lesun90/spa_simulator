@@ -1,0 +1,80 @@
+[
+  {
+    "application": "scene",
+    "cycles": [
+      {
+        "cycle": 0,
+        "listeners": 0,
+        "animationFrames": 0,
+        "pendingLoadTeardown": false
+      },
+      {
+        "cycle": 1,
+        "listeners": 0,
+        "animationFrames": 0,
+        "pendingLoadTeardown": false
+      },
+      {
+        "cycle": 2,
+        "listeners": 0,
+        "animationFrames": 0,
+        "pendingLoadTeardown": true
+      }
+    ]
+  },
+  {
+    "application": "scenario",
+    "cycles": [
+      {
+        "cycle": 0,
+        "listeners": 0,
+        "animationFrames": 0,
+        "pendingLoadTeardown": false
+      },
+      {
+        "cycle": 1,
+        "listeners": 0,
+        "animationFrames": 0,
+        "pendingLoadTeardown": false
+      },
+      {
+        "cycle": 2,
+        "listeners": 0,
+        "animationFrames": 0,
+        "pendingLoadTeardown": true
+      }
+    ]
+  },
+  {
+    "application": "thumbnails",
+    "pendingStatic": "expired",
+    "pendingLive": null,
+    "lateRenders": 0,
+    "pruning": "replacement retained",
+    "failedLoadsReleased": 5,
+    "repeatedHandleDisposal": "passed"
+  },
+  {
+    "application": "viewer",
+    "cycles": [
+      {
+        "cycle": 0,
+        "listeners": 0,
+        "animationFrames": 0,
+        "pendingLoadTeardown": false
+      },
+      {
+        "cycle": 1,
+        "listeners": 0,
+        "animationFrames": 0,
+        "pendingLoadTeardown": false
+      },
+      {
+        "cycle": 2,
+        "listeners": 0,
+        "animationFrames": 0,
+        "pendingLoadTeardown": true
+      }
+    ]
+  }
+]

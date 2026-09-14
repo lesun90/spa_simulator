@@ -32,6 +32,7 @@ export class TextField {
   private caretBlinkTimer = 0;
   private rect: Rect;
   private readonly unregister: () => void;
+  private readonly textGeometry = new THREE.PlaneGeometry(1, 1);
   private readonly focusable = {
     onKeyDown: (event: KeyboardEvent) => this.handleKeyDown(event),
     onBlur: () => this.handleBlur()
@@ -71,7 +72,7 @@ export class TextField {
     this.caret.visible = true;
     this.interaction.focusField(this.focusable);
     this.panel.setBorder(theme.focusRing.hex);
-    this.positionCaret();
+    this.rebuildText();
   }
 
   private handleBlur() {
@@ -79,6 +80,7 @@ export class TextField {
     this.focused = false;
     this.caret.visible = false;
     this.panel.setBorder(theme.border.hex);
+    this.rebuildText();
     this.options.onCommit?.(this.value);
   }
 
@@ -117,6 +119,7 @@ export class TextField {
   }
 
   private rebuildText() {
+    const clippingPlanes = this.caret.material.clippingPlanes;
     if (this.textMesh) {
       this.panel.root.remove(this.textMesh);
       this.textMesh.material.dispose();
@@ -133,10 +136,18 @@ export class TextField {
       size: this.options.fontSize ?? 13,
       color: showPlaceholder ? theme.textMutedAlt.css : theme.text.css
     });
-    const material = hudBasicMaterial({ map: rasterized.texture, transparent: true });
-    const mesh = new THREE.Mesh(unitPlane, material);
-    mesh.scale.set(rasterized.width, rasterized.height, 1);
-    mesh.position.set(-this.rect.width / 2 + paddingX + rasterized.width / 2, 0, hudZ.glyph);
+    const material = hudBasicMaterial({ map: rasterized.texture, transparent: true, clippingPlanes });
+    // Crop the texture horizontally without replacing a parent ScrollRegion's clip planes.
+    const width = Math.min(rasterized.width, Math.max(this.rect.width - paddingX * 2 - 2, 1));
+    const fraction = width / rasterized.width;
+    const start = this.focused ? 1 - fraction : 0;
+    const uv = this.textGeometry.getAttribute("uv");
+    uv.setX(0, start); uv.setX(2, start);
+    uv.setX(1, start + fraction); uv.setX(3, start + fraction);
+    uv.needsUpdate = true;
+    const mesh = new THREE.Mesh(this.textGeometry, material);
+    mesh.scale.set(width, rasterized.height, 1);
+    mesh.position.set(-this.rect.width / 2 + paddingX + width / 2, 0, hudZ.glyph);
     this.panel.root.add(mesh);
     this.textMesh = mesh;
     this.positionCaret();
@@ -144,7 +155,7 @@ export class TextField {
 
   private positionCaret() {
     const paddingX = this.options.paddingX ?? 9;
-    const textWidth = this.value.length ? (this.textMesh?.scale.x ?? 0) : 0;
+    const textWidth = this.value.length ? Math.min(this.textMesh?.scale.x ?? 0, Math.max(this.rect.width - paddingX * 2 - 2, 0)) : 0;
     const height = Math.min(this.rect.height - 10, (this.options.fontSize ?? 13) * 1.2);
     this.caret.scale.set(1.5, height, 1);
     this.caret.position.set(-this.rect.width / 2 + paddingX + textWidth + 1.5, 0, hudZ.glyph + 0.001);
@@ -172,5 +183,6 @@ export class TextField {
     this.panel.dispose();
     this.textMesh?.material.dispose();
     this.caret.material.dispose();
+    this.textGeometry.dispose();
   }
 }

@@ -40,7 +40,7 @@ export class ScenarioHudFeature {
 
   constructor(
     size: ViewportSize,
-    interaction: InteractionSystem,
+    private readonly interaction: InteractionSystem,
     private readonly listScenes: () => Promise<readonly SceneChoice[]>,
     private readonly useScene: (reference: SceneReference) => Promise<void>,
     resetView: () => void,
@@ -69,8 +69,9 @@ export class ScenarioHudFeature {
       detailHash: label(right, 18, 207, 11.5, "500", theme.textMuted.css, "", 2),
       diagnostic: label(right, 18, 265, 11.5, "500", theme.diagnostic.css, "", 5),
       modalTitle: label(modalRect(size), 25, 28, 18, "700", theme.text.css, "Replace current scene?"),
-      modalMessage: label(modalRect(size), 25, 76, 12.5, "500", theme.textMuted.css,
-        "This replaces the current environment and removes 0 agents. Cancel keeps the current scene.", 3)
+      modalCandidate: label(modalRect(size), 25, 65, 14, "600", theme.text.css, "", 2),
+      modalMessage: label(modalRect(size), 25, 112, 12.5, "500", theme.textMuted.css,
+        "This replaces the current environment and removes 0 agents. Cancel keeps the current scene.", 4)
     };
     this.useButton = new Button(this.useRect(), interaction, { label: "Use Scene", onClick: () => this.requestUse() });
     this.resetButton = new Button(this.resetRect(), interaction, { icon: "refresh", onClick: resetView });
@@ -83,9 +84,9 @@ export class ScenarioHudFeature {
     this.backdrop = new Panel({ x: 0, y: 0, width: size.width, height: size.height }, { fill: 0x0d1520, fillOpacity: 0.55, radius: 0, z: 4.5 });
     this.modal = new Panel(modalRect(size), { fill: theme.panel.hex, border: theme.borderStrong.hex, borderWidth: 1, radius: theme.radius.lg, shadow: "lg", z: 5 });
     this.cancelButton = new Button(modalButtonRect(size, false), interaction, { label: "Cancel", onClick: () => this.cancel() });
-    this.confirmButton = new Button(modalButtonRect(size, true), interaction, { label: "Replace Scene", onClick: () => this.confirm() });
-    for (const root of [this.labels.modalTitle.root, this.labels.modalMessage.root, this.cancelButton.root, this.confirmButton.root]) root.position.z = 5.2;
-    this.modalRoot.add(this.backdrop.root, this.modal.root, this.labels.modalTitle.root, this.labels.modalMessage.root, this.cancelButton.root, this.confirmButton.root);
+    this.confirmButton = new Button(modalButtonRect(size, true), interaction, { label: "Switch Scene", onClick: () => this.confirm() });
+    for (const root of [this.labels.modalTitle.root, this.labels.modalCandidate.root, this.labels.modalMessage.root, this.cancelButton.root, this.confirmButton.root]) root.position.z = 5.2;
+    this.modalRoot.add(this.backdrop.root, this.modal.root, this.labels.modalTitle.root, this.labels.modalCandidate.root, this.labels.modalMessage.root, this.cancelButton.root, this.confirmButton.root);
     this.modalRoot.visible = false;
     this.unregisterBackdrop = interaction.register(this.backdrop.root, { onClick: () => this.cancel() });
     this.unregisterModal = interaction.register(this.modal.root, { onPointerDown: () => {} });
@@ -116,7 +117,7 @@ export class ScenarioHudFeature {
       this.choices = choices;
       this.candidate = choices.find((choice) => choice.reference.key === this.candidate?.reference.key) ?? null;
       this.browser.setChoices(choices);
-      this.labels.status.setText(`${choices.filter((choice) => choice.available).length} scene${choices.length === 1 ? "" : "s"} available.`);
+      this.labels.status.setText(`${choices.filter((choice) => choice.available).length} scene${choices.filter((choice) => choice.available).length === 1 ? "" : "s"} available.`);
     } catch (error) {
       if (!this.disposed && generation === this.generation) this.labels.status.setText(message(error));
     } finally {
@@ -157,7 +158,10 @@ export class ScenarioHudFeature {
 
   private requestUse(): void {
     if (!this.candidate?.available || this.busy || sameSceneReference(this.candidate.reference, this.active)) return;
+    this.interaction.blurField();
     this.pending = this.candidate;
+    this.labels.modalTitle.setText("Switch scene?");
+    this.labels.modalCandidate.setText(`“${this.candidate.label}”`);
     this.modalRoot.visible = true;
     this.invalidate();
   }
@@ -192,6 +196,7 @@ export class ScenarioHudFeature {
   }
 
   handleKeyDown(event: KeyboardEvent): void {
+    if (this.interaction.handleKeyDown(event)) return;
     if (event.key === "Escape" && this.pending) this.cancel();
   }
 
@@ -233,7 +238,8 @@ export class ScenarioHudFeature {
     this.backdrop.setRect({ x: 0, y: 0, width: size.width, height: size.height });
     this.modal.setRect(modalRect(size));
     this.labels.modalTitle.setFrame(frame(modalRect(size), 25, 28, 1));
-    this.labels.modalMessage.setFrame(frame(modalRect(size), 25, 76, 3));
+    this.labels.modalCandidate.setFrame(frame(modalRect(size), 25, 65, 2));
+    this.labels.modalMessage.setFrame(frame(modalRect(size), 25, 112, 4));
     this.cancelButton.setRect(modalButtonRect(size, false));
     this.confirmButton.setRect(modalButtonRect(size, true));
   }
@@ -287,7 +293,7 @@ function label(rect: Rect, inset: number, y: number, size: number, weight: strin
 
 function modalRect(size: ViewportSize): Rect {
   const width = Math.min(420, size.width - 28);
-  return { x: (size.width - width) / 2, y: (size.height - 216) / 2, width, height: 216 };
+  return { x: (size.width - width) / 2, y: (size.height - 256) / 2, width, height: 256 };
 }
 
 function modalButtonRect(size: ViewportSize, primary: boolean): Rect {

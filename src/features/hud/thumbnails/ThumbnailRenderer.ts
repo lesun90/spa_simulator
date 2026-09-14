@@ -46,6 +46,8 @@ export interface LiveThumbnailHandle {
  */
 export class ThumbnailRenderer {
   private readonly staticTargets = new Map<string, THREE.WebGLRenderTarget>();
+  private readonly pendingStatic = new Map<string, Promise<THREE.Texture>>();
+  private disposed = false;
   private readonly staticRig = createRig();
   private readonly livePool: LiveSlot[];
 
@@ -62,44 +64,68 @@ export class ThumbnailRenderer {
   }
 
   async getStaticThumbnail(asset: AssetCatalogEntry): Promise<THREE.Texture> {
+    if (this.disposed) throw new Error("Thumbnail renderer is disposed.");
+    const pending = this.pendingStatic.get(asset.id);
+    if (pending) return pending;
     const existing = this.staticTargets.get(asset.id);
     if (existing) return existing.texture;
 
     const target = createThumbnailTarget(STATIC_RESOLUTION);
     this.staticTargets.set(asset.id, target);
-
-    const object = await this.assetManager.instantiate(asset);
-    centerObjectForPreview(object);
-    this.staticRig.scene.add(object);
-    this.renderInto(target, this.staticRig);
-    this.staticRig.scene.remove(object);
-
-    return target.texture;
+    const prepare = (async () => {
+      try {
+        const template = await this.assetManager.getTemplate(asset);
+        if (this.disposed || this.staticTargets.get(asset.id) !== target) throw new Error("Thumbnail request expired.");
+        const object = template.clone(true);
+        centerObjectForPreview(object);
+        this.staticRig.scene.add(object);
+        try { this.renderInto(target, this.staticRig); }
+        finally { this.staticRig.scene.remove(object); }
+        return target.texture;
+      } catch (error) {
+        if (this.staticTargets.get(asset.id) === target) {
+          this.staticTargets.delete(asset.id);
+          target.dispose();
+        }
+        throw error;
+      } finally {
+        if (this.staticTargets.get(asset.id) === target || !this.staticTargets.has(asset.id)) this.pendingStatic.delete(asset.id);
+      }
+    })();
+    this.pendingStatic.set(asset.id, prepare);
+    return prepare;
   }
 
   async acquireLiveThumbnail(asset: AssetCatalogEntry): Promise<LiveThumbnailHandle | null> {
+    if (this.disposed) return null;
     const slot = this.livePool.find((candidate) => !candidate.inUse);
     if (!slot) return null;
     slot.inUse = true;
-
-    const object = await this.assetManager.instantiate(asset);
-    if (!slot.inUse) {
-      // Released while the asset was loading.
-      return null;
+    try {
+      const template = await this.assetManager.getTemplate(asset);
+      if (this.disposed) return null;
+      const object = template.clone(true);
+      centerObjectForPreview(object);
+      slot.object = object;
+      slot.rig.scene.add(object);
+      this.renderInto(slot.target, slot.rig);
+      let released = false;
+      return {
+        texture: slot.target.texture,
+        dispose: () => {
+          if (released) return;
+          released = true;
+          object.removeFromParent();
+          slot.object = null;
+          slot.inUse = false;
+        }
+      };
+    } catch (error) {
+      slot.object?.removeFromParent();
+      slot.object = null;
+      slot.inUse = false;
+      throw error;
     }
-    centerObjectForPreview(object);
-    slot.object = object;
-    slot.rig.scene.add(object);
-    this.renderInto(slot.target, slot.rig);
-
-    return {
-      texture: slot.target.texture,
-      dispose: () => {
-        if (slot.object) slot.rig.scene.remove(slot.object);
-        slot.object = null;
-        slot.inUse = false;
-      }
-    };
   }
 
   update(dt: number) {
@@ -111,6 +137,7 @@ export class ThumbnailRenderer {
   }
 
   private renderInto(target: THREE.WebGLRenderTarget, rig: PreviewRig) {
+    if (this.disposed) return;
     const previousTarget = this.renderer.getRenderTarget();
     this.renderer.setRenderTarget(target);
     // The app renderer runs with autoClear disabled (Renderer.ts composites world+HUD layers onto one
@@ -127,14 +154,23 @@ export class ThumbnailRenderer {
       if (!validAssetIds.has(id)) {
         target.dispose();
         this.staticTargets.delete(id);
+        this.pendingStatic.delete(id);
       }
     }
   }
 
   dispose() {
+    if (this.disposed) return;
+    this.disposed = true;
+    this.pendingStatic.clear();
     for (const target of this.staticTargets.values()) target.dispose();
     this.staticTargets.clear();
-    for (const slot of this.livePool) slot.target.dispose();
+    for (const slot of this.livePool) {
+      slot.object?.removeFromParent();
+      slot.object = null;
+      slot.inUse = false;
+      slot.target.dispose();
+    }
   }
 }
 

@@ -5,10 +5,11 @@ import type { SceneChoice } from "../domain/scene";
 
 /** Renders published environment packages into the same static 3D card previews used by Scene Studio. */
 export class ScenarioSceneThumbnails {
+  private readonly assets = new AssetManager();
   private readonly thumbnails: ThumbnailRenderer;
 
   constructor(renderer: THREE.WebGLRenderer) {
-    this.thumbnails = new ThumbnailRenderer(renderer, new AssetManager());
+    this.thumbnails = new ThumbnailRenderer(renderer, this.assets);
   }
 
   getStaticThumbnail(choice: SceneChoice): Promise<THREE.Texture> {
@@ -23,13 +24,18 @@ export class ScenarioSceneThumbnails {
     this.thumbnails.update(dt);
   }
 
+  retain(choices: readonly SceneChoice[]): void {
+    this.thumbnails.pruneStatic(new Set(choices.filter((choice) => choice.available).map((choice) => this.assetFor(choice).id)));
+  }
+
   dispose(): void {
     this.thumbnails.dispose();
+    this.assets.dispose();
   }
 
   private assetFor(choice: SceneChoice) {
     return {
-      id: `published-scene:${choice.reference.key}:${choice.reference.modelSha256}`,
+      id: `published-scene:${choice.reference.key}:${choice.reference.modelSha256}:${choice.reference.manifestSha256}`,
       label: choice.label,
       category: "published scenes",
       source: "shared",

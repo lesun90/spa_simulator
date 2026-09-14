@@ -61,6 +61,7 @@ export class ScenarioStudioApp {
     ]);
     this.input = new InputManager(this.canvas, {
       onPointerDown: (x, y, event) => {
+        this.interaction.blurField();
         this.world.setCameraControlsEnabled(!this.interaction.isPointerOverInteractiveLayer(x, y));
         this.interaction.handlePointerDown(x, y, event);
         this.hud.invalidate();

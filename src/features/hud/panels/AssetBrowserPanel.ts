@@ -148,7 +148,7 @@ export class AssetBrowserPanel extends BasePanel {
       });
       tile.setActive(asset.id === this.state.placementAssetId);
       tile.setConnectable(this.connectableAssetIds.has(asset.id));
-      void this.thumbnails.getStaticThumbnail(asset).then((texture) => tile.setThumbnailTexture(texture));
+      void this.thumbnails.getStaticThumbnail(asset).then((texture) => tile.setThumbnailTexture(texture)).catch(() => {});
       this.scroll.content.add(tile.root);
       this.rows.push({ tile, assetId: asset.id });
     });
@@ -206,7 +206,7 @@ export class AssetBrowserPanel extends BasePanel {
       }
       this.hoveredHandle = { assetId: asset.id, handle };
       this.rows.find((row) => row.assetId === asset.id)?.tile.setThumbnailTexture(handle.texture);
-    });
+    }).catch(() => {});
   }
 
   private endHover(asset: AssetCatalogEntry) {
@@ -214,7 +214,7 @@ export class AssetBrowserPanel extends BasePanel {
     if (this.hoveredHandle?.assetId !== asset.id) return;
     this.releaseHover();
     const row = this.rows.find((entry) => entry.assetId === asset.id);
-    if (row) void this.thumbnails.getStaticThumbnail(asset).then((texture) => row.tile.setThumbnailTexture(texture));
+    if (row) void this.thumbnails.getStaticThumbnail(asset).then((texture) => row.tile.setThumbnailTexture(texture)).catch(() => {});
   }
 
   private releaseHover() {

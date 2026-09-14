@@ -46,7 +46,7 @@ Set `STEERLAB_USER_DATA_DIR` to use a different scene location. Shared source-co
 
 ## Scenario Studio
 
-Scenario Studio is available at http://localhost:5173/scenario_studio. It opens with a 100 m green ground and a browser of published scene packages from `assets/scenes`. Select a card, then use **Use Scene** and confirm to load its actual geometry. Refresh discovers newly added packages. Invalid packages stay visible with a diagnostic; a failed load leaves the current scene in place.
+Scenario Studio is available at http://localhost:5173/scenario_studio. It opens with a 100 m green ground and a browser of published scene packages from `assets/scenes`. Search by scene name or package key, select a card, then use **Use Scene** and confirm with **Switch Scene** to load its actual geometry. Refresh discovers newly added packages. Invalid packages stay visible with a diagnostic; a failed load leaves the current scene in place.
 
 To review the built client without changing the development server, run inside the Compose app container:
 
@@ -57,7 +57,7 @@ docker compose exec -T app npm run review:serve
 
 The review server listens on port 4173 inside the container. Map that port to an available host port if you need to open it from a host browser; see [Scenario Studio review](docs/scenario-studio-review.md). The preview server uses the same Scenario Studio scene catalog and read-only source routes as development.
 
-Later functionality is documented in the [Scenario Studio design](docs/2026-09-12-scenario-studio-design.md) and [implementation plan](docs/2026-09-12-scenario-studio-implementation-plan.md). Each implementation step delivers a feature that can be reviewed in the running application.
+Later functionality is documented in the [Scenario Studio design](docs/scenario-studio-design.md) and [implementation plan](docs/scenario-studio-implementation-plan.md). Each implementation step delivers a feature that can be reviewed in the running application.
 
 ## Run Checks
 

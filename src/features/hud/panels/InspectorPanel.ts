@@ -225,6 +225,11 @@ export class InspectorPanel extends BasePanel {
       this.previewMesh.material.needsUpdate = true;
       this.previewMesh.visible = Boolean(this.state.selected);
       this.placePreviewMesh();
+    }).catch(() => {
+      if (requestId === this.previewRequestId) {
+        this.previewMesh.material.map = null;
+        this.previewMesh.visible = false;
+      }
     });
   }
 
