@@ -27,8 +27,8 @@ const declaration: Shape = { fields: {
   id: "string", version: "number", dimensions: { fields: { sourceTileWidth: "number", sourceTileDepth: "number" } },
   capabilities: strings, defaultProfile: "string", profiles: { record: profile }, socketNamespace: "string",
   catalogProfiles: { fields: { generic: "string", automatic: "string" } }, triggerCategory: "string", inferredRoles: strings,
-  independentPlacementDimensions: "boolean", roadWidthFraction: "number"
-}, optional: ["socketNamespace", "catalogProfiles", "triggerCategory", "inferredRoles", "independentPlacementDimensions", "roadWidthFraction"] };
+  independentPlacementDimensions: "boolean", roadWidthFraction: "number", materials: strings
+}, optional: ["socketNamespace", "catalogProfiles", "triggerCategory", "inferredRoles", "independentPlacementDimensions", "roadWidthFraction", "materials"] };
 
 /** Reject malformed authored JSON before semantic validation dereferences any nested fields. */
 export function validatePackShape(value: unknown, selectedProfile?: string): asserts value is WfcPackDeclaration {

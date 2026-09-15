@@ -47,6 +47,8 @@ export interface WfcPackDeclaration {
   dimensions: { sourceTileWidth: number; sourceTileDepth: number };
   /** Fraction of a straight road tile's edge that is drivable surface, for scene road-width metadata. */
   roadWidthFraction?: number;
+  /** Every distinct real material token found anywhere in the pack's assets (see computeMaterialCatalog.ts). */
+  materials?: readonly string[];
   capabilities: readonly WfcCapability[];
   defaultProfile: string;
   profiles: Readonly<Record<string, WfcPackProfile>>;

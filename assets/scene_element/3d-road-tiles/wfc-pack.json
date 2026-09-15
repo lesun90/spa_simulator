@@ -1,5 +1,6 @@
 {
   "roadWidthFraction": 0.5,
+  "materials": ["alternate_dirt","asphalt","frontcolor","grass","grey_asphalt","sand","stone","water"],
   "dimensions": {
     "sourceTileWidth": 3,
     "sourceTileDepth": 3

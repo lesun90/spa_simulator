@@ -9,6 +9,8 @@ const roadPack = roadPackData as unknown as WfcPackDeclaration & { triggerCatego
 export const defaultRoadProfile = roadPack.profiles["road-scene"];
 /** Fraction of a straight road tile's edge that is drivable surface; multiply by a scene's grid cellSize for its road width in meters. */
 export const roadWidthFraction = roadPack.roadWidthFraction ?? null;
+/** Every real material token used anywhere in the road-tile pack, derived by scripts/computeMaterialCatalog.ts. */
+export const packMaterials: readonly string[] = roadPack.materials ?? [];
 export function legacyRoadScene(assets: readonly AssetCatalogEntry[]) { return assets.some((asset) => asset.category === roadPack.triggerCategory); }
 export function legacyRoles(asset: AssetCatalogEntry) { return asset.category === roadPack.triggerCategory ? roadPack.inferredRoles : undefined; }
 
