@@ -11,6 +11,7 @@ import { HudText } from "./HudText";
 
 type Context = { kind: "new"; key: string } | { kind: "existing"; key: string } | null;
 type AgentFieldKey = "name" | "x" | "y" | "z" | "scale" | "heading" | "mass" | "slope" | "clearance";
+type VehicleFieldKey = "maxEngineForceN" | "maxBrakeForceN" | "maxSteeringAngleDegrees" | "steeringSpeedDegreesPerSecond" | "suspensionStiffness" | "suspensionDamping" | "suspensionRestLength" | "suspensionMaxTravel" | "wheelFrictionSlip";
 
 const FIELD_SPECS: ReadonlyArray<{ key: AgentFieldKey; label: string; help: string }> = [
   { key: "name", label: "Name", help: "The name used to identify this agent instance." },
@@ -24,6 +25,18 @@ const FIELD_SPECS: ReadonlyArray<{ key: AgentFieldKey; label: string; help: stri
   { key: "clearance", label: "Clearance m", help: "Vertical gap between the agent and its support." }
 ];
 
+const VEHICLE_FIELD_SPECS: ReadonlyArray<{ key: VehicleFieldKey; label: string; help: string }> = [
+  { key: "maxEngineForceN", label: "Engine force N", help: "Maximum forward drive force applied to the wheels." },
+  { key: "maxBrakeForceN", label: "Brake force N", help: "Maximum braking force applied to the wheels." },
+  { key: "maxSteeringAngleDegrees", label: "Steer angle °", help: "Maximum steering wheel lock angle." },
+  { key: "steeringSpeedDegreesPerSecond", label: "Steer speed °/s", help: "How fast the front wheels sweep toward the target steering angle." },
+  { key: "suspensionStiffness", label: "Suspension stiff.", help: "Suspension spring stiffness; higher resists compression more." },
+  { key: "suspensionDamping", label: "Suspension damp.", help: "Suspension damping; higher settles bounce faster." },
+  { key: "suspensionRestLength", label: "Suspension rest m", help: "Suspension length when the wheel is unloaded." },
+  { key: "suspensionMaxTravel", label: "Suspension travel m", help: "Maximum suspension compression distance." },
+  { key: "wheelFrictionSlip", label: "Tire grip", help: "Base tire traction, multiplied by the ground material's friction." }
+];
+
 export class AgentInspectorPanel extends BasePanel {
   private readonly title: HudText;
   private readonly contextLabel: HudText;
@@ -35,6 +48,9 @@ export class AgentInspectorPanel extends BasePanel {
   private readonly fieldLabels: HudText[];
   private readonly helpButtons: Button[];
   private readonly fields: Record<AgentFieldKey, TextField>;
+  private readonly vehicleFieldLabels: HudText[];
+  private readonly vehicleHelpButtons: Button[];
+  private readonly vehicleFields: Record<VehicleFieldKey, TextField>;
   private readonly primary: Button;
   private readonly duplicate: Button;
   private readonly remove: Button;
@@ -67,10 +83,15 @@ export class AgentInspectorPanel extends BasePanel {
       label: "?", fontSize: 11, paddingX: 0, onClick: () => this.setStatus(help)
     }));
     this.fields = Object.fromEntries(FIELD_SPECS.map(({ key }) => [key, new TextField({ x: 0, y: 0, width: 1, height: 30 }, interaction, { numeric: key !== "name" })])) as typeof this.fields;
+    this.vehicleFieldLabels = VEHICLE_FIELD_SPECS.map(({ label }) => text(label, 10.5, "600", theme.textMutedStrong.css));
+    this.vehicleHelpButtons = VEHICLE_FIELD_SPECS.map(({ help }) => new Button({ x: 0, y: 0, width: 20, height: 20 }, interaction, {
+      label: "?", fontSize: 11, paddingX: 0, onClick: () => this.setStatus(help)
+    }));
+    this.vehicleFields = Object.fromEntries(VEHICLE_FIELD_SPECS.map(({ key }) => [key, new TextField({ x: 0, y: 0, width: 1, height: 30 }, interaction, { numeric: true })])) as typeof this.vehicleFields;
     this.primary = new Button({ x: 0, y: 0, width: 1, height: 34 }, interaction, { label: "Add", onClick: () => this.primaryAction() });
     this.duplicate = new Button({ x: 0, y: 0, width: 1, height: 32 }, interaction, { label: "Duplicate", onClick: () => void this.execute(() => this.context?.kind === "existing" ? this.onDuplicate(this.context.key) : Promise.resolve()) });
     this.remove = new Button({ x: 0, y: 0, width: 1, height: 32 }, interaction, { label: "Delete", onClick: () => void this.execute(() => this.context?.kind === "existing" ? this.onDelete(this.context.key) : Promise.resolve()) });
-    this.root.add(this.divider.root, this.title.root, this.contextLabel.root, this.assetLabel.root, ...this.fieldLabels.map((item) => item.root), ...this.helpButtons.map((item) => item.root), ...Object.values(this.fields).map((item) => item.root), this.collisionLabel.root, this.eligibilityLabel.root, this.status.root, this.primary.root, this.duplicate.root, this.remove.root);
+    this.root.add(this.divider.root, this.title.root, this.contextLabel.root, this.assetLabel.root, ...this.fieldLabels.map((item) => item.root), ...this.helpButtons.map((item) => item.root), ...Object.values(this.fields).map((item) => item.root), ...this.vehicleFieldLabels.map((item) => item.root), ...this.vehicleHelpButtons.map((item) => item.root), ...Object.values(this.vehicleFields).map((item) => item.root), this.collisionLabel.root, this.eligibilityLabel.root, this.status.root, this.primary.root, this.duplicate.root, this.remove.root);
     this.layout();
     this.updateState();
   }
@@ -142,7 +163,11 @@ export class AgentInspectorPanel extends BasePanel {
     this.onVisualChange();
   }
 
-  update(dt: number): void { for (const field of Object.values(this.fields)) field.update(dt); }
+  update(dt: number): void { for (const field of [...Object.values(this.fields), ...Object.values(this.vehicleFields)]) field.update(dt); }
+
+  private visibleVehicleSpecs(): typeof VEHICLE_FIELD_SPECS {
+    return this.currentDraft()?.asset.category === "vehicles" ? VEHICLE_FIELD_SPECS : [];
+  }
 
   protected layout(): void {
     const x = this.rect.x + 18;
@@ -156,7 +181,12 @@ export class AgentInspectorPanel extends BasePanel {
     this.fieldLabels?.forEach((label, index) => label.setFrame({ x, y: start + index * row, width: 63 }));
     this.helpButtons?.forEach((button, index) => button.setRect({ x: x + 64, y: start - 5 + index * row, width: 20, height: 20 }));
     FIELD_SPECS.forEach(({ key }, index) => this.fields?.[key].setRect({ x: x + 91, y: start - 8 + index * row, width: Math.max(width - 91, 1), height: 30 }));
-    const detailY = start + FIELD_SPECS.length * row + 2;
+    const vehicleSpecs = this.visibleVehicleSpecs();
+    const vehicleStart = start + FIELD_SPECS.length * row;
+    this.vehicleFieldLabels?.forEach((label, index) => label.setFrame({ x, y: vehicleStart + index * row, width: 63 }));
+    this.vehicleHelpButtons?.forEach((button, index) => button.setRect({ x: x + 64, y: vehicleStart - 5 + index * row, width: 20, height: 20 }));
+    VEHICLE_FIELD_SPECS.forEach(({ key }, index) => this.vehicleFields?.[key].setRect({ x: x + 91, y: vehicleStart - 8 + index * row, width: Math.max(width - 91, 1), height: 30 }));
+    const detailY = vehicleStart + vehicleSpecs.length * row + 2;
     this.collisionLabel?.setFrame({ x, y: detailY, width, maxLines: 2 });
     this.eligibilityLabel?.setFrame({ x, y: detailY + 34, width, maxLines: 2 });
     this.status?.setFrame({ x, y: Math.max(detailY + 66, this.rect.y + this.rect.height - 132), width, maxLines: 3 });
@@ -191,6 +221,18 @@ export class AgentInspectorPanel extends BasePanel {
     const base = this.currentDraft();
     if (!base) return null;
     const number = (key: keyof typeof this.fields) => Number(this.fields[key].getValue());
+    const vehicleNumber = (key: VehicleFieldKey) => Number(this.vehicleFields[key].getValue());
+    const vehicle = base.vehicle ? {
+      maxEngineForceN: vehicleNumber("maxEngineForceN"),
+      maxBrakeForceN: vehicleNumber("maxBrakeForceN"),
+      maxSteeringAngleDegrees: vehicleNumber("maxSteeringAngleDegrees"),
+      steeringSpeedDegreesPerSecond: vehicleNumber("steeringSpeedDegreesPerSecond"),
+      suspensionStiffness: vehicleNumber("suspensionStiffness"),
+      suspensionDamping: vehicleNumber("suspensionDamping"),
+      suspensionRestLength: vehicleNumber("suspensionRestLength"),
+      suspensionMaxTravel: vehicleNumber("suspensionMaxTravel"),
+      wheelFrictionSlip: vehicleNumber("wheelFrictionSlip")
+    } : null;
     return freezeDraft({
       ...base,
       name: this.fields.name.getValue(),
@@ -201,7 +243,8 @@ export class AgentInspectorPanel extends BasePanel {
       },
       scale: number("scale"),
       mass: number("mass"),
-      placement: { maxSlopeDegrees: number("slope"), clearance: number("clearance") }
+      placement: { maxSlopeDegrees: number("slope"), clearance: number("clearance") },
+      vehicle
     });
   }
 
@@ -220,8 +263,9 @@ export class AgentInspectorPanel extends BasePanel {
     this.fields.x.setValue(format(draft.pose.position.x)); this.fields.y.setValue(format(draft.pose.position.y)); this.fields.z.setValue(format(draft.pose.position.z));
     this.fields.scale.setValue(format(draft.scale)); this.fields.heading.setValue(format(draft.pose.headingRadians * 180 / Math.PI)); this.fields.mass.setValue(format(draft.mass));
     this.fields.slope.setValue(format(draft.placement.maxSlopeDegrees)); this.fields.clearance.setValue(format(draft.placement.clearance));
+    if (draft.vehicle) for (const { key } of VEHICLE_FIELD_SPECS) this.vehicleFields[key].setValue(format(draft.vehicle[key]));
   }
-  private clearFields(): void { for (const field of Object.values(this.fields)) field.setValue(""); }
+  private clearFields(): void { for (const field of [...Object.values(this.fields), ...Object.values(this.vehicleFields)]) field.setValue(""); }
   private updateState(): void {
     const draft = this.currentDraft();
     const existing = this.context?.kind === "existing";
@@ -238,12 +282,18 @@ export class AgentInspectorPanel extends BasePanel {
     for (const field of Object.values(this.fields)) field.root.visible = Boolean(draft);
     for (const label of this.fieldLabels) label.root.visible = Boolean(draft);
     for (const button of this.helpButtons) button.root.visible = Boolean(draft);
+    const vehicleVisible = this.visibleVehicleSpecs().length > 0;
+    for (const field of Object.values(this.vehicleFields)) field.root.visible = vehicleVisible;
+    for (const label of this.vehicleFieldLabels) label.root.visible = vehicleVisible;
+    for (const button of this.vehicleHelpButtons) button.root.visible = vehicleVisible;
+    this.layout();
     this.onVisualChange();
   }
 
   dispose(): void {
     this.title.dispose(); this.contextLabel.dispose(); this.assetLabel.dispose(); this.collisionLabel.dispose(); this.eligibilityLabel.dispose(); this.status.dispose(); this.divider.dispose();
     for (const label of this.fieldLabels) label.dispose(); for (const button of this.helpButtons) button.dispose(); for (const field of Object.values(this.fields)) field.dispose();
+    for (const label of this.vehicleFieldLabels) label.dispose(); for (const button of this.vehicleHelpButtons) button.dispose(); for (const field of Object.values(this.vehicleFields)) field.dispose();
     this.primary.dispose(); this.duplicate.dispose(); this.remove.dispose(); super.dispose();
   }
 }
