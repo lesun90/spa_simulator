@@ -16,7 +16,11 @@ import { ScenarioHudFeature } from "./ui/ScenarioHudFeature";
 import { PhysicsEngineRegistry } from "./physics/PhysicsEngineRegistry";
 import { RapierPhysicsEngineFactory } from "./physics/RapierPhysicsWorld";
 import type { PlacementPreview } from "./domain/agent";
+import type { DriveCommand } from "./domain/playback";
 import { HttpScenarioRepository } from "./persistence/HttpScenarioRepository";
+
+const DRIVE_KEYS = new Set(["KeyW", "KeyA", "KeyS", "KeyD", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Space"]);
+const NEUTRAL_DRIVE_COMMAND: DriveCommand = { throttle: 0, steering: 0, brake: 0 };
 
 /** Owns the same renderer, viewport, input, and HUD composition used by Scene Studio. */
 export class ScenarioStudioApp {
@@ -38,11 +42,16 @@ export class ScenarioStudioApp {
   private placementPreview: PlacementPreview | null = null;
   private placementGeneration = 0;
   private placementBusy = false;
+  private readonly driveKeys = new Set<string>();
+  private currentDriveCommand: DriveCommand = NEUTRAL_DRIVE_COMMAND;
+  private playbackAccumulator = 0;
+  private playbackStepBusy = false;
   private readonly beforeUnload = (event: BeforeUnloadEvent) => {
     if (!this.session.document.isDirty) return;
     event.preventDefault();
     event.returnValue = "";
   };
+  private readonly onWindowBlur = () => this.clearDriveKeys();
 
   constructor(host: HTMLElement) {
     this.canvas = document.createElement("canvas");
@@ -80,6 +89,16 @@ export class ScenarioStudioApp {
         if (!this.disposed) {
           this.hud?.setPopulation(agents);
           this.syncScenarioState();
+        }
+      },
+      (state, message) => {
+        if (this.disposed) return;
+        this.hud?.setPlaybackState(state, message);
+        if (state !== "running") this.clearDriveKeys();
+        if (state !== "ready") {
+          this.agentVisuals.select(null);
+          this.hud?.clearAgentSelection();
+          this.clearPlacement();
         }
       });
     this.hud = new ScenarioHudFeature(
@@ -144,7 +163,10 @@ export class ScenarioStudioApp {
           const currentWasSaved = this.session.document.markSaved(saved);
           this.syncScenarioState();
           this.hud.setScenarioStatus(currentWasSaved ? `${saved.name} saved.` : "Saved the previous revision; newer changes remain unsaved.");
-        }
+        },
+        play: async () => { await this.session.play(); },
+        pause: () => this.session.pause(),
+        reset: () => this.session.reset()
       }
     );
     this.syncScenarioState();
@@ -163,13 +185,14 @@ export class ScenarioStudioApp {
         this.interaction.handlePointerDown(x, y, event);
         if (draft && !overHud) {
           this.world.setCameraControlsEnabled(false);
-          if (!this.placementBusy && this.placementPreview?.valid) void this.commitPlacement(draft, this.world.rayFromCanvasPoint(x, y, this.viewport.size.width, this.viewport.size.height));
+          if (this.session.playback !== "ready") this.hud.setPlacementPreview({ valid: false, pose: null, reason: "Pause playback and Reset before placing agents.", sceneRevision: -1 });
+          else if (!this.placementBusy && this.placementPreview?.valid) void this.commitPlacement(draft, this.world.rayFromCanvasPoint(x, y, this.viewport.size.width, this.viewport.size.height));
         } else if (!overHud && !this.interaction.isCaptured()) {
           const id = this.agentVisuals.pick(this.world.rayFromCanvasPoint(x, y, this.viewport.size.width, this.viewport.size.height));
           if (id) {
             directAgent = true;
             this.selectAgent(id);
-            this.agentVisuals.startDirectTransform(id, { x, y, target: null, button: event.button, buttons: event.buttons, shiftKey: event.shiftKey, originalEvent: event });
+            if (this.session.playback === "ready") this.agentVisuals.startDirectTransform(id, { x, y, target: null, button: event.button, buttons: event.buttons, shiftKey: event.shiftKey, originalEvent: event });
           }
           this.world.setCameraControlsEnabled(!id);
         } else this.world.setCameraControlsEnabled(false);
@@ -197,12 +220,15 @@ export class ScenarioStudioApp {
       onKeyDown: (event) => {
         this.hud.handleKeyDown(event);
         this.hud.invalidate();
+        this.handleDriveKey(event, true);
       },
+      onKeyUp: (event) => this.handleDriveKey(event, false),
       onFileDrop: (_files, x, y) => {
         const draft = this.hud.getPlacementDraft();
         if (draft && !this.interaction.isPointerOverInteractiveLayer(x, y)) void this.commitPlacement(draft, this.world.rayFromCanvasPoint(x, y, this.viewport.size.width, this.viewport.size.height));
       }
     });
+    window.addEventListener("blur", this.onWindowBlur);
     this.unsubscribe = this.viewport.subscribe((size) => {
       this.world.resize(size);
       this.hud.resize(size);
@@ -212,6 +238,7 @@ export class ScenarioStudioApp {
       this.performanceMonitor.begin();
       this.world.update();
       this.hud.updatePreviews(dt);
+      this.tickPlayback(dt);
       if (this.hud.consumeRenderNeeded()) this.hudCache.refresh(this.renderer.renderer, this.hud.scene, this.hud.camera, this.viewport.size);
       this.renderer.renderLayers([
         { scene: this.world.scene, camera: this.world.camera },
@@ -238,10 +265,51 @@ export class ScenarioStudioApp {
     this.viewport.dispose();
     this.canvas.remove();
     window.removeEventListener("beforeunload", this.beforeUnload);
+    window.removeEventListener("blur", this.onWindowBlur);
   }
 
   private confirmDiscard(action: string): boolean {
     return !this.session.document.isDirty || window.confirm(`Discard unsaved changes and ${action}?`);
+  }
+
+  private tickPlayback(dt: number): void {
+    if (this.session.playback !== "running") { this.playbackAccumulator = 0; return; }
+    this.playbackAccumulator += dt;
+    if (this.playbackStepBusy) return;
+    const stepDt = this.playbackAccumulator;
+    this.playbackAccumulator = 0;
+    this.playbackStepBusy = true;
+    void this.session.stepPlayback(stepDt).then((transforms) => {
+      if (transforms && !this.disposed) this.agentVisuals.applyLiveTransforms(transforms);
+    }).finally(() => { this.playbackStepBusy = false; });
+  }
+
+  private handleDriveKey(event: KeyboardEvent, pressed: boolean): void {
+    if (!DRIVE_KEYS.has(event.code)) return;
+    if (this.interaction.hasFocus() || this.session.playback !== "running") {
+      if (this.driveKeys.size) this.clearDriveKeys();
+      return;
+    }
+    event.preventDefault();
+    if (pressed) this.driveKeys.add(event.code); else this.driveKeys.delete(event.code);
+    this.updateDriveCommand();
+  }
+
+  private updateDriveCommand(): void {
+    const throttle = (this.driveKeys.has("KeyW") || this.driveKeys.has("ArrowUp") ? 1 : 0) - (this.driveKeys.has("KeyS") || this.driveKeys.has("ArrowDown") ? 1 : 0);
+    const steering = (this.driveKeys.has("KeyD") || this.driveKeys.has("ArrowRight") ? 1 : 0) - (this.driveKeys.has("KeyA") || this.driveKeys.has("ArrowLeft") ? 1 : 0);
+    const brake = this.driveKeys.has("Space") ? 1 : 0;
+    const next: DriveCommand = { throttle, steering, brake };
+    if (next.throttle === this.currentDriveCommand.throttle && next.steering === this.currentDriveCommand.steering && next.brake === this.currentDriveCommand.brake) return;
+    this.currentDriveCommand = next;
+    this.session.drive(next);
+  }
+
+  private clearDriveKeys(): void {
+    if (!this.driveKeys.size && this.currentDriveCommand === NEUTRAL_DRIVE_COMMAND) return;
+    this.driveKeys.clear();
+    this.currentDriveCommand = NEUTRAL_DRIVE_COMMAND;
+    this.session.drive(NEUTRAL_DRIVE_COMMAND);
   }
 
   private syncScenarioState(): void {
@@ -262,6 +330,10 @@ export class ScenarioStudioApp {
   private previewPlacement(x: number, y: number): void {
     const draft = this.hud.getPlacementDraft();
     if (!draft) return;
+    if (this.session.playback !== "ready") {
+      this.hud.setPlacementPreview({ valid: false, pose: null, reason: "Pause playback and Reset before placing agents.", sceneRevision: -1 });
+      return;
+    }
     const generation = ++this.placementGeneration;
     const ray = this.world.rayFromCanvasPoint(x, y, this.viewport.size.width, this.viewport.size.height);
     void this.session.previewAgentPlacement(draft, ray).then((preview) => {

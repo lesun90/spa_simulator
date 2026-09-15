@@ -1,4 +1,5 @@
-import type { AgentDraft, AgentSnapshot, PlacementHit, PlacementPreview, Ray3 } from "../domain/agent";
+import type { AgentDraft, AgentSnapshot, PlacementHit, PlacementPreview, Ray3, Vector3Value } from "../domain/agent";
+import type { DriveCommand } from "../domain/playback";
 
 export interface TriangleMeshDescription {
   readonly label: string;
@@ -18,6 +19,18 @@ export interface PlacementSurface {
   pickSurface(ray: Ray3): Promise<PlacementHit | null>;
 }
 
+/** Neutral transform for one live playback body, stamped with the run that produced it. */
+export interface AgentTransform {
+  readonly id: string;
+  readonly position: Vector3Value;
+  readonly headingRadians: number;
+}
+
+export interface PlaybackSnapshot {
+  readonly generation: number;
+  readonly transforms: readonly AgentTransform[];
+}
+
 export interface PhysicsWorld extends PlacementSurface {
   replaceScene(scene: SceneGeometryDescription): Promise<number>;
   previewAgentPlacement(draft: AgentDraft, ray: Ray3, ignoreAgentId?: string): Promise<PlacementPreview>;
@@ -25,6 +38,14 @@ export interface PhysicsWorld extends PlacementSurface {
   updateAgent(agent: AgentSnapshot, expectedSceneRevision: number): Promise<void>;
   removeAgent(id: string): Promise<void>;
   clearAgents(): Promise<void>;
+  /** Builds live bodies for every authored agent from their baseline snapshot. `controlledAgentId` names the one agent, if any, that accepts drive commands. */
+  preparePlayback(agents: readonly AgentSnapshot[], controlledAgentId: string | null, expectedSceneRevision: number, generation: number): Promise<void>;
+  /** Advances fixed 1/60 s substeps to cover wall-clock `dt` and returns transforms stamped with `generation`; rejects once `generation` is no longer the active run. */
+  stepPlayback(dt: number, generation: number): Promise<PlaybackSnapshot>;
+  /** Applies a validated throttle/steering/brake command to the controlled agent; rejects once `generation` is no longer the active run. */
+  driveControlledAgent(command: DriveCommand, generation: number): Promise<void>;
+  /** Releases live bodies and restores the authored, query-only colliders for `agents`. Safe to call repeatedly. */
+  resetPlayback(agents: readonly AgentSnapshot[], generation: number): Promise<void>;
   dispose(): Promise<void>;
 }
 

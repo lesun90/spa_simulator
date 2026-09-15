@@ -11,6 +11,7 @@ import {
   transformModeForPointerButton
 } from "../../features/world/objectTransform";
 import { scaledAgentCollision, type AgentDraft, type AgentPresentation, type AgentPresenter, type AgentSnapshot, type PlacementPreview, type Ray3, type Vector3Value } from "../domain/agent";
+import type { AgentTransform } from "../physics/PhysicsWorld";
 
 type AgentTransformMode = ObjectTransformControlMode | "move";
 
@@ -94,6 +95,17 @@ export class AgentVisuals implements AgentPresenter {
     object.name = agent.name;
     applyPose(object, agent);
     if (this.selectedId === agent.id) this.refreshSelectionControls();
+  }
+
+  /** Applies live playback poses directly to instances, bypassing the authored snapshot and any active selection controls. */
+  applyLiveTransforms(transforms: readonly AgentTransform[]): void {
+    for (const transform of transforms) {
+      const object = this.instances.get(transform.id);
+      if (!object) continue;
+      object.position.set(transform.position.x, transform.position.y, transform.position.z);
+      object.rotation.set(0, transform.headingRadians, 0);
+      object.updateMatrixWorld(true);
+    }
   }
 
   remove(id: string): void {

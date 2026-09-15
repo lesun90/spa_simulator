@@ -1,6 +1,6 @@
 # Scenario Studio review
 
-Steps 1–2 completed in `98cf824` and `b5a5000`; the Step 2 revision and Step 3 persistence milestone are reviewed in the working tree through **2026-09-15**. [Design](scenario-studio-design.md) · [Progress/tasks](scenario-studio-implementation-plan.md)
+Steps 1–3 completed in `98cf824`, `b5a5000` and `0eca7da`; the Step 4 playback and driving milestone is reviewed in the working tree through **2026-09-15**. [Design](scenario-studio-design.md) · [Progress/tasks](scenario-studio-implementation-plan.md)
 
 ## Run review
 
@@ -57,6 +57,29 @@ Copy artifacts: `docker compose cp app:/tmp/scenario-studio-review ./scenario-st
 3. Scenario files live under an isolated `STEERLAB_SCENARIOS_DIR`. The server rejects malformed numeric data and preserves the prior file; writes use unique temporary files and atomic rename.
 4. Open validates record shape/version and resolves current scene and agent hashes before it changes physics, presentations, population or the document. A malformed response leaves the current named two-agent workspace recoverable.
 5. A failed Save leaves both the current dirty document and prior saved file intact; retry succeeds. New and dirty Open use native discard confirmation, and dirty navigation registers the browser unload safeguard.
+
+## Step 4 walkthrough coverage
+
+1. Play/Pause/Reset controls sit beside New/Open/Save in the compact toolbar, with a Ready/Preparing/Running/Paused/Playback error status line and Play relabeled Resume from a paused run.
+2. Play snapshots the authored population, builds one dynamic Rapier body per agent from its authored pose and scale (query-only authoring colliders are removed first so they cannot collide with the live bodies), and starts the single `inputEligible` agent as the controlled vehicle.
+3. On the default open ground, holding W/A/S/D (or the arrow keys, with Space as brake) drives the controlled vehicle through a validated `DriveCommand` boundary: throttle accelerates along its current forward axis with a top speed, steering scales with forward speed and reverses correctly, and lateral grip damping keeps it from skating sideways. Gravity and ground contact apply throughout; the authored snapshot never changes while running.
+4. Pause freezes the live transforms in place (confirmed unchanged across a follow-up delay); Resume continues the same run without recreating bodies. Attempting to move, transform, duplicate or delete an agent while running or paused is rejected with "Pause playback and Reset before editing agents."; placement and direct-drag transforms are likewise blocked at the input layer.
+5. Reset releases the live bodies, restores the authored transform on every visual instance, recreates the query-only authoring colliders and returns to Ready, where the same edit is immediately accepted again. Two repeated Play/Reset cycles completed with no errors and no leaked bodies. A `stepPlayback` response whose generation no longer matches the session's current run (superseded by a Reset while the call was in flight) is discarded rather than applied.
+6. Save during a Running or Paused run continues to serialize only the authored document; live positions never reach the saved record.
+
+### Step 4 evidence
+
+Host-run pass (no Docker container available this session), Chromium **151.0.7922.34** via Playwright, SwiftShader, **1366 × 900**. Milestone gate only; the Docker build, full repository suite and broad browser matrix from the release/hardening gate are still owed on the next formal review pass.
+
+| Check | Recorded result |
+| --- | --- |
+| `tsc --noEmit` and `vite build` | Passed. |
+| Milestone 4 walkthrough (ad hoc Playwright script, not checked in) | Real product controls only: placed a vehicle, clicked Play, held W to drive on the default ground, clicked Pause (position frozen across a delay), attempted an edit while paused (rejected), Resumed, clicked Reset (visual snapshot back to the authored pose, edit accepted again), then ran two more Play/Reset cycles with no errors. Zero browser console errors. |
+| Scoped regressions | `tests/interactionSystem.test.ts`, `tests/worldInteraction.test.ts`, `tests/disposeObject.test.ts` (36 tests across the main tree and an existing worktree copy) passed. |
+| Shared application workflow regression | `scripts/verifyApplicationWorkflows.ts` passed end to end (Scene Studio, Scenario Studio scene/agent/persistence flows, Asset Viewer); zero browser errors. |
+| Resource lifecycle regression | Not run this pass — blocked by a pre-existing root-owned `node_modules/.vite` cache in this sandbox unrelated to this change; rerun in the normal review container. |
+
+An architecture pass confirmed: domain code (`ScenarioSession`, `domain/playback.ts`) still imports no Three.js/Rapier/DOM types; Rapier types stay inside `physics.worker.ts`/`RapierPhysicsWorld.ts`; `AgentTransform`/`PlaybackSnapshot`/`DriveCommand` are plain neutral values crossing the physics boundary; `preparePlayback`/`resetPlayback` are idempotent setters while `stepPlayback`/`driveControlledAgent` are generation-gated against the active run; and Save/authoring guards were verified to read only `ScenarioDocument`'s authored state, never live transforms.
 
 ## Results and evidence
 

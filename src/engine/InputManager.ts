@@ -4,6 +4,7 @@ export interface InputHandlers {
   onPointerUp(x: number, y: number, event: PointerEvent): void;
   onWheel(x: number, y: number, deltaY: number, event: WheelEvent): void;
   onKeyDown(event: KeyboardEvent): void;
+  onKeyUp(event: KeyboardEvent): void;
   onFileDrop(files: FileList, x: number, y: number): void;
 }
 
@@ -22,6 +23,7 @@ export class InputManager {
     canvas.addEventListener("dragover", this.onDragOver);
     canvas.addEventListener("drop", this.onDrop);
     window.addEventListener("keydown", this.onKeyDown);
+    window.addEventListener("keyup", this.onKeyUp);
   }
 
   private toLocal(event: { clientX: number; clientY: number }) {
@@ -70,6 +72,10 @@ export class InputManager {
     this.handlers.onKeyDown(event);
   };
 
+  private onKeyUp = (event: KeyboardEvent) => {
+    this.handlers.onKeyUp(event);
+  };
+
   dispose() {
     this.canvas.removeEventListener("pointerdown", this.onPointerDown);
     this.canvas.removeEventListener("pointermove", this.onPointerMove);
@@ -80,5 +86,6 @@ export class InputManager {
     this.canvas.removeEventListener("dragover", this.onDragOver);
     this.canvas.removeEventListener("drop", this.onDrop);
     window.removeEventListener("keydown", this.onKeyDown);
+    window.removeEventListener("keyup", this.onKeyUp);
   }
 }

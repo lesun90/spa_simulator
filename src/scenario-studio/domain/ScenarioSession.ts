@@ -1,9 +1,11 @@
 import type { SceneCatalog } from "../catalog/SceneCatalog";
 import type { AgentCatalog } from "../catalog/AgentCatalog";
-import type { PhysicsWorld } from "../physics/PhysicsWorld";
+import type { AgentTransform, PhysicsWorld } from "../physics/PhysicsWorld";
 import type { AgentDraft, AgentPresenter, AgentSnapshot, PlacementPreview, Ray3, Vector3Value } from "./agent";
 import { agentFootprintContainsPoint, agentSupportsFootprint, authoredBounds, placementOriginY, scaledAgentCollision, validateAgentDraft } from "./agent";
 import { AgentPopulation } from "./AgentPopulation";
+import type { DriveCommand, PlaybackState } from "./playback";
+import { validateDriveCommand } from "./playback";
 import type { ScenePresentation, ScenePresenter } from "./ScenePresentation";
 import { ScenarioDocument } from "./ScenarioDocument";
 import { sameSceneReference, type SceneReference } from "./scene";
@@ -18,6 +20,9 @@ export class ScenarioSession {
   private readonly physics: Promise<PhysicsWorld>;
   private readonly ready: Promise<void>;
   private sceneRevision = 0;
+  private playbackState: PlaybackState = "ready";
+  private playbackGeneration = 0;
+  private controlledAgentId: string | null = null;
 
   constructor(
     readonly document: ScenarioDocument,
@@ -27,7 +32,8 @@ export class ScenarioSession {
     physics: Promise<PhysicsWorld>,
     private readonly engineKey: string,
     private readonly agentPresenter: AgentPresenter,
-    private readonly onPopulationChanged: (agents: readonly AgentSnapshot[]) => void = () => {}
+    private readonly onPopulationChanged: (agents: readonly AgentSnapshot[]) => void = () => {},
+    private readonly onPlaybackChanged: (state: PlaybackState, message?: string) => void = () => {}
   ) {
     this.presentation = presenter.createDefault();
     presenter.show(this.presentation);
@@ -37,11 +43,14 @@ export class ScenarioSession {
   }
 
   get agents(): readonly AgentSnapshot[] { return this.population.snapshots(); }
+  get playback(): PlaybackState { return this.playbackState; }
+  get controlledAgent(): string | null { return this.controlledAgentId; }
 
   async open(record: ScenarioRecord): Promise<void> {
     if (this.disposed) throw new Error("Scenario session was disposed.");
     const stagedRecord = validateScenarioRecord(record);
     if (stagedRecord.engineKey !== this.engineKey) throw new Error(`Physics engine “${stagedRecord.engineKey}” is not available.`);
+    this.resetPlaybackState();
     const request = ++this.generation;
     let scenePresentation: ScenePresentation | null = null;
     const agentPresentations: { agent: AgentSnapshot; presentation: import("./agent").AgentPresentation }[] = [];
@@ -88,6 +97,7 @@ export class ScenarioSession {
   async replaceScene(reference: SceneReference): Promise<void> {
     if (this.disposed) return;
     if (sameSceneReference(this.document.sceneReference, reference)) return;
+    this.resetPlaybackState();
     const request = ++this.generation;
     let prepared: ScenePresentation | null = null;
     try {
@@ -128,6 +138,7 @@ export class ScenarioSession {
   }
 
   async placeAgent(draft: AgentDraft, ray: Ray3): Promise<void> {
+    this.assertAuthoringAllowed();
     const validDraft = validateAgentDraft(draft);
     const request = this.generation;
     const preview = await this.previewAgentPlacement(validDraft, ray);
@@ -136,6 +147,7 @@ export class ScenarioSession {
   }
 
   async updateAgent(id: string, draft: AgentDraft, placementRay?: Ray3): Promise<void> {
+    this.assertAuthoringAllowed();
     const instance = this.population.get(id);
     if (!instance) throw new Error("The selected agent no longer exists.");
     const validDraft = validateAgentDraft(draft);
@@ -159,6 +171,7 @@ export class ScenarioSession {
   }
 
   async duplicateAgent(id: string): Promise<string> {
+    this.assertAuthoringAllowed();
     const source = this.population.get(id)?.snapshot();
     if (!source) throw new Error("The selected agent no longer exists.");
     const spacingX = source.collision.halfExtents.x * source.scale * 2 + 0.6;
@@ -175,6 +188,7 @@ export class ScenarioSession {
   }
 
   async deleteAgent(id: string): Promise<void> {
+    this.assertAuthoringAllowed();
     if (!this.population.get(id)) return;
     if (this.population.hasDependents(id)) {
       throw new Error("Move or delete the agents resting on this agent before deleting it.");
@@ -182,6 +196,99 @@ export class ScenarioSession {
     this.population.remove(id);
     this.agentPresenter.remove(id);
     this.syncDocument();
+  }
+
+  async play(): Promise<void> {
+    if (this.disposed) throw new Error("Scenario session was disposed.");
+    if (this.playbackState === "running" || this.playbackState === "preparing") return;
+    if (this.playbackState === "paused") {
+      this.playbackState = "running";
+      this.onPlaybackChanged(this.playbackState);
+      return;
+    }
+    if (this.playbackState !== "ready") throw new Error("Reset the scenario before playing again.");
+    this.playbackState = "preparing";
+    this.onPlaybackChanged(this.playbackState);
+    const generation = ++this.playbackGeneration;
+    const agents = this.agents;
+    const controlledAgentId = agents.find((agent) => agent.inputEligible)?.id ?? null;
+    try {
+      const world = await this.physics;
+      await this.ready;
+      if (this.disposed || generation !== this.playbackGeneration) return;
+      await world.preparePlayback(agents, controlledAgentId, this.sceneRevision, generation);
+      if (this.disposed || generation !== this.playbackGeneration) {
+        await world.resetPlayback(agents, generation).catch(() => {});
+        return;
+      }
+      this.controlledAgentId = controlledAgentId;
+      this.playbackState = "running";
+      this.onPlaybackChanged(this.playbackState);
+    } catch (error) {
+      if (this.disposed || generation !== this.playbackGeneration) return;
+      this.playbackState = "error";
+      this.controlledAgentId = null;
+      this.onPlaybackChanged(this.playbackState, error instanceof Error ? error.message : "Play failed.");
+    }
+  }
+
+  pause(): void {
+    if (this.playbackState !== "running") return;
+    this.playbackState = "paused";
+    this.onPlaybackChanged(this.playbackState);
+  }
+
+  reset(): void {
+    if (this.disposed || this.playbackState === "ready") return;
+    const generation = ++this.playbackGeneration;
+    this.playbackState = "ready";
+    this.controlledAgentId = null;
+    const agents = this.agents;
+    for (const agent of agents) this.agentPresenter.update(agent);
+    this.onPlaybackChanged(this.playbackState);
+    void this.physics.then((world) => world.resetPlayback(agents, generation)).catch(() => {});
+  }
+
+  drive(command: DriveCommand): void {
+    if (this.disposed || this.playbackState !== "running") return;
+    const generation = this.playbackGeneration;
+    const validated = validateDriveCommand(command);
+    void this.physics.then((world) => world.driveControlledAgent(validated, generation)).catch((error) => {
+      if (this.disposed || generation !== this.playbackGeneration) return;
+      this.playbackState = "error";
+      this.controlledAgentId = null;
+      this.onPlaybackChanged(this.playbackState, error instanceof Error ? error.message : "Drive command failed.");
+    });
+  }
+
+  async stepPlayback(dt: number): Promise<readonly AgentTransform[] | null> {
+    if (this.disposed || this.playbackState !== "running") return null;
+    const generation = this.playbackGeneration;
+    try {
+      const world = await this.physics;
+      const snapshot = await world.stepPlayback(dt, generation);
+      if (this.disposed || generation !== this.playbackGeneration) return null;
+      return snapshot.transforms;
+    } catch (error) {
+      if (this.disposed || generation !== this.playbackGeneration) return null;
+      this.playbackState = "error";
+      this.controlledAgentId = null;
+      this.onPlaybackChanged(this.playbackState, error instanceof Error ? error.message : "Playback step failed.");
+      return null;
+    }
+  }
+
+  private assertAuthoringAllowed(): void {
+    if (this.disposed) throw new Error("Scenario session was disposed.");
+    if (this.playbackState !== "ready") throw new Error("Pause playback and Reset before editing agents.");
+  }
+
+  private resetPlaybackState(): void {
+    if (this.playbackState === "ready" && this.controlledAgentId === null) return;
+    ++this.playbackGeneration;
+    this.playbackState = "ready";
+    this.controlledAgentId = null;
+    this.onPlaybackChanged(this.playbackState);
   }
 
   private async commitAgent(draft: AgentDraft, revision: number, request: number): Promise<string> {
@@ -209,6 +316,7 @@ export class ScenarioSession {
     if (this.disposed) return;
     this.disposed = true;
     ++this.generation;
+    ++this.playbackGeneration;
     this.presentation.dispose();
     this.population.clear();
     this.agentPresenter.clear();

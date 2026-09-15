@@ -1,5 +1,6 @@
 import type { AgentDraft, AgentSnapshot, PlacementHit, PlacementPreview, Ray3 } from "../domain/agent";
-import type { SceneGeometryDescription } from "./PhysicsWorld";
+import type { DriveCommand } from "../domain/playback";
+import type { PlaybackSnapshot, SceneGeometryDescription } from "./PhysicsWorld";
 
 export type PhysicsWorkerOperation =
   | { type: "replaceScene"; scene: SceneGeometryDescription }
@@ -9,6 +10,10 @@ export type PhysicsWorkerOperation =
   | { type: "updateAgent"; agent: AgentSnapshot; expectedSceneRevision: number }
   | { type: "removeAgent"; id: string }
   | { type: "clearAgents" }
+  | { type: "preparePlayback"; agents: readonly AgentSnapshot[]; controlledAgentId: string | null; expectedSceneRevision: number; generation: number }
+  | { type: "stepPlayback"; dt: number; generation: number }
+  | { type: "driveControlledAgent"; command: DriveCommand; generation: number }
+  | { type: "resetPlayback"; agents: readonly AgentSnapshot[]; generation: number }
   | { type: "dispose" };
 
 export interface PhysicsWorkerRequest { readonly id: number; readonly operation: PhysicsWorkerOperation; }
@@ -35,6 +40,12 @@ export class PhysicsWorkerClient {
   updateAgent(agent: AgentSnapshot, expectedSceneRevision: number): Promise<void> { return this.request({ type: "updateAgent", agent, expectedSceneRevision }); }
   removeAgent(id: string): Promise<void> { return this.request({ type: "removeAgent", id }); }
   clearAgents(): Promise<void> { return this.request({ type: "clearAgents" }); }
+  preparePlayback(agents: readonly AgentSnapshot[], controlledAgentId: string | null, expectedSceneRevision: number, generation: number): Promise<void> {
+    return this.request({ type: "preparePlayback", agents, controlledAgentId, expectedSceneRevision, generation });
+  }
+  stepPlayback(dt: number, generation: number): Promise<PlaybackSnapshot> { return this.request({ type: "stepPlayback", dt, generation }); }
+  driveControlledAgent(command: DriveCommand, generation: number): Promise<void> { return this.request({ type: "driveControlledAgent", command, generation }); }
+  resetPlayback(agents: readonly AgentSnapshot[], generation: number): Promise<void> { return this.request({ type: "resetPlayback", agents, generation }); }
 
   async dispose(): Promise<void> {
     if (this.disposed) return;

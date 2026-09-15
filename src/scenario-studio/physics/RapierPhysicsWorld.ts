@@ -1,5 +1,6 @@
 import type { AgentDraft, AgentSnapshot, PlacementHit, PlacementPreview, Ray3 } from "../domain/agent";
-import type { PhysicsEngineFactory, PhysicsWorld, SceneGeometryDescription } from "./PhysicsWorld";
+import type { DriveCommand } from "../domain/playback";
+import type { PhysicsEngineFactory, PhysicsWorld, PlaybackSnapshot, SceneGeometryDescription } from "./PhysicsWorld";
 import { PhysicsWorkerClient } from "./PhysicsWorkerClient";
 
 export class RapierPhysicsWorld implements PhysicsWorld {
@@ -18,6 +19,12 @@ export class RapierPhysicsWorld implements PhysicsWorld {
   updateAgent(agent: AgentSnapshot, expectedSceneRevision: number): Promise<void> { return this.client.updateAgent(agent, expectedSceneRevision); }
   removeAgent(id: string): Promise<void> { return this.client.removeAgent(id); }
   clearAgents(): Promise<void> { return this.client.clearAgents(); }
+  preparePlayback(agents: readonly AgentSnapshot[], controlledAgentId: string | null, expectedSceneRevision: number, generation: number): Promise<void> {
+    return this.client.preparePlayback(agents, controlledAgentId, expectedSceneRevision, generation);
+  }
+  stepPlayback(dt: number, generation: number): Promise<PlaybackSnapshot> { return this.client.stepPlayback(dt, generation); }
+  driveControlledAgent(command: DriveCommand, generation: number): Promise<void> { return this.client.driveControlledAgent(command, generation); }
+  resetPlayback(agents: readonly AgentSnapshot[], generation: number): Promise<void> { return this.client.resetPlayback(agents, generation); }
   dispose(): Promise<void> { return this.client.dispose(); }
 }
 

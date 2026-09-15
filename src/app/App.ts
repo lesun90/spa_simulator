@@ -64,6 +64,7 @@ export class App {
         if (this.interaction.handleKeyDown(event)) return;
         this.state.handleGlobalKeyDown(event);
       },
+      onKeyUp: () => {},
       onFileDrop: (files) => {
         const file = files[0];
         if (file) void this.state.importDroppedFile(file);

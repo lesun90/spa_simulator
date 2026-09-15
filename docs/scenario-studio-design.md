@@ -1,6 +1,6 @@
 # Scenario Studio design
 
-Updated 2026-09-14. **Steps 1–2 complete** (`98cf824`, `b5a5000`); Steps 3–11 unimplemented.
+Updated 2026-09-15. **Steps 1–4 complete** (`98cf824`, `b5a5000`, `0eca7da`, and Step 4 reviewed in the working tree); Steps 5–11 unimplemented.
 [Plan](scenario-studio-implementation-plan.md) · [Review and evidence](scenario-studio-review.md)
 
 This document owns product requirements; the plan owns delivery tasks, and the review guide owns verification commands/results. Sections below describe the release target unless marked current.
@@ -16,7 +16,7 @@ Excluded: local Python service, native Python packages/ML integration, source as
 ## Current implementation
 
 - Separate route/composition root, authored scene/agent document and transactional session, injected catalog/presentation/physics boundaries, owned presentations and generation-guarded replacement.
-- Green default ground/grid and collider; imported GLBs scale by `1 / unitsPerMeter`, fit the camera, and contribute transformed triangle support. Water geometry is retained as a non-supporting placement blocker, and imports never receive the default fallback. Rapier owns placement queries and agent colliders in a dedicated worker through an open engine registry. No playback, scenario persistence, surface dynamics or language runtimes yet; reload starts on default ground.
+- Green default ground/grid and collider; imported GLBs scale by `1 / unitsPerMeter`, fit the camera, and contribute transformed triangle support. Water geometry is retained as a non-supporting placement blocker, and imports never receive the default fallback. Rapier owns placement queries, agent colliders and live playback bodies in a dedicated worker through an open engine registry. Scenario name/New/Open/Save persist authored scenes and agents; Play/Pause/Reset run fixed-step Rapier playback with one controlled vehicle driven by throttle/steering/brake. No surface dynamics, scripted behavior or suspended-agent scaling yet; reload starts on default ground.
 - Left scene/agent inspector, independent bottom Scenes/Agents browsers, search/Refresh/previews, Add/drag ghost, viewport selection, validated transform/duplicate/delete, named replacement warnings and orbit/zoom/reset. Per-asset and per-instance drafts survive context switches; successful scene replacement clears agents and scene drafts.
 - `assets/scenes/sample` and `scene2` contain version-1 packages at one unit/meter. No root pair currently; discovery supports it as `.`. Vehicle assets include models, thumbnails, metadata, chassis bounds and wheels, not complete driving configurations.
 - Shared dev/preview middleware serves scene and agent catalogs, scene package APIs and contained `/scenario-assets/{scenes,agents}/*` sources. Agent discovery is confined to `assets/agents` and reports malformed/duplicate metadata. Existing stack adds pinned Rapier to TypeScript, Vite/Node, Three.js, HUD primitives, canvas and stats.js; the FPS overlay is not simulation performance evidence.

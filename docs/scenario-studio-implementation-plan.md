@@ -10,7 +10,7 @@
 
 **Spec:** [Scenario Studio design](scenario-studio-design.md)
 
-**Core progress:** 3/5 milestones complete. Milestone 1: `98cf824`; Milestone 2: `b5a5000`, revised and reviewed in the working tree on 2026-09-15; Milestone 3 completed and reviewed in the working tree on 2026-09-15. The Milestone 2–3 revisions are not committed. **Next: Milestone 4**, Rapier playback and basic driving.
+**Core progress:** 4/5 milestones complete. Milestone 1: `98cf824`; Milestone 2: `b5a5000`; Milestone 3: `0eca7da`; Milestone 4 completed and reviewed in the working tree on 2026-09-15. **Next: Milestone 5**, JavaScript agent behavior.
 
 [Design requirements](scenario-studio-design.md) · [Commands and evidence](scenario-studio-review.md)
 
@@ -130,14 +130,16 @@ Defer: autosave, recent files, import/export, recovery history, keyboard-shortcu
 
 ## Milestone 4: Rapier playback and basic driving
 
-- [ ] Add `PlaybackState = ready | preparing | running | paused | error` and legal `play`, `pause` and `reset` transitions to the domain.
-- [ ] Extend `PhysicsWorld` with preparation, fixed stepping, commands, reset and stamped neutral snapshots.
-- [ ] Create generic and vehicle bodies from the authored baseline only when Play enters preparation. Use authored scale for collision and body dimensions.
-- [ ] Step Rapier at `1/60` seconds in its worker and apply stamped transforms to visuals. Reset restores the authored baseline and releases live bodies.
-- [ ] Add one controlled-agent path for throttle, steering and braking through a validated `DriveCommand` boundary.
-- [ ] Disable authored transforms while running or paused. Saving during playback writes authored state, not live transforms.
+- [x] Add `PlaybackState = ready | preparing | running | paused | error` and legal `play`, `pause` and `reset` transitions to the domain.
+- [x] Extend `PhysicsWorld` with preparation, fixed stepping, commands, reset and stamped neutral snapshots.
+- [x] Create generic and vehicle bodies from the authored baseline only when Play enters preparation. Use authored scale for collision and body dimensions.
+- [x] Step Rapier at `1/60` seconds in its worker and apply stamped transforms to visuals. Reset restores the authored baseline and releases live bodies.
+- [x] Add one controlled-agent path for throttle, steering and braking through a validated `DriveCommand` boundary.
+- [x] Disable authored transforms while running or paused. Saving during playback writes authored state, not live transforms.
 
 Core acceptance: place a vehicle, Play, drive, Pause and Reset. Verify gravity/contact, basic control, authored-state restoration, stale-snapshot rejection and repeated body cleanup.
+
+Details: [Milestone 4 results](scenario-studio-review.md#step-4-walkthrough-coverage).
 
 Defer: wheel animation, render interpolation polish, multiple control schemes, surface-specific traction, water, detailed metrics and large-agent tuning.
 

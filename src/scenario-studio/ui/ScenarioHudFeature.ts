@@ -9,6 +9,7 @@ import { Panel } from "../../features/hud/kit/Panel";
 import { TextField } from "../../features/hud/kit/TextField";
 import { sameSceneReference, type SceneChoice, type SceneReference } from "../domain/scene";
 import { createAgentDraft, type AgentChoice, type AgentDraft, type AgentSnapshot, type PlacementPreview } from "../domain/agent";
+import type { PlaybackState } from "../domain/playback";
 import { HudText } from "./HudText";
 import { SceneBrowserPanel } from "./SceneBrowserPanel";
 import type { ScenarioSceneThumbnails } from "../rendering/ScenarioSceneThumbnails";
@@ -20,6 +21,9 @@ interface ScenarioActions {
   create(): Promise<void>;
   open(): Promise<void>;
   save(): Promise<void>;
+  play(): Promise<void>;
+  pause(): void;
+  reset(): void;
 }
 
 /** Reuses Scene Studio's shell geometry, panel chrome, tiles, buttons, and text renderer. */
@@ -39,6 +43,9 @@ export class ScenarioHudFeature {
   private readonly newButton: Button;
   private readonly openButton: Button;
   private readonly saveButton: Button;
+  private readonly playButton: Button;
+  private readonly pauseButton: Button;
+  private readonly resetPlaybackButton: Button;
   private readonly backdrop: Panel;
   private readonly modal: Panel;
   private readonly cancelButton: Button;
@@ -62,6 +69,8 @@ export class ScenarioHudFeature {
   private activeTab: "scenes" | "agents" = "scenes";
   private scenarioBusy = false;
   private scenarioName = "Untitled scenario";
+  private playbackState: PlaybackState = "ready";
+  private playbackBusy = false;
 
   constructor(
     size: ViewportSize,
@@ -109,6 +118,7 @@ export class ScenarioHudFeature {
       detailHash: label(right, 18, 296, 11.5, "500", theme.textMuted.css, "", 2),
       diagnostic: label(right, 18, 350, 11.5, "500", theme.diagnostic.css, "", 5),
       scenarioState: new HudText(scenarioStateFrame(this.layout), { size: 11, weight: "600", color: theme.textMutedStrong.css }),
+      playbackState: new HudText(playbackStateFrame(this.layout), { size: 11, weight: "600", color: theme.textMutedStrong.css }),
       modalTitle: label(modalRect(size), 25, 28, 18, "700", theme.text.css, "Replace current scene?"),
       modalCandidate: label(modalRect(size), 25, 65, 14, "600", theme.text.css, "", 2),
       modalMessage: label(modalRect(size), 25, 112, 12.5, "500", theme.textMuted.css,
@@ -131,6 +141,9 @@ export class ScenarioHudFeature {
     this.newButton = new Button(scenarioButtonRect(this.layout, 0), interaction, { label: "New", onClick: () => void this.runScenarioAction("Creating new scenario…", () => this.scenarioActions.create()) });
     this.openButton = new Button(scenarioButtonRect(this.layout, 1), interaction, { label: "Open", onClick: () => void this.runScenarioAction("Opening scenario…", () => this.scenarioActions.open()) });
     this.saveButton = new Button(scenarioButtonRect(this.layout, 2), interaction, { label: "Save", onClick: () => void this.runScenarioAction("Saving scenario…", () => this.scenarioActions.save()) });
+    this.playButton = new Button(playbackButtonRect(this.layout, 0), interaction, { label: "Play", onClick: () => void this.runPlaybackAction(() => this.scenarioActions.play()) });
+    this.pauseButton = new Button(playbackButtonRect(this.layout, 1), interaction, { label: "Pause", onClick: () => this.scenarioActions.pause() });
+    this.resetPlaybackButton = new Button(playbackButtonRect(this.layout, 2), interaction, { label: "Reset", onClick: () => this.scenarioActions.reset() });
     const leftDivider = new Panel({ x: left.x, y: 40, width: left.width, height: 1 }, { fill: theme.borderSubtle.hex, radius: 0 });
     const rightDivider = new Panel({ x: right.x, y: 40, width: right.width, height: 1 }, { fill: theme.borderSubtle.hex, radius: 0 });
     this.left.root.add(leftDivider.root, ...Object.entries(this.labels).filter(([key]) => ["leftTitle", "activeHeader", "active", "candidateHeader", "candidate", "status"].includes(key)).map(([, value]) => value.root), this.useButton.root);
@@ -147,9 +160,11 @@ export class ScenarioHudFeature {
     this.unregisterBackdrop = interaction.register(this.backdrop.root, { onClick: () => this.cancel() });
     this.unregisterModal = interaction.register(this.modal.root, { onPointerDown: () => {} });
     this.scene.add(this.left.root, this.agentInspector.root, this.right.root, this.browser.root, this.agentBrowser.root, this.scenesTab.root, this.agentsTab.root,
-      this.scenarioNameField.root, this.newButton.root, this.openButton.root, this.saveButton.root, this.labels.scenarioState.root, this.resetButton.root, this.modalRoot);
+      this.scenarioNameField.root, this.newButton.root, this.openButton.root, this.saveButton.root, this.labels.scenarioState.root, this.resetButton.root, this.modalRoot,
+      this.playButton.root, this.pauseButton.root, this.resetPlaybackButton.root, this.labels.playbackState.root);
     this.showTab("scenes");
     this.update();
+    this.setPlaybackState("ready");
   }
 
   private readonly dividers: Panel[];
@@ -401,6 +416,28 @@ export class ScenarioHudFeature {
     this.saveButton.setDisabled(this.scenarioBusy || this.busy);
   }
 
+  setPlaybackState(state: PlaybackState, statusMessage?: string): void {
+    this.playbackState = state;
+    this.playbackBusy = state === "preparing";
+    this.labels.playbackState.setText(statusMessage ? `${playbackLabel(state)} — ${statusMessage}` : playbackLabel(state));
+    this.labels.playbackState.setStyle({ color: state === "error" ? theme.diagnostic.css : theme.textMutedStrong.css });
+    this.updatePlaybackButtons();
+    this.invalidate();
+  }
+
+  private async runPlaybackAction(action: () => Promise<void>): Promise<void> {
+    if (this.playbackBusy) return;
+    try { await action(); }
+    catch (error) { if (!this.disposed) this.setPlaybackState(this.playbackState, message(error)); }
+  }
+
+  private updatePlaybackButtons(): void {
+    this.playButton.setLabel(this.playbackState === "paused" ? "Resume" : "Play");
+    this.playButton.setDisabled(this.playbackBusy || this.playbackState === "running" || this.playbackState === "preparing" || this.playbackState === "error");
+    this.pauseButton.setDisabled(this.playbackState !== "running");
+    this.resetPlaybackButton.setDisabled(this.playbackState === "ready");
+  }
+
   handleKeyDown(event: KeyboardEvent): void {
     if (this.interaction.handleKeyDown(event)) return;
     if (event.key === "Escape" && this.pending) this.cancel();
@@ -438,7 +475,11 @@ export class ScenarioHudFeature {
     this.newButton.setRect(scenarioButtonRect(this.layout, 0));
     this.openButton.setRect(scenarioButtonRect(this.layout, 1));
     this.saveButton.setRect(scenarioButtonRect(this.layout, 2));
+    this.playButton.setRect(playbackButtonRect(this.layout, 0));
+    this.pauseButton.setRect(playbackButtonRect(this.layout, 1));
+    this.resetPlaybackButton.setRect(playbackButtonRect(this.layout, 2));
     this.labels.scenarioState.setFrame(scenarioStateFrame(this.layout));
+    this.labels.playbackState.setFrame(playbackStateFrame(this.layout));
     this.dividers[0].setRect({ x: 0, y: 40, width: this.layout.leftPanel.width, height: 1 });
     this.dividers[1].setRect({ x: this.layout.inspectorPanel.x, y: 40, width: this.layout.inspectorPanel.width, height: 1 });
     for (const [name, y, panel] of [
@@ -482,6 +523,9 @@ export class ScenarioHudFeature {
     this.newButton.dispose();
     this.openButton.dispose();
     this.saveButton.dispose();
+    this.playButton.dispose();
+    this.pauseButton.dispose();
+    this.resetPlaybackButton.dispose();
     this.backdrop.dispose();
     this.modal.dispose();
     this.cancelButton.dispose();
@@ -515,9 +559,33 @@ function scenarioButtonRect(layout: ShellRects, index: number): Rect {
   return { x: name.x + name.width + 8 + index * 68, y: 10, width: 62, height: 34 };
 }
 
+function playbackButtonRect(layout: ShellRects, index: number): Rect {
+  const viewport = layout.viewport;
+  if (viewport.width < 520) {
+    const width = Math.max(Math.floor((viewport.width - 32) / 3), 44);
+    return { x: viewport.x + 10 + index * (width + 6), y: 86, width, height: 30 };
+  }
+  return { x: viewport.x + 10 + index * 68, y: 50, width: 62, height: 34 };
+}
+
 function scenarioStateFrame(layout: ShellRects) {
   const viewport = layout.viewport;
-  return { x: viewport.x + 12, y: viewport.width < 520 ? 86 : 51, width: Math.max(viewport.width - 24, 1), maxLines: 2 };
+  return { x: viewport.x + 12, y: viewport.width < 520 ? 122 : 88, width: Math.max(viewport.width - 24, 1), maxLines: 2 };
+}
+
+function playbackStateFrame(layout: ShellRects) {
+  const viewport = layout.viewport;
+  return { x: viewport.x + 12, y: viewport.width < 520 ? 140 : 105, width: Math.max(viewport.width - 24, 1), maxLines: 2 };
+}
+
+function playbackLabel(state: PlaybackState): string {
+  switch (state) {
+    case "ready": return "Ready";
+    case "preparing": return "Preparing…";
+    case "running": return "Running";
+    case "paused": return "Paused";
+    case "error": return "Playback error";
+  }
 }
 
 function sideStyle(side: "left" | "right") {

@@ -1,8 +1,26 @@
 /// <reference lib="webworker" />
 import RAPIER from "@dimforge/rapier3d-compat";
 import { placementOriginY, scaledAgentCollision, type AgentDraft, type AgentSnapshot, type PlacementHit, type PlacementPreview, type Ray3, type Vector3Value } from "../domain/agent";
-import type { SceneGeometryDescription } from "./PhysicsWorld";
+import { NEUTRAL_DRIVE_COMMAND, validateDriveCommand, type DriveCommand } from "../domain/playback";
+import type { AgentTransform, PlaybackSnapshot, SceneGeometryDescription } from "./PhysicsWorld";
 import type { PhysicsWorkerRequest, PhysicsWorkerResponse } from "./PhysicsWorkerClient";
+
+const FIXED_STEP = 1 / 60;
+// Comfortably above RenderLoop's 0.1s per-frame dt clamp so a normal slow frame never loses simulated time.
+const MAX_SUBSTEPS_PER_CALL = 8;
+const ENGINE_ACCEL = 14;
+const MAX_FORWARD_SPEED = 22;
+const MAX_REVERSE_SPEED = 8;
+const BRAKE_DECAY_PER_SECOND = 6;
+const LATERAL_GRIP = 0.9;
+const STEER_RATE = 2.4;
+const STEER_REFERENCE_SPEED = 6;
+
+interface PlaybackBody {
+  readonly body: RAPIER.RigidBody;
+  readonly kind: "generic" | "vehicle";
+  readonly localCenter: Vector3Value;
+}
 
 let world: RAPIER.World | null = null;
 let sceneRevision = 0;
@@ -10,6 +28,12 @@ let initialized: Promise<void> | null = null;
 const environmentHandles = new Map<number, string>();
 const nonSupportingHandles = new Set<number>();
 const agentColliders = new Map<string, RAPIER.Collider>();
+
+let playbackGeneration = 0;
+let controlledBodyId: string | null = null;
+let driveCommand: DriveCommand = NEUTRAL_DRIVE_COMMAND;
+let stepAccumulator = 0;
+const playbackBodies = new Map<string, PlaybackBody>();
 
 self.addEventListener("message", (event: MessageEvent<PhysicsWorkerRequest>) => {
   void dispatch(event.data).then(
@@ -29,6 +53,10 @@ async function dispatch(request: PhysicsWorkerRequest): Promise<unknown> {
     case "updateAgent": return updateAgent(operation.agent, operation.expectedSceneRevision);
     case "removeAgent": return removeAgent(operation.id);
     case "clearAgents": return clearAgents();
+    case "preparePlayback": return preparePlayback(operation.agents, operation.controlledAgentId, operation.expectedSceneRevision, operation.generation);
+    case "stepPlayback": return stepPlayback(operation.dt, operation.generation);
+    case "driveControlledAgent": return driveControlledAgent(operation.command, operation.generation);
+    case "resetPlayback": return resetPlayback(operation.agents, operation.generation);
     case "dispose": dispose(); return undefined;
   }
 }
@@ -79,6 +107,7 @@ function replaceScene(scene: SceneGeometryDescription): number {
   nonSupportingHandles.clear();
   for (const handle of nextNonSupportingHandles) nonSupportingHandles.add(handle);
   agentColliders.clear();
+  clearPlaybackState();
   return ++sceneRevision;
 }
 
@@ -175,6 +204,131 @@ function removeAgent(id: string): void {
 }
 
 function clearAgents(): void { for (const id of [...agentColliders.keys()]) removeAgent(id); }
+
+function preparePlayback(agents: readonly AgentSnapshot[], controlledAgentId: string | null, expectedSceneRevision: number, generation: number): void {
+  assertRevision(expectedSceneRevision);
+  const active = requireWorld();
+  teardownPlaybackBodies(active);
+  for (const collider of agentColliders.values()) active.removeCollider(collider, false);
+  agentColliders.clear();
+  let controlledKind: "generic" | "vehicle" | null = null;
+  for (const agent of agents) {
+    const kind: "generic" | "vehicle" = agent.asset.category === "vehicles" ? "vehicle" : "generic";
+    const localCenter = scaledAgentCollision(agent).center;
+    const half = scaledAgentCollision(agent).halfExtents;
+    const center = collisionCenter(agent, agent.pose.position, agent.pose.headingRadians);
+    const body = active.createRigidBody(RAPIER.RigidBodyDesc.dynamic()
+      .setTranslation(center.x, center.y, center.z)
+      .setRotation(rotation(agent.pose.headingRadians))
+      .setLinearDamping(0.15)
+      .setAngularDamping(0.6));
+    active.createCollider(RAPIER.ColliderDesc.cuboid(half.x, half.y, half.z).setMass(agent.mass).setFriction(1), body);
+    playbackBodies.set(agent.id, { body, kind, localCenter });
+    if (agent.id === controlledAgentId) controlledKind = kind;
+  }
+  controlledBodyId = controlledAgentId && controlledKind === "vehicle" ? controlledAgentId : null;
+  driveCommand = NEUTRAL_DRIVE_COMMAND;
+  stepAccumulator = 0;
+  playbackGeneration = generation;
+  active.step();
+}
+
+function stepPlayback(dt: number, generation: number): PlaybackSnapshot {
+  assertPlaybackGeneration(generation);
+  const active = requireWorld();
+  stepAccumulator = Math.min(stepAccumulator + Math.max(dt, 0), FIXED_STEP * MAX_SUBSTEPS_PER_CALL);
+  while (stepAccumulator >= FIXED_STEP) {
+    applyDriveForces();
+    active.step();
+    stepAccumulator -= FIXED_STEP;
+  }
+  return { generation: playbackGeneration, transforms: collectTransforms() };
+}
+
+function driveControlledAgent(command: DriveCommand, generation: number): void {
+  assertPlaybackGeneration(generation);
+  driveCommand = validateDriveCommand(command);
+}
+
+function resetPlayback(agents: readonly AgentSnapshot[], generation: number): void {
+  const active = requireWorld();
+  teardownPlaybackBodies(active);
+  controlledBodyId = null;
+  driveCommand = NEUTRAL_DRIVE_COMMAND;
+  stepAccumulator = 0;
+  playbackGeneration = generation;
+  for (const agent of agents) {
+    if (agentColliders.has(agent.id)) continue;
+    const center = collisionCenter(agent, agent.pose.position, agent.pose.headingRadians);
+    const half = scaledAgentCollision(agent).halfExtents;
+    const collider = active.createCollider(RAPIER.ColliderDesc.cuboid(half.x, half.y, half.z)
+      .setTranslation(center.x, center.y, center.z).setRotation(rotation(agent.pose.headingRadians)).setMass(agent.mass));
+    agentColliders.set(agent.id, collider);
+  }
+  active.step();
+}
+
+function teardownPlaybackBodies(active: RAPIER.World): void {
+  for (const { body } of playbackBodies.values()) active.removeRigidBody(body);
+  playbackBodies.clear();
+}
+
+function clearPlaybackState(): void {
+  playbackBodies.clear();
+  controlledBodyId = null;
+  driveCommand = NEUTRAL_DRIVE_COMMAND;
+  stepAccumulator = 0;
+  playbackGeneration = 0;
+}
+
+function applyDriveForces(): void {
+  if (!controlledBodyId) return;
+  const entry = playbackBodies.get(controlledBodyId);
+  if (!entry) return;
+  const rot = entry.body.rotation();
+  const heading = 2 * Math.atan2(rot.y, rot.w);
+  const forward = { x: Math.sin(heading), z: Math.cos(heading) };
+  const right = { x: Math.cos(heading), z: -Math.sin(heading) };
+  const linvel = entry.body.linvel();
+  const forwardSpeed = linvel.x * forward.x + linvel.z * forward.z;
+  const lateralSpeed = linvel.x * right.x + linvel.z * right.z;
+
+  let nextForwardSpeed = forwardSpeed + driveCommand.throttle * ENGINE_ACCEL * FIXED_STEP;
+  if (driveCommand.brake > 0) nextForwardSpeed *= Math.max(0, 1 - driveCommand.brake * BRAKE_DECAY_PER_SECOND * FIXED_STEP);
+  nextForwardSpeed = Math.min(MAX_FORWARD_SPEED, Math.max(-MAX_REVERSE_SPEED, nextForwardSpeed));
+  const nextLateralSpeed = lateralSpeed * (1 - LATERAL_GRIP);
+
+  entry.body.setLinvel({
+    x: forward.x * nextForwardSpeed + right.x * nextLateralSpeed,
+    y: linvel.y,
+    z: forward.z * nextForwardSpeed + right.z * nextLateralSpeed
+  }, true);
+
+  const speedFactor = Math.min(1, Math.abs(nextForwardSpeed) / STEER_REFERENCE_SPEED);
+  const directionSign = nextForwardSpeed >= 0 ? 1 : -1;
+  entry.body.setAngvel({ x: 0, y: driveCommand.steering * STEER_RATE * speedFactor * directionSign, z: 0 }, true);
+}
+
+function collectTransforms(): AgentTransform[] {
+  const transforms: AgentTransform[] = [];
+  for (const [id, entry] of playbackBodies) {
+    const translation = entry.body.translation();
+    const rot = entry.body.rotation();
+    const heading = 2 * Math.atan2(rot.y, rot.w);
+    const offset = rotate(entry.localCenter.x, entry.localCenter.z, heading);
+    transforms.push({
+      id,
+      position: { x: translation.x - offset.x, y: translation.y - entry.localCenter.y, z: translation.z - offset.z },
+      headingRadians: heading
+    });
+  }
+  return transforms;
+}
+
+function assertPlaybackGeneration(expected: number): void {
+  if (expected !== playbackGeneration) throw new Error("The playback run is stale. Try again.");
+}
+
 function assertRevision(expected: number): void { if (expected !== sceneRevision) throw new Error("The placement result is stale. Try again."); }
 function requireWorld(): RAPIER.World { if (!world) throw new Error("Physics environment is still preparing."); return world; }
 function invalid(reason: string, pose: PlacementPreview["pose"] = null): PlacementPreview { return { valid: false, pose, reason, sceneRevision }; }
@@ -187,4 +341,4 @@ function collisionCenter(draft: AgentDraft, position: Vector3Value, heading: num
   const horizontal = rotate(center.x, center.z, heading);
   return { x: position.x + horizontal.x, y: position.y + center.y, z: position.z + horizontal.z };
 }
-function dispose(): void { world?.free(); world = null; environmentHandles.clear(); nonSupportingHandles.clear(); agentColliders.clear(); }
+function dispose(): void { world?.free(); world = null; environmentHandles.clear(); nonSupportingHandles.clear(); agentColliders.clear(); clearPlaybackState(); }
