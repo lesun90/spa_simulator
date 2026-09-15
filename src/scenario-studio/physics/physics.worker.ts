@@ -234,17 +234,19 @@ function preparePlayback(agents: readonly AgentSnapshot[], controlledAgentId: st
     const localCenter = collision.center;
     const half = collision.halfExtents;
     const center = collisionCenter(agent, agent.pose.position, agent.pose.headingRadians);
+    // Only the controlled vehicle is wheel-driven; every other body stays the plain dynamic cuboid it was, damping included.
+    const drive = agent.id === controlledAgentId && kind === "vehicle" && agent.vehicle && agent.asset.wheels?.length
+      ? { tuning: agent.vehicle, wheels: agent.asset.wheels }
+      : null;
     const body = active.createRigidBody(RAPIER.RigidBodyDesc.dynamic()
       .setTranslation(center.x, center.y, center.z)
       .setRotation(rotation(agent.pose.headingRadians))
-      .setLinearDamping(kind === "vehicle" ? 0.02 : 0.15)
-      .setAngularDamping(kind === "vehicle" ? 0.3 : 0.6));
+      .setLinearDamping(drive ? 0.02 : 0.15)
+      .setAngularDamping(drive ? 0.3 : 0.6));
     active.createCollider(RAPIER.ColliderDesc.cuboid(half.x, half.y, half.z).setMass(agent.mass).setFriction(1), body);
 
-    // Only the controlled vehicle is wheel-driven; every other body stays the plain dynamic cuboid it was.
-    if (agent.id === controlledAgentId && kind === "vehicle" && agent.vehicle && agent.asset.wheels?.length) {
-      const wheels = agent.asset.wheels;
-      const tuning = agent.vehicle;
+    if (drive) {
+      const { tuning, wheels } = drive;
       const controller = active.createVehicleController(body);
       controller.indexUpAxis = 1;
       // Rapier 0.20 exposes the forward-axis setter under this (upstream misspelled) name; `indexForwardAxis` is read-only.
