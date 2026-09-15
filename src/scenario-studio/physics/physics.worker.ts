@@ -9,18 +9,13 @@ import type { PhysicsWorkerRequest, PhysicsWorkerResponse } from "./PhysicsWorke
 const FIXED_STEP = 1 / 60;
 // Comfortably above RenderLoop's 0.1s per-frame dt clamp so a normal slow frame never loses simulated time.
 const MAX_SUBSTEPS_PER_CALL = 8;
-const ENGINE_ACCEL = 14;
-const MAX_FORWARD_SPEED = 22;
-const MAX_REVERSE_SPEED = 8;
-const BRAKE_DECAY_PER_SECOND = 6;
-const LATERAL_GRIP = 0.9;
-const STEER_RATE = 2.4;
-const STEER_REFERENCE_SPEED = 6;
 
 interface PlaybackBody {
   readonly body: RAPIER.RigidBody;
   readonly kind: "generic" | "vehicle";
   readonly localCenter: Vector3Value;
+  readonly controller?: RAPIER.DynamicRayCastVehicleController;
+  readonly wheelCount: number;
 }
 
 let world: RAPIER.World | null = null;
@@ -36,6 +31,10 @@ let controlledBodyId: string | null = null;
 let driveCommand: DriveCommand = NEUTRAL_DRIVE_COMMAND;
 let stepAccumulator = 0;
 const playbackBodies = new Map<string, PlaybackBody>();
+/** The agents the live bodies were built from, so the step loop can read their tuning without re-sending them each step. */
+let preparedAgents: readonly AgentSnapshot[] = [];
+/** Current front-wheel steering angle per agent, ramped toward the commanded angle instead of snapping. */
+const wheelSteeringRadians = new Map<string, number>();
 
 self.addEventListener("message", (event: MessageEvent<PhysicsWorkerRequest>) => {
   void dispatch(event.data).then(
@@ -231,19 +230,49 @@ function preparePlayback(agents: readonly AgentSnapshot[], controlledAgentId: st
   let controlledKind: "generic" | "vehicle" | null = null;
   for (const agent of agents) {
     const kind: "generic" | "vehicle" = agent.asset.category === "vehicles" ? "vehicle" : "generic";
-    const localCenter = scaledAgentCollision(agent).center;
-    const half = scaledAgentCollision(agent).halfExtents;
+    const collision = scaledAgentCollision(agent);
+    const localCenter = collision.center;
+    const half = collision.halfExtents;
     const center = collisionCenter(agent, agent.pose.position, agent.pose.headingRadians);
     const body = active.createRigidBody(RAPIER.RigidBodyDesc.dynamic()
       .setTranslation(center.x, center.y, center.z)
       .setRotation(rotation(agent.pose.headingRadians))
-      .setLinearDamping(0.15)
-      .setAngularDamping(0.6));
+      .setLinearDamping(kind === "vehicle" ? 0.02 : 0.15)
+      .setAngularDamping(kind === "vehicle" ? 0.3 : 0.6));
     active.createCollider(RAPIER.ColliderDesc.cuboid(half.x, half.y, half.z).setMass(agent.mass).setFriction(1), body);
-    playbackBodies.set(agent.id, { body, kind, localCenter });
+
+    // Only the controlled vehicle is wheel-driven; every other body stays the plain dynamic cuboid it was.
+    if (agent.id === controlledAgentId && kind === "vehicle" && agent.vehicle && agent.asset.wheels?.length) {
+      const wheels = agent.asset.wheels;
+      const tuning = agent.vehicle;
+      const controller = active.createVehicleController(body);
+      controller.indexUpAxis = 1;
+      // Rapier 0.20 exposes the forward-axis setter under this (upstream misspelled) name; `indexForwardAxis` is read-only.
+      controller.setIndexForwardAxis = 2;
+      wheels.forEach((wheel, index) => {
+        // Wheel metadata shares the asset's unscaled model frame, so scale it before rebasing onto the chassis collider's center.
+        const local = {
+          x: wheel.position.x * agent.scale - localCenter.x,
+          y: wheel.position.y * agent.scale - localCenter.y,
+          z: wheel.position.z * agent.scale - localCenter.z
+        };
+        // The axle points to the vehicle's right (-X here, since assets author +X as left); with up=+Y that makes +Z the drive direction.
+        controller.addWheel(local, { x: 0, y: -1, z: 0 }, { x: -1, y: 0, z: 0 }, tuning.suspensionRestLength, wheel.radius * agent.scale);
+        controller.setWheelSuspensionStiffness(index, tuning.suspensionStiffness);
+        controller.setWheelSuspensionCompression(index, tuning.suspensionDamping);
+        controller.setWheelSuspensionRelaxation(index, tuning.suspensionDamping);
+        controller.setWheelMaxSuspensionTravel(index, tuning.suspensionMaxTravel);
+        controller.setWheelFrictionSlip(index, tuning.wheelFrictionSlip);
+      });
+      playbackBodies.set(agent.id, { body, kind, localCenter, controller, wheelCount: wheels.length });
+    } else {
+      playbackBodies.set(agent.id, { body, kind, localCenter, wheelCount: 0 });
+    }
     if (agent.id === controlledAgentId) controlledKind = kind;
   }
   controlledBodyId = controlledAgentId && controlledKind === "vehicle" ? controlledAgentId : null;
+  preparedAgents = agents;
+  wheelSteeringRadians.clear();
   driveCommand = NEUTRAL_DRIVE_COMMAND;
   stepAccumulator = 0;
   playbackGeneration = generation;
@@ -255,7 +284,7 @@ function stepPlayback(dt: number, generation: number): PlaybackSnapshot {
   const active = requireWorld();
   stepAccumulator = Math.min(stepAccumulator + Math.max(dt, 0), FIXED_STEP * MAX_SUBSTEPS_PER_CALL);
   while (stepAccumulator >= FIXED_STEP) {
-    applyDriveForces();
+    applyDriveForces(preparedAgents);
     active.step();
     stepAccumulator -= FIXED_STEP;
   }
@@ -286,44 +315,50 @@ function resetPlayback(agents: readonly AgentSnapshot[], generation: number): vo
 }
 
 function teardownPlaybackBodies(active: RAPIER.World): void {
-  for (const { body } of playbackBodies.values()) active.removeRigidBody(body);
+  for (const { body, controller } of playbackBodies.values()) {
+    if (controller) active.removeVehicleController(controller);
+    active.removeRigidBody(body);
+  }
   playbackBodies.clear();
+  preparedAgents = [];
+  wheelSteeringRadians.clear();
 }
 
 function clearPlaybackState(): void {
   playbackBodies.clear();
+  preparedAgents = [];
+  wheelSteeringRadians.clear();
   controlledBodyId = null;
   driveCommand = NEUTRAL_DRIVE_COMMAND;
   stepAccumulator = 0;
   playbackGeneration = 0;
 }
 
-function applyDriveForces(): void {
+function applyDriveForces(agents: readonly AgentSnapshot[]): void {
   if (!controlledBodyId) return;
   const entry = playbackBodies.get(controlledBodyId);
-  if (!entry) return;
-  const rot = entry.body.rotation();
-  const heading = 2 * Math.atan2(rot.y, rot.w);
-  const forward = { x: Math.sin(heading), z: Math.cos(heading) };
-  const right = { x: Math.cos(heading), z: -Math.sin(heading) };
-  const linvel = entry.body.linvel();
-  const forwardSpeed = linvel.x * forward.x + linvel.z * forward.z;
-  const lateralSpeed = linvel.x * right.x + linvel.z * right.z;
+  const agent = agents.find((candidate) => candidate.id === controlledBodyId);
+  const controller = entry?.controller;
+  if (!controller || !agent?.vehicle || !agent.asset.wheels) return;
+  const tuning = agent.vehicle;
+  const maxSteeringRadians = tuning.maxSteeringAngleDegrees * Math.PI / 180;
+  const targetSteering = driveCommand.steering * maxSteeringRadians;
+  const currentSteering = wheelSteeringRadians.get(controlledBodyId) ?? 0;
+  const steeringStep = tuning.steeringSpeedDegreesPerSecond * Math.PI / 180 * FIXED_STEP;
+  const nextSteering = Math.abs(targetSteering - currentSteering) <= steeringStep
+    ? targetSteering
+    : currentSteering + Math.sign(targetSteering - currentSteering) * steeringStep;
+  wheelSteeringRadians.set(controlledBodyId, nextSteering);
 
-  let nextForwardSpeed = forwardSpeed + driveCommand.throttle * ENGINE_ACCEL * FIXED_STEP;
-  if (driveCommand.brake > 0) nextForwardSpeed *= Math.max(0, 1 - driveCommand.brake * BRAKE_DECAY_PER_SECOND * FIXED_STEP);
-  nextForwardSpeed = Math.min(MAX_FORWARD_SPEED, Math.max(-MAX_REVERSE_SPEED, nextForwardSpeed));
-  const nextLateralSpeed = lateralSpeed * (1 - LATERAL_GRIP);
-
-  entry.body.setLinvel({
-    x: forward.x * nextForwardSpeed + right.x * nextLateralSpeed,
-    y: linvel.y,
-    z: forward.z * nextForwardSpeed + right.z * nextLateralSpeed
-  }, true);
-
-  const speedFactor = Math.min(1, Math.abs(nextForwardSpeed) / STEER_REFERENCE_SPEED);
-  const directionSign = nextForwardSpeed >= 0 ? 1 : -1;
-  entry.body.setAngvel({ x: 0, y: driveCommand.steering * STEER_RATE * speedFactor * directionSign, z: 0 }, true);
+  agent.asset.wheels.forEach((wheel, index) => {
+    controller.setWheelEngineForce(index, driveCommand.throttle * tuning.maxEngineForceN);
+    controller.setWheelBrake(index, driveCommand.brake * tuning.maxBrakeForceN);
+    if (wheel.steerable) controller.setWheelSteering(index, nextSteering);
+    // The ground collider from the previous step's contact; the design accepts that one-step lag over re-raycasting here.
+    const groundFriction = controller.wheelGroundObject(index)?.friction() ?? 1;
+    controller.setWheelFrictionSlip(index, tuning.wheelFrictionSlip * groundFriction);
+  });
+  controller.updateVehicle(FIXED_STEP);
 }
 
 function collectTransforms(): AgentTransform[] {
@@ -333,10 +368,16 @@ function collectTransforms(): AgentTransform[] {
     const rot = entry.body.rotation();
     const heading = 2 * Math.atan2(rot.y, rot.w);
     const offset = rotate(entry.localCenter.x, entry.localCenter.z, heading);
+    const controller = entry.controller;
+    const wheels = controller ? Array.from({ length: entry.wheelCount }, (_, index) => ({
+      steeringRadians: controller.wheelSteering(index) ?? 0,
+      rotationRadians: controller.wheelRotation(index) ?? 0
+    })) : undefined;
     transforms.push({
       id,
       position: { x: translation.x - offset.x, y: translation.y - entry.localCenter.y, z: translation.z - offset.z },
-      headingRadians: heading
+      headingRadians: heading,
+      ...(wheels ? { wheels } : {})
     });
   }
   return transforms;

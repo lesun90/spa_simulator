@@ -25,6 +25,8 @@ export interface AgentTransform {
   readonly id: string;
   readonly position: Vector3Value;
   readonly headingRadians: number;
+  /** Per-wheel steer/spin angles for bodies driven by a wheel controller, index-paired with `agent.asset.wheels`. */
+  readonly wheels?: readonly { readonly steeringRadians: number; readonly rotationRadians: number }[];
 }
 
 export interface PlaybackSnapshot {
