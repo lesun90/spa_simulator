@@ -103,7 +103,7 @@ export class PublishedScenes {
 
 function metadataFrom(value: unknown, diagnostics: string[]): {
   name?: string;
-  optional: { description?: string; sceneSize?: number; cellSize?: number; seed?: number; roadWidthMeters?: number };
+  optional: { description?: string; sceneSize?: number; cellSize?: number; seed?: number; roadWidthMeters?: number; materials?: readonly string[] };
 } {
   if (value === undefined) return { optional: {} };
   if (!value || typeof value !== "object" || Array.isArray(value)) {
@@ -117,6 +117,7 @@ function metadataFrom(value: unknown, diagnostics: string[]): {
   const cellSize = optionalPositiveNumber(record.cellSize, "cellSize", diagnostics);
   const seed = optionalSeed(record.seed, diagnostics);
   const roadWidthMeters = optionalPositiveNumber(record.roadWidthMeters, "roadWidthMeters", diagnostics);
+  const materials = optionalStringArray(record.materials, "materials", diagnostics);
   return {
     ...(name ? { name } : {}),
     optional: {
@@ -124,7 +125,8 @@ function metadataFrom(value: unknown, diagnostics: string[]): {
       ...(sceneSize !== undefined ? { sceneSize } : {}),
       ...(cellSize !== undefined ? { cellSize } : {}),
       ...(seed !== undefined ? { seed } : {}),
-      ...(roadWidthMeters !== undefined ? { roadWidthMeters } : {})
+      ...(roadWidthMeters !== undefined ? { roadWidthMeters } : {}),
+      ...(materials !== undefined ? { materials } : {})
     }
   };
 }
@@ -153,5 +155,12 @@ function optionalSeed(value: unknown, diagnostics: string[]): number | undefined
   if (value === undefined) return undefined;
   if (typeof value === "number" && Number.isInteger(value) && value >= 0 && value <= 0xffffffff) return value;
   diagnostics.push("Manifest metadata.seed must be an unsigned 32-bit integer when present.");
+  return undefined;
+}
+
+function optionalStringArray(value: unknown, name: string, diagnostics: string[]): readonly string[] | undefined {
+  if (value === undefined) return undefined;
+  if (Array.isArray(value) && value.every((item) => typeof item === "string" && item.trim())) return value;
+  diagnostics.push(`Manifest metadata.${name} must be an array of non-empty strings when present.`);
   return undefined;
 }

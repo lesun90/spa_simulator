@@ -8,6 +8,7 @@ import { canonicalJson } from "../src/environment/manifestEncoder";
 import { validateEnvironmentPackage } from "../src/environment/packageValidator";
 import { buildSceneRecipe } from "../src/environment/sceneRecipe";
 import type { EnvironmentManifest } from "../src/environment/types";
+import { packMaterials } from "../src/wfc/metadata/packCatalog";
 import type { createEnvironmentPackageStore } from "./environmentPackageStore";
 import { safeId } from "./sceneStore";
 
@@ -61,7 +62,8 @@ export function createEnvironmentExportCache() {
           ...(scene.grid.width === scene.grid.depth ? { sceneSize: scene.grid.width } : {}),
           ...(Number.isFinite(scene.grid.cellSize) ? { cellSize: scene.grid.cellSize } : {}),
           ...(generationRuns.length === 1 ? { seed: generationRuns[0].seed } : {}),
-          ...(scene.roadWidth > 0 ? { roadWidthMeters: scene.roadWidth } : {})
+          ...(scene.roadWidth > 0 ? { roadWidthMeters: scene.roadWidth } : {}),
+          ...(packMaterials.length ? { materials: packMaterials } : {})
         }
       };
       return { status: "ok", exportId, manifest, manifestJson: canonicalJson(manifest), metrics: compiled.metrics };

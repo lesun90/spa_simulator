@@ -14,6 +14,7 @@ export interface SceneChoice {
   readonly cellSize?: number;
   readonly seed?: number;
   readonly roadWidthMeters?: number;
+  readonly materials?: readonly string[];
   readonly reference: SceneReference;
   readonly thumbnailUrl: string | null;
   readonly available: boolean;

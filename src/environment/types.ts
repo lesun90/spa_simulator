@@ -93,6 +93,7 @@ export interface EnvironmentManifestMetadata {
   cellSize?: number;
   seed?: number;
   roadWidthMeters?: number;
+  materials?: readonly string[];
 }
 
 export interface EnvironmentManifestChunk {
