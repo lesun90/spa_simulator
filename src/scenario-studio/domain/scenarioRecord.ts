@@ -1,4 +1,4 @@
-import { validateAgentDraft, type AgentAssetReference, type AgentSnapshot, type Vector3Value, type WheelDescriptor } from "./agent";
+import { validateAgentDraft, type AgentAssetReference, type AgentSnapshot, type Vector3Value, type VehicleTuning, type WheelDescriptor } from "./agent";
 import type { SceneReference } from "./scene";
 
 export const SCENARIO_RECORD_VERSION = 1 as const;
@@ -110,6 +110,7 @@ function validateAgentSnapshot(value: unknown): AgentSnapshot {
     scale: numeric(source.scale, "Agent scale"),
     pose: { position: vector(pose.position, "Agent position"), headingRadians: numeric(pose.headingRadians, "Agent heading"), support },
     mass: numeric(source.mass, "Agent mass"),
+    vehicle: source.vehicle === null || source.vehicle === undefined ? null : validateVehicleTuningRecord(source.vehicle),
     collision: { center: vector(collision.center, "Collision center"), halfExtents: vector(collision.halfExtents, "Collision half-extents") },
     placement: { maxSlopeDegrees: numeric(placement.maxSlopeDegrees, "Maximum placement slope"), clearance: numeric(placement.clearance, "Placement clearance") },
     inputEligible: source.inputEligible
@@ -139,6 +140,21 @@ function validateAgentAsset(value: unknown): AgentAssetReference {
     bounds: { min: boundsMin, max: boundsMax },
     collision: { center: vector(collision.center, "Agent asset collision center"), halfExtents: collisionHalfExtents },
     ...(wheels ? { wheels } : {})
+  });
+}
+
+function validateVehicleTuningRecord(value: unknown): VehicleTuning {
+  const source = record(value, "Vehicle tuning");
+  return Object.freeze({
+    maxEngineForceN: positive(source.maxEngineForceN, "Vehicle max engine force"),
+    maxBrakeForceN: positive(source.maxBrakeForceN, "Vehicle max brake force"),
+    maxSteeringAngleDegrees: numeric(source.maxSteeringAngleDegrees, "Vehicle max steering angle"),
+    steeringSpeedDegreesPerSecond: positive(source.steeringSpeedDegreesPerSecond, "Vehicle steering speed"),
+    suspensionStiffness: positive(source.suspensionStiffness, "Vehicle suspension stiffness"),
+    suspensionDamping: positive(source.suspensionDamping, "Vehicle suspension damping"),
+    suspensionRestLength: positive(source.suspensionRestLength, "Vehicle suspension rest length"),
+    suspensionMaxTravel: positive(source.suspensionMaxTravel, "Vehicle suspension max travel"),
+    wheelFrictionSlip: positive(source.wheelFrictionSlip, "Vehicle wheel friction slip")
   });
 }
 

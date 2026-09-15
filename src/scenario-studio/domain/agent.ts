@@ -56,6 +56,30 @@ export interface AgentPose {
   readonly support?: AgentSupportReference | null;
 }
 
+export interface VehicleTuning {
+  readonly maxEngineForceN: number;
+  readonly maxBrakeForceN: number;
+  readonly maxSteeringAngleDegrees: number;
+  readonly steeringSpeedDegreesPerSecond: number;
+  readonly suspensionStiffness: number;
+  readonly suspensionDamping: number;
+  readonly suspensionRestLength: number;
+  readonly suspensionMaxTravel: number;
+  readonly wheelFrictionSlip: number;
+}
+
+const DEFAULT_VEHICLE_TUNING: VehicleTuning = Object.freeze({
+  maxEngineForceN: 4000,
+  maxBrakeForceN: 6000,
+  maxSteeringAngleDegrees: 35,
+  steeringSpeedDegreesPerSecond: 120,
+  suspensionStiffness: 24,
+  suspensionDamping: 2.3,
+  suspensionRestLength: 0.12,
+  suspensionMaxTravel: 0.2,
+  wheelFrictionSlip: 1.6
+});
+
 export type AgentSupportReference =
   | { readonly kind: "scene"; readonly id: string }
   | { readonly kind: "agent"; readonly id: string };
@@ -66,6 +90,7 @@ export interface AgentDraft {
   readonly scale: number;
   readonly pose: AgentPose;
   readonly mass: number;
+  readonly vehicle: VehicleTuning | null;
   readonly collision: {
     readonly center: Vector3Value;
     readonly halfExtents: Vector3Value;
@@ -107,6 +132,7 @@ export function createAgentDraft(asset: AgentAssetReference, roadWidthMeters = 0
     scale,
     pose: { position: { x: 0, y: 0, z: 0 }, headingRadians: 0, support: null },
     mass: 1200,
+    vehicle: asset.category === "vehicles" ? DEFAULT_VEHICLE_TUNING : null,
     collision: asset.collision,
     placement: { maxSlopeDegrees: 35, clearance: 0.03 },
     inputEligible: true
@@ -127,6 +153,7 @@ export function validateAgentDraft(draft: AgentDraft): AgentDraft {
   if (!Number.isFinite(draft.placement.maxSlopeDegrees) || draft.placement.maxSlopeDegrees < 0 || draft.placement.maxSlopeDegrees >= 90) {
     throw new Error("Maximum placement slope must be between 0 and 90 degrees.");
   }
+  if (draft.vehicle) validateVehicleTuning(draft.vehicle);
   return freezeDraft({ ...draft, name: draft.name.trim() });
 }
 
@@ -135,6 +162,7 @@ export function freezeDraft(draft: AgentDraft): AgentDraft {
     name: draft.name,
     scale: draft.scale,
     mass: draft.mass,
+    vehicle: draft.vehicle ? Object.freeze({ ...draft.vehicle }) : null,
     inputEligible: draft.inputEligible,
     asset: Object.freeze({ ...draft.asset }),
     pose: Object.freeze({
@@ -268,4 +296,18 @@ function finiteVector(value: Vector3Value, label: string): void {
 
 function positiveVector(value: Vector3Value, label: string): void {
   positive(value.x, label); positive(value.y, label); positive(value.z, label);
+}
+
+function validateVehicleTuning(vehicle: VehicleTuning): void {
+  positive(vehicle.maxEngineForceN, "Vehicle max engine force");
+  positive(vehicle.maxBrakeForceN, "Vehicle max brake force");
+  if (!Number.isFinite(vehicle.maxSteeringAngleDegrees) || vehicle.maxSteeringAngleDegrees <= 0 || vehicle.maxSteeringAngleDegrees >= 90) {
+    throw new Error("Vehicle max steering angle must be between 0 and 90 degrees.");
+  }
+  positive(vehicle.steeringSpeedDegreesPerSecond, "Vehicle steering speed");
+  positive(vehicle.suspensionStiffness, "Vehicle suspension stiffness");
+  positive(vehicle.suspensionDamping, "Vehicle suspension damping");
+  positive(vehicle.suspensionRestLength, "Vehicle suspension rest length");
+  positive(vehicle.suspensionMaxTravel, "Vehicle suspension max travel");
+  positive(vehicle.wheelFrictionSlip, "Vehicle wheel friction slip");
 }
