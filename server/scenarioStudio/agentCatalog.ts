@@ -1,14 +1,25 @@
 import { createHash } from "node:crypto";
 import { readdir, readFile, realpath } from "node:fs/promises";
 import { basename, extname, join, relative, resolve, sep } from "node:path";
-import type { AgentAssetReference, AgentChoice, Vector3Value } from "../../src/scenario-studio/domain/agent";
+import type { AgentAssetReference, AgentChoice, Vector3Value, WheelDescriptor } from "../../src/scenario-studio/domain/agent";
 import { findDuplicateIds, readJsonAssetMetadata, type AssetMetadata } from "../assetCatalog";
+
+interface VehicleWheelMetadata {
+  id?: unknown;
+  wheelNode?: unknown;
+  steeringNode?: unknown;
+  suspensionNode?: unknown;
+  position?: unknown;
+  radius?: unknown;
+  steerable?: unknown;
+}
 
 interface VehicleMetadata {
   model?: unknown;
   units?: unknown;
   bounds?: { min?: unknown; max?: unknown };
   collision?: { type?: unknown; center?: unknown; halfExtents?: unknown };
+  wheels?: unknown;
 }
 
 const sha256 = (bytes: Uint8Array) => createHash("sha256").update(bytes).digest("hex");
@@ -77,6 +88,7 @@ export class PublishedAgents {
     if (vehicle.collision?.type !== "box") diagnostics.push("Only box agent collision metadata is supported.");
     const collisionCenter = vector(vehicle.collision?.center, "Collision center", diagnostics, { x: 0, y: 0.5, z: 0 });
     const collisionHalfExtents = vector(vehicle.collision?.halfExtents, "Collision half-extents", diagnostics, { x: 0.5, y: 0.5, z: 0.5 }, true);
+    const wheels = Array.isArray(vehicle.wheels) ? vehicle.wheels.map((item, index) => wheelDescriptor(item as VehicleWheelMetadata, index, diagnostics)).filter((item): item is WheelDescriptor => item !== null) : undefined;
     const id = typeof assetMetadata.id === "string" && assetMetadata.id.trim() ? assetMetadata.id.trim() : key.replaceAll("/", ".");
     if (typeof assetMetadata.id !== "string" || !assetMetadata.id.trim()) diagnostics.push("asset.json id is required.");
     const label = typeof assetMetadata.label === "string" && assetMetadata.label.trim() ? assetMetadata.label.trim() : basename(folder).replace(/[-_]/g, " ");
@@ -91,7 +103,8 @@ export class PublishedAgents {
       metadataSha256: sha256(Buffer.concat([assetBytes ?? Buffer.alloc(0), vehicleBytes ?? Buffer.alloc(0)])),
       unitsPerMeter: 1,
       bounds: { min: boundsMin, max: boundsMax },
-      collision: { center: collisionCenter, halfExtents: collisionHalfExtents }
+      collision: { center: collisionCenter, halfExtents: collisionHalfExtents },
+      ...(wheels?.length ? { wheels } : {})
     };
     return { asset, available: diagnostics.length === 0, diagnostics };
   }
@@ -103,6 +116,18 @@ function vector(value: unknown, label: string, diagnostics: string[], fallback: 
     return fallback;
   }
   return { x: value[0], y: value[1], z: value[2] };
+}
+
+function wheelDescriptor(value: VehicleWheelMetadata, index: number, diagnostics: string[]): WheelDescriptor | null {
+  const label = `Vehicle wheel #${index}`;
+  if (typeof value.id !== "string" || !value.id.trim()) { diagnostics.push(`${label} id is required.`); return null; }
+  if (typeof value.wheelNode !== "string" || !value.wheelNode.trim()) { diagnostics.push(`${label} wheelNode is required.`); return null; }
+  if (typeof value.steeringNode !== "string" || !value.steeringNode.trim()) { diagnostics.push(`${label} steeringNode is required.`); return null; }
+  if (typeof value.suspensionNode !== "string" || !value.suspensionNode.trim()) { diagnostics.push(`${label} suspensionNode is required.`); return null; }
+  const position = vector(value.position, `${label} position`, diagnostics, { x: 0, y: 0.3, z: 0 });
+  if (typeof value.radius !== "number" || !Number.isFinite(value.radius) || value.radius <= 0) { diagnostics.push(`${label} radius must be a positive number.`); return null; }
+  if (typeof value.steerable !== "boolean") { diagnostics.push(`${label} steerable must be a boolean.`); return null; }
+  return { id: value.id, wheelNode: value.wheelNode, steeringNode: value.steeringNode, suspensionNode: value.suspensionNode, position, radius: value.radius, steerable: value.steerable };
 }
 
 function unavailable(choice: AgentChoice, diagnostic: string): AgentChoice {

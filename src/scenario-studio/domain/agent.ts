@@ -16,6 +16,16 @@ export interface PlacementHit {
   readonly sceneRevision: number;
 }
 
+export interface WheelDescriptor {
+  readonly id: string;
+  readonly wheelNode: string;
+  readonly steeringNode: string;
+  readonly suspensionNode: string;
+  readonly position: Vector3Value;
+  readonly radius: number;
+  readonly steerable: boolean;
+}
+
 export interface AgentAssetReference {
   readonly id: string;
   readonly key: string;
@@ -31,6 +41,7 @@ export interface AgentAssetReference {
     readonly center: Vector3Value;
     readonly halfExtents: Vector3Value;
   };
+  readonly wheels?: readonly WheelDescriptor[];
 }
 
 export interface AgentChoice {

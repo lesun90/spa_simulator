@@ -1,4 +1,4 @@
-import { validateAgentDraft, type AgentAssetReference, type AgentSnapshot, type Vector3Value } from "./agent";
+import { validateAgentDraft, type AgentAssetReference, type AgentSnapshot, type Vector3Value, type WheelDescriptor } from "./agent";
 import type { SceneReference } from "./scene";
 
 export const SCENARIO_RECORD_VERSION = 1 as const;
@@ -125,6 +125,7 @@ function validateAgentAsset(value: unknown): AgentAssetReference {
   const collisionHalfExtents = vector(collision.halfExtents, "Agent asset collision half-extents");
   if (boundsMax.x <= boundsMin.x || boundsMax.y <= boundsMin.y || boundsMax.z <= boundsMin.z) throw new Error("Agent asset bounds must have positive dimensions.");
   if (collisionHalfExtents.x <= 0 || collisionHalfExtents.y <= 0 || collisionHalfExtents.z <= 0) throw new Error("Agent asset collision half-extents must be positive.");
+  const wheels = source.wheels === undefined ? undefined : validateWheelList(source.wheels);
   return Object.freeze({
     id: identity(source.id, "Agent asset ID"),
     key: requiredText(source.key, "Agent asset key", 512),
@@ -136,7 +137,26 @@ function validateAgentAsset(value: unknown): AgentAssetReference {
     metadataSha256: hash(source.metadataSha256, "Agent metadata hash"),
     unitsPerMeter: positive(source.unitsPerMeter, "Agent units per meter"),
     bounds: { min: boundsMin, max: boundsMax },
-    collision: { center: vector(collision.center, "Agent asset collision center"), halfExtents: collisionHalfExtents }
+    collision: { center: vector(collision.center, "Agent asset collision center"), halfExtents: collisionHalfExtents },
+    ...(wheels ? { wheels } : {})
+  });
+}
+
+function validateWheelList(value: unknown): WheelDescriptor[] {
+  if (!Array.isArray(value)) throw new Error("Agent asset wheels must be an array.");
+  return value.map(validateWheel);
+}
+
+function validateWheel(value: unknown): WheelDescriptor {
+  const source = record(value, "Agent asset wheel");
+  return Object.freeze({
+    id: requiredText(source.id, "Wheel ID", 32),
+    wheelNode: requiredText(source.wheelNode, "Wheel node name", 128),
+    steeringNode: requiredText(source.steeringNode, "Steering node name", 128),
+    suspensionNode: requiredText(source.suspensionNode, "Suspension node name", 128),
+    position: vector(source.position, "Wheel position"),
+    radius: positive(source.radius, "Wheel radius"),
+    steerable: typeof source.steerable === "boolean" ? source.steerable : (() => { throw new Error("Wheel steerable flag must be a boolean."); })()
   });
 }
 
