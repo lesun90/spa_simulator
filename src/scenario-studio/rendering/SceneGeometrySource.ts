@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import type { SceneGeometryDescription, TriangleMeshDescription } from "../physics/PhysicsWorld";
+import { normalizeMaterialToken } from "../domain/materialFriction";
 
 /** Extracts transformed, meter-scaled solid triangles without leaking Three.js types across the adapter boundary. */
 export class SceneGeometrySource {
@@ -43,9 +44,11 @@ function extract(mesh: THREE.Mesh, matrix: THREE.Matrix4, label: string, water: 
   const vertices: number[] = [];
   const indices: number[] = [];
   const point = new THREE.Vector3();
+  let material = "unnamed";
   for (let triangle = 0; triangle < triangleCount; triangle++) {
     const first = triangle * 3;
     if (isWaterTriangle(mesh, first) !== water) continue;
+    if (material === "unnamed") material = triangleMaterialName(mesh, first);
     for (let corner = 0; corner < 3; corner++) {
       const vertexIndex = sourceIndices ? sourceIndices.getX(first + corner) : first + corner;
       point.fromBufferAttribute(position, vertexIndex).applyMatrix4(matrix);
@@ -54,7 +57,14 @@ function extract(mesh: THREE.Mesh, matrix: THREE.Matrix4, label: string, water: 
     }
   }
   if (!indices.length) return null;
-  return { label, vertices: new Float32Array(vertices), indices: new Uint32Array(indices) };
+  return { label, vertices: new Float32Array(vertices), indices: new Uint32Array(indices), material };
+}
+
+function triangleMaterialName(mesh: THREE.Mesh, indexOffset: number): string {
+  const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+  const group = mesh.geometry.groups.find((candidate) => indexOffset >= candidate.start && indexOffset < candidate.start + candidate.count);
+  const material = materials[group?.materialIndex ?? 0];
+  return normalizeMaterialToken(material?.name || mesh.name || "unnamed");
 }
 
 function isWaterTriangle(mesh: THREE.Mesh, indexOffset: number): boolean {

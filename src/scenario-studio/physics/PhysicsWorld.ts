@@ -5,6 +5,7 @@ export interface TriangleMeshDescription {
   readonly label: string;
   readonly vertices: Float32Array;
   readonly indices: Uint32Array;
+  readonly material: string;
 }
 
 /** Neutral, meter-scaled scene geometry shared by physics adapters. */
