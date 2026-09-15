@@ -92,6 +92,7 @@ export interface EnvironmentManifestMetadata {
   sceneSize?: number;
   cellSize?: number;
   seed?: number;
+  roadWidthMeters?: number;
 }
 
 export interface EnvironmentManifestChunk {

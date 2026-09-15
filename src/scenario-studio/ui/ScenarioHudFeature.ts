@@ -40,6 +40,9 @@ export class ScenarioHudFeature {
   private readonly useButton: Button;
   private readonly resetButton: Button;
   private readonly scenarioNameField: TextField;
+  private readonly roadWidthField: TextField;
+  /** Session-only road-width edits, keyed by scene reference key; unset scenes fall back to their authored metadata. */
+  private readonly roadWidthOverrides = new Map<string, number>();
   private readonly newButton: Button;
   private readonly openButton: Button;
   private readonly saveButton: Button;
@@ -113,10 +116,11 @@ export class ScenarioHudFeature {
       detailName: label(right, 18, 64, 14, "600", theme.text.css, "No scene selected", 2),
       detailDescription: label(right, 18, 109, 12, "500", theme.textMuted.css, "Select a scene in the browser to inspect its metadata.", 3),
       detailMetadata: label(right, 18, 171, 11.5, "600", theme.text.css, "", 3),
-      detailKey: label(right, 18, 238, 11.5, "500", theme.textMuted.css, "", 2),
-      detailVersion: label(right, 18, 270, 11.5, "500", theme.textMuted.css, ""),
-      detailHash: label(right, 18, 296, 11.5, "500", theme.textMuted.css, "", 2),
-      diagnostic: label(right, 18, 350, 11.5, "500", theme.diagnostic.css, "", 5),
+      roadWidthLabel: label(right, 18, 222, 11.5, "600", theme.textMutedStrong.css, "Road width (m)"),
+      detailKey: label(right, 18, 255, 11.5, "500", theme.textMuted.css, "", 2),
+      detailVersion: label(right, 18, 287, 11.5, "500", theme.textMuted.css, ""),
+      detailHash: label(right, 18, 313, 11.5, "500", theme.textMuted.css, "", 2),
+      diagnostic: label(right, 18, 367, 11.5, "500", theme.diagnostic.css, "", 5),
       scenarioState: new HudText(scenarioStateFrame(this.layout), { size: 11, weight: "600", color: theme.textMutedStrong.css }),
       playbackState: new HudText(playbackStateFrame(this.layout), { size: 11, weight: "600", color: theme.textMutedStrong.css }),
       modalTitle: label(modalRect(size), 25, 28, 18, "700", theme.text.css, "Replace current scene?"),
@@ -146,8 +150,13 @@ export class ScenarioHudFeature {
     this.resetPlaybackButton = new Button(playbackButtonRect(this.layout, 2), interaction, { label: "Reset", onClick: () => this.scenarioActions.reset() });
     const leftDivider = new Panel({ x: left.x, y: 40, width: left.width, height: 1 }, { fill: theme.borderSubtle.hex, radius: 0 });
     const rightDivider = new Panel({ x: right.x, y: 40, width: right.width, height: 1 }, { fill: theme.borderSubtle.hex, radius: 0 });
+    this.roadWidthField = new TextField(this.roadWidthFieldRect(), interaction, {
+      numeric: true,
+      placeholder: "0",
+      onCommit: (value) => this.commitRoadWidth(value)
+    }, "0");
     this.left.root.add(leftDivider.root, ...Object.entries(this.labels).filter(([key]) => ["leftTitle", "activeHeader", "active", "candidateHeader", "candidate", "status"].includes(key)).map(([, value]) => value.root), this.useButton.root);
-    this.right.root.add(rightDivider.root, ...Object.entries(this.labels).filter(([key]) => ["inspectorTitle", "detailName", "detailDescription", "detailMetadata", "detailKey", "detailVersion", "detailHash", "diagnostic"].includes(key)).map(([, value]) => value.root));
+    this.right.root.add(rightDivider.root, ...Object.entries(this.labels).filter(([key]) => ["inspectorTitle", "detailName", "detailDescription", "detailMetadata", "roadWidthLabel", "detailKey", "detailVersion", "detailHash", "diagnostic"].includes(key)).map(([, value]) => value.root), this.roadWidthField.root);
     this.dividers = [leftDivider, rightDivider];
 
     this.backdrop = new Panel({ x: 0, y: 0, width: size.width, height: size.height }, { fill: 0x0d1520, fillOpacity: 0.55, radius: 0, z: 4.5 });
@@ -177,6 +186,12 @@ export class ScenarioHudFeature {
   private resetRect(): Rect {
     const r = this.layout.viewport;
     return { x: r.x + r.width - 44, y: 10, width: 34, height: 34 };
+  }
+
+  private roadWidthFieldRect(): Rect {
+    const r = this.layout.inspectorPanel;
+    const labelWidth = 100;
+    return { x: r.x + 18 + labelWidth, y: r.y + 216, width: Math.max(r.width - 36 - labelWidth, 40), height: 26 };
   }
 
   private sceneTabRect(): Rect {
@@ -310,6 +325,7 @@ export class ScenarioHudFeature {
     else this.agentBrowser.update(dt);
     this.agentInspector.update(dt);
     this.scenarioNameField.update(dt);
+    this.roadWidthField.update(dt);
   }
 
   invalidate(): void {
@@ -326,8 +342,25 @@ export class ScenarioHudFeature {
   private selectAgentAsset(choice: AgentChoice): void {
     if (this.busy || this.pending) return;
     this.agentBrowser.setSelected(choice.asset.id);
-    this.agentInspector.selectNew(choice);
+    this.agentInspector.selectNew(choice, this.activeRoadWidthMeters());
     this.invalidate();
+  }
+
+  private activeRoadWidthMeters(): number {
+    const choice = this.choices.find((candidate) => sameSceneReference(candidate.reference, this.active));
+    return choice ? this.roadWidthOverrides.get(choice.reference.key) ?? choice.roadWidthMeters ?? 0 : 0;
+  }
+
+  private candidateRoadWidthMeters(): number {
+    if (!this.candidate) return 0;
+    return this.roadWidthOverrides.get(this.candidate.reference.key) ?? this.candidate.roadWidthMeters ?? 0;
+  }
+
+  private commitRoadWidth(value: string): void {
+    if (!this.candidate) return;
+    const parsed = Number.parseFloat(value);
+    if (Number.isFinite(parsed) && parsed >= 0) this.roadWidthOverrides.set(this.candidate.reference.key, parsed);
+    this.roadWidthField.setValue(String(this.candidateRoadWidthMeters()));
   }
 
   private armPlacement(draft: AgentDraft): void {
@@ -337,7 +370,7 @@ export class ScenarioHudFeature {
   }
 
   private dragAgent(choice: AgentChoice, phase: "start" | "move" | "drop", x: number, y: number): void {
-    if (phase === "start") this.armPlacement(this.agentInspector.currentPlacementDraft() ?? createAgentDraft(choice.asset));
+    if (phase === "start") this.armPlacement(this.agentInspector.currentPlacementDraft() ?? createAgentDraft(choice.asset, this.activeRoadWidthMeters()));
     if (phase === "drop" && this.placementDraft) {
       if (this.interaction.isPointerOverInteractiveLayer(x, y)) this.cancelPlacement();
       else this.onPlacementDropped(this.placementDraft, x, y);
@@ -453,6 +486,9 @@ export class ScenarioHudFeature {
     this.labels.detailName.setText(this.candidate?.label ?? "No scene selected");
     this.labels.detailDescription.setText(this.candidate?.description ?? (this.candidate ? "" : "Select a scene in the browser to inspect its metadata."));
     this.labels.detailMetadata.setText(this.candidate ? sceneMetadata(this.candidate) : "");
+    this.labels.roadWidthLabel.root.visible = Boolean(this.candidate);
+    this.roadWidthField.root.visible = Boolean(this.candidate);
+    this.roadWidthField.setValue(String(this.candidateRoadWidthMeters()));
     this.labels.detailKey.setText(this.candidate ? `Package: ${this.candidate.reference.key === "." ? "root" : this.candidate.reference.key}` : "");
     this.labels.detailVersion.setText(this.candidate ? `Format version: ${this.candidate.reference.formatVersion}` : "");
     this.labels.detailHash.setText(this.candidate ? `Model SHA-256: ${this.candidate.reference.modelSha256.slice(0, 18)}…` : "");
@@ -487,10 +523,12 @@ export class ScenarioHudFeature {
       ["candidateHeader", 156, this.layout.leftPanel], ["candidate", 182, this.layout.leftPanel],
       ["status", this.layout.leftPanel.height - 120, this.layout.leftPanel], ["inspectorTitle", 12, this.layout.inspectorPanel],
       ["detailName", 64, this.layout.inspectorPanel], ["detailDescription", 109, this.layout.inspectorPanel],
-      ["detailMetadata", 171, this.layout.inspectorPanel], ["detailKey", 238, this.layout.inspectorPanel],
-      ["detailVersion", 270, this.layout.inspectorPanel], ["detailHash", 296, this.layout.inspectorPanel],
-      ["diagnostic", 350, this.layout.inspectorPanel]
+      ["detailMetadata", 171, this.layout.inspectorPanel], ["roadWidthLabel", 222, this.layout.inspectorPanel],
+      ["detailKey", 255, this.layout.inspectorPanel],
+      ["detailVersion", 287, this.layout.inspectorPanel], ["detailHash", 313, this.layout.inspectorPanel],
+      ["diagnostic", 367, this.layout.inspectorPanel]
     ] as const) this.labels[name].setFrame({ x: panel.x + 18, y: panel.y + y, width: Math.max(panel.width - 36, 1), maxLines: name === "status" ? 4 : name === "diagnostic" ? 5 : 3 });
+    this.roadWidthField.setRect(this.roadWidthFieldRect());
     this.useButton.setRect(this.useRect());
     this.resetButton.setRect(this.resetRect());
     this.scenesTab.setRect(this.sceneTabRect());
@@ -520,6 +558,7 @@ export class ScenarioHudFeature {
     this.useButton.dispose();
     this.resetButton.dispose();
     this.scenarioNameField.dispose();
+    this.roadWidthField.dispose();
     this.newButton.dispose();
     this.openButton.dispose();
     this.saveButton.dispose();

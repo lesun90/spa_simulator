@@ -1,5 +1,6 @@
 import type { SceneReference } from "./scene";
 import type { AgentSnapshot } from "./agent";
+import { createId } from "../../editor-core/scene";
 import { freezeRecord, SCENARIO_RECORD_VERSION, validateScenarioRecord, type ScenarioRecord } from "./scenarioRecord";
 
 /** Owns persisted scenario identity, authored state, and dirty-state transitions. */
@@ -80,5 +81,5 @@ export function newScenarioRecord(name = "Untitled scenario", id = createScenari
 }
 
 function createScenarioId(): string {
-  return `scenario-${globalThis.crypto.randomUUID()}`;
+  return createId("scenario");
 }

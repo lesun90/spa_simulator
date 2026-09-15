@@ -60,7 +60,8 @@ export function createEnvironmentExportCache() {
           ...(scene.description ? { description: scene.description } : {}),
           ...(scene.grid.width === scene.grid.depth ? { sceneSize: scene.grid.width } : {}),
           ...(Number.isFinite(scene.grid.cellSize) ? { cellSize: scene.grid.cellSize } : {}),
-          ...(generationRuns.length === 1 ? { seed: generationRuns[0].seed } : {})
+          ...(generationRuns.length === 1 ? { seed: generationRuns[0].seed } : {}),
+          ...(scene.roadWidth > 0 ? { roadWidthMeters: scene.roadWidth } : {})
         }
       };
       return { status: "ok", exportId, manifest, manifestJson: canonicalJson(manifest), metrics: compiled.metrics };

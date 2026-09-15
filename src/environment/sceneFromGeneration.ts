@@ -1,6 +1,7 @@
 import { defaultSurfaceAppearance, DEFAULT_BACKGROUND_COLOR, DEFAULT_GROUND_COLOR, type Scene, type SceneObject } from "../editor-core/scene";
 import { DEFAULT_WFC_TILE_SIZE, type GenerateWfcLayoutRequest } from "../wfc/sceneLayout";
 import type { GenerateWfcSceneResult } from "../wfc/sceneGenerator";
+import { roadWidthFraction } from "../wfc/metadata/packCatalog";
 
 type SolvedGeneration = Extract<GenerateWfcSceneResult, { status: "solved" }>;
 
@@ -13,6 +14,7 @@ export function sceneFromGeneration(result: SolvedGeneration, request: GenerateW
     name: `cli-${result.seed}`,
     description: "",
     grid: { cellSize: tileWidth, width: request.width * tileWidth, depth: request.depth * tileDepth },
+    roadWidth: result.roadScene && roadWidthFraction !== null ? roadWidthFraction * tileWidth : 0,
     background: defaultSurfaceAppearance(DEFAULT_BACKGROUND_COLOR),
     ground: defaultSurfaceAppearance(DEFAULT_GROUND_COLOR),
     objects: result.objects as SceneObject[],

@@ -34,8 +34,8 @@ const ROW_LABEL_WIDTH = 76;
 
 // One "header + dropdown + value row" surface-appearance block (used for Background and Ground).
 const APPEARANCE_BLOCK_HEIGHT = HEADER_HEIGHT + HEADER_GAP + CONTROL_HEIGHT + STACK_GAP + CONTROL_HEIGHT;
-// The grid block: header + three labeled rows (cell size, scene size, placement).
-const GRID_BLOCK_HEIGHT = HEADER_HEIGHT + HEADER_GAP + CONTROL_HEIGHT + STACK_GAP + CONTROL_HEIGHT + STACK_GAP + CONTROL_HEIGHT;
+// The grid block: header + four labeled rows (cell size, scene size, road width, placement).
+const GRID_BLOCK_HEIGHT = HEADER_HEIGHT + HEADER_GAP + CONTROL_HEIGHT + STACK_GAP + CONTROL_HEIGHT + STACK_GAP + CONTROL_HEIGHT + STACK_GAP + CONTROL_HEIGHT;
 
 const WFC_BLOCK_HEIGHT = HEADER_HEIGHT + HEADER_GAP + CONTROL_HEIGHT + STACK_GAP + CONTROL_HEIGHT + STACK_GAP + CONTROL_HEIGHT;
 
@@ -77,6 +77,8 @@ export class SceneTabPanel {
   private readonly gridField: TextField;
   private sceneSizeLabel: LabelMesh | null = null;
   private readonly sceneSizeField: TextField;
+  private roadWidthLabel: LabelMesh | null = null;
+  private readonly roadWidthField: TextField;
   private placementLabel: LabelMesh | null = null;
   private readonly placementCellButton: Button;
   private readonly placementFreeButton: Button;
@@ -147,6 +149,14 @@ export class SceneTabPanel {
     );
     this.footerScroll.content.add(this.sceneSizeField.root);
 
+    this.roadWidthField = new TextField(
+      this.roadWidthFieldRect(),
+      interaction,
+      { numeric: true, placeholder: "0", onCommit: (value) => this.commitRoadWidth(value) },
+      formatGridSize(state.scene?.roadWidth ?? 0)
+    );
+    this.footerScroll.content.add(this.roadWidthField.root);
+
     this.placementCellButton = new Button(this.placementCellButtonRect(), interaction, {
       label: "Cell",
       fontSize: 11.5,
@@ -200,6 +210,7 @@ export class SceneTabPanel {
     this.groundEditor.refresh();
     this.gridField.setValue(formatGridSize(this.state.scene?.grid.cellSize ?? 1));
     this.sceneSizeField.setValue(formatGridSize(this.state.scene?.grid.width ?? 10));
+    this.roadWidthField.setValue(formatGridSize(this.state.scene?.roadWidth ?? 0));
   }
 
   private refreshSelection() {
@@ -301,8 +312,18 @@ export class SceneTabPanel {
     return { x: field.x - ROW_LABEL_WIDTH, y: field.y, width: ROW_LABEL_WIDTH, height: CONTROL_HEIGHT };
   }
 
-  private placementControlRect(): Rect {
+  private roadWidthFieldRect(): Rect {
     const field = this.sceneSizeFieldRect();
+    return { x: field.x, y: field.y + CONTROL_HEIGHT + STACK_GAP, width: field.width, height: CONTROL_HEIGHT };
+  }
+
+  private roadWidthLabelRect(): Rect {
+    const field = this.roadWidthFieldRect();
+    return { x: field.x - ROW_LABEL_WIDTH, y: field.y, width: ROW_LABEL_WIDTH, height: CONTROL_HEIGHT };
+  }
+
+  private placementControlRect(): Rect {
+    const field = this.roadWidthFieldRect();
     return { x: field.x, y: field.y + CONTROL_HEIGHT + STACK_GAP, width: field.width, height: CONTROL_HEIGHT };
   }
 
@@ -353,12 +374,13 @@ export class SceneTabPanel {
     this.refreshWfcGeneration();
     this.renderRowLabel("cellSizeLabel", "Cell size", this.cellSizeLabelRect());
     this.renderRowLabel("sceneSizeLabel", "Scene size", this.sceneSizeLabelRect());
+    this.renderRowLabel("roadWidthLabel", "Road width", this.roadWidthLabelRect());
     this.renderRowLabel("placementLabel", "Placement", this.placementLabelRect());
     this.refreshPlacementControls();
     this.footerScroll.applyClipping();
   }
 
-  private renderRowLabel(field: "cellSizeLabel" | "sceneSizeLabel" | "placementLabel", text: string, rect: Rect) {
+  private renderRowLabel(field: "cellSizeLabel" | "sceneSizeLabel" | "roadWidthLabel" | "placementLabel", text: string, rect: Rect) {
     const existing = this[field];
     if (existing) {
       this.footerScroll.content.remove(existing);
@@ -461,6 +483,15 @@ export class SceneTabPanel {
     this.sceneSizeField.setValue(formatGridSize(this.state.scene?.grid.width ?? 10));
   }
 
+  private commitRoadWidth(value: string) {
+    const parsed = Number.parseFloat(value);
+    if (Number.isFinite(parsed) && parsed >= 0) {
+      this.state.setRoadWidth(parsed);
+      return;
+    }
+    this.roadWidthField.setValue(formatGridSize(this.state.scene?.roadWidth ?? 0));
+  }
+
   private normalizeWfcSeed() {
     this.wfcSeedField.setValue(String(integer(this.wfcSeedField.getValue(), 1)));
   }
@@ -481,6 +512,7 @@ export class SceneTabPanel {
     if (!this.root.visible) return;
     this.gridField.update(dt);
     this.sceneSizeField.update(dt);
+    this.roadWidthField.update(dt);
   }
 
   setVisible(visible: boolean) {
@@ -497,6 +529,7 @@ export class SceneTabPanel {
     this.groundEditor.setRects(this.groundDropdownRect(), this.groundValueRect());
     this.gridField.setRect(this.gridFieldRect());
     this.sceneSizeField.setRect(this.sceneSizeFieldRect());
+    this.roadWidthField.setRect(this.roadWidthFieldRect());
     this.placementCellButton.setRect(this.placementCellButtonRect());
     this.placementFreeButton.setRect(this.placementFreeButtonRect());
     this.wfcRandomSeedCheckbox.setRect(this.wfcRandomSeedCheckboxRect());
@@ -524,6 +557,8 @@ export class SceneTabPanel {
     this.gridField.dispose();
     this.sceneSizeLabel?.material.dispose();
     this.sceneSizeField.dispose();
+    this.roadWidthLabel?.material.dispose();
+    this.roadWidthField.dispose();
     this.placementLabel?.material.dispose();
     this.placementCellButton.dispose();
     this.placementFreeButton.dispose();

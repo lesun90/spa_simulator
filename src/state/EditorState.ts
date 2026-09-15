@@ -24,6 +24,7 @@ import {
 } from "../wfc/sceneLayout";
 import { createBrowserEditorStateDependencies } from "./browserEditorStateDependencies";
 import type { EditorStateDependencies, SceneSummary } from "./EditorStateDependencies";
+import { roadWidthFraction } from "../wfc/metadata/packCatalog";
 
 export type EditorTopic =
   | "scene"
@@ -326,6 +327,11 @@ export class EditorState {
       this.setWfcProgress({ status: "placing", cells: result.objects.length });
       this.history = executeCommand(this.history, replaceGeneratedLayoutCommand(result.objects, isGeneratedWfcObject));
       this.selectedObjectId = result.objects[0]?.id ?? null;
+      // Prepopulate the road-width default from the pack's known road-surface fraction, without
+      // clobbering a value the scene author already set (including one from an earlier generation).
+      if (result.roadScene && roadWidthFraction !== null && this.history.scene.roadWidth === 0) {
+        this.setRoadWidth(roadWidthFraction * this.history.scene.grid.cellSize);
+      }
       this.emit("scene", "selection");
       this.setNotice(`Generated ${result.objects.length} tiles (seed ${result.seed})`);
     } catch (error) {
@@ -457,6 +463,14 @@ export class EditorState {
       ...this.history,
       scene: { ...this.history.scene, grid: { ...grid, width: size, depth: size } }
     };
+    this.emit("sceneGrid");
+  }
+
+  /** 0 means unset (no scene-derived agent sizing). */
+  setRoadWidth(width: number) {
+    if (!this.history || !Number.isFinite(width) || width < 0) return;
+    if (this.history.scene.roadWidth === width) return;
+    this.history = { ...this.history, scene: { ...this.history.scene, roadWidth: width } };
     this.emit("sceneGrid");
   }
 

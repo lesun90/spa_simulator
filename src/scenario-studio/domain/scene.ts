@@ -13,6 +13,7 @@ export interface SceneChoice {
   readonly sceneSize?: number;
   readonly cellSize?: number;
   readonly seed?: number;
+  readonly roadWidthMeters?: number;
   readonly reference: SceneReference;
   readonly thumbnailUrl: string | null;
   readonly available: boolean;

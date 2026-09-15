@@ -7,6 +7,8 @@ import { validatePackShape } from "./packShape";
 
 const roadPack = roadPackData as unknown as WfcPackDeclaration & { triggerCategory: string; inferredRoles: string[] };
 export const defaultRoadProfile = roadPack.profiles["road-scene"];
+/** Fraction of a straight road tile's edge that is drivable surface; multiply by a scene's grid cellSize for its road width in meters. */
+export const roadWidthFraction = roadPack.roadWidthFraction ?? null;
 export function legacyRoadScene(assets: readonly AssetCatalogEntry[]) { return assets.some((asset) => asset.category === roadPack.triggerCategory); }
 export function legacyRoles(asset: AssetCatalogEntry) { return asset.category === roadPack.triggerCategory ? roadPack.inferredRoles : undefined; }
 

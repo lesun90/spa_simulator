@@ -1,4 +1,5 @@
 {
+  "roadWidthFraction": 0.5,
   "dimensions": {
     "sourceTileWidth": 3,
     "sourceTileDepth": 3
