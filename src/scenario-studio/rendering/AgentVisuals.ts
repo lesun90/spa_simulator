@@ -49,6 +49,7 @@ export class AgentVisuals implements AgentPresenter {
   private readonly assets = new AssetManager();
   private readonly instances = new Map<string, THREE.Object3D>();
   private readonly agents = new Map<string, AgentSnapshot>();
+  private readonly wheelNodes = new Map<string, ReadonlyArray<{ steering: THREE.Object3D; wheel: THREE.Object3D } | null>>();
   private readonly ghost = new THREE.Mesh(
     new THREE.BoxGeometry(1, 1, 1),
     new THREE.MeshBasicMaterial({ color: 0x27a86b, transparent: true, opacity: 0.28, depthWrite: false })
@@ -104,8 +105,32 @@ export class AgentVisuals implements AgentPresenter {
       if (!object) continue;
       object.position.set(transform.position.x, transform.position.y, transform.position.z);
       object.rotation.set(0, transform.headingRadians, 0);
+      if (transform.wheels) {
+        const nodes = this.resolveWheelNodes(transform.id);
+        transform.wheels.forEach((wheel, index) => {
+          const node = nodes?.[index];
+          if (!node) return;
+          node.steering.rotation.y = wheel.steeringRadians;
+          node.wheel.rotation.x = wheel.rotationRadians;
+        });
+      }
       object.updateMatrixWorld(true);
     }
+  }
+
+  private resolveWheelNodes(id: string): ReadonlyArray<{ steering: THREE.Object3D; wheel: THREE.Object3D } | null> | null {
+    const cached = this.wheelNodes.get(id);
+    if (cached) return cached;
+    const object = this.instances.get(id);
+    const wheels = this.agents.get(id)?.asset.wheels;
+    if (!object || !wheels?.length) return null;
+    const resolved = wheels.map((wheel) => {
+      const steering = object.getObjectByName(wheel.steeringNode);
+      const wheelNode = object.getObjectByName(wheel.wheelNode);
+      return steering && wheelNode ? { steering, wheel: wheelNode } : null;
+    });
+    this.wheelNodes.set(id, resolved);
+    return resolved;
   }
 
   remove(id: string): void {
@@ -113,6 +138,7 @@ export class AgentVisuals implements AgentPresenter {
     if (!object) return;
     object.removeFromParent();
     this.instances.delete(id);
+    this.wheelNodes.delete(id);
     this.agents.delete(id);
     if (this.selectedId === id) this.select(null);
   }
