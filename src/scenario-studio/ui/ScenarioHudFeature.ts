@@ -6,6 +6,7 @@ import { BasePanel } from "../../features/hud/kit/BasePanel";
 import { Button } from "../../features/hud/kit/Button";
 import { computeShellLayout, type Rect, type ShellRects } from "../../features/hud/kit/layout";
 import { Panel } from "../../features/hud/kit/Panel";
+import { TextField } from "../../features/hud/kit/TextField";
 import { sameSceneReference, type SceneChoice, type SceneReference } from "../domain/scene";
 import { createAgentDraft, type AgentChoice, type AgentDraft, type AgentSnapshot, type PlacementPreview } from "../domain/agent";
 import { HudText } from "./HudText";
@@ -13,6 +14,13 @@ import { SceneBrowserPanel } from "./SceneBrowserPanel";
 import type { ScenarioSceneThumbnails } from "../rendering/ScenarioSceneThumbnails";
 import { AgentBrowserTab } from "./AgentBrowserTab";
 import { AgentInspectorPanel } from "./AgentInspectorPanel";
+
+interface ScenarioActions {
+  rename(name: string): string;
+  create(): Promise<void>;
+  open(): Promise<void>;
+  save(): Promise<void>;
+}
 
 /** Reuses Scene Studio's shell geometry, panel chrome, tiles, buttons, and text renderer. */
 export class ScenarioHudFeature {
@@ -27,6 +35,10 @@ export class ScenarioHudFeature {
   private readonly right: BasePanel;
   private readonly useButton: Button;
   private readonly resetButton: Button;
+  private readonly scenarioNameField: TextField;
+  private readonly newButton: Button;
+  private readonly openButton: Button;
+  private readonly saveButton: Button;
   private readonly backdrop: Panel;
   private readonly modal: Panel;
   private readonly cancelButton: Button;
@@ -48,6 +60,8 @@ export class ScenarioHudFeature {
   private population: readonly AgentSnapshot[] = [];
   private placementDraft: AgentDraft | null = null;
   private activeTab: "scenes" | "agents" = "scenes";
+  private scenarioBusy = false;
+  private scenarioName = "Untitled scenario";
 
   constructor(
     size: ViewportSize,
@@ -61,7 +75,8 @@ export class ScenarioHudFeature {
     duplicateAgent: (id: string) => Promise<void>,
     deleteAgent: (id: string) => Promise<void>,
     resetView: () => void,
-    thumbnails: ScenarioSceneThumbnails
+    thumbnails: ScenarioSceneThumbnails,
+    private readonly scenarioActions: ScenarioActions
   ) {
     this.layout = shell(size);
     this.camera = new THREE.OrthographicCamera(0, size.width, 0, size.height, 0.1, 100);
@@ -87,10 +102,13 @@ export class ScenarioHudFeature {
       status: label(left, 18, left.height - 120, 11.5, "500", theme.textMuted.css, "Select a scene from the browser.", 4),
       inspectorTitle: label(right, 18, 12, 14, "700", theme.text.css, "Scene Inspector"),
       detailName: label(right, 18, 64, 14, "600", theme.text.css, "No scene selected", 2),
-      detailKey: label(right, 18, 109, 12, "500", theme.textMuted.css, "Select a scene in the browser to inspect its package.", 3),
-      detailVersion: label(right, 18, 181, 11.5, "500", theme.textMuted.css, ""),
-      detailHash: label(right, 18, 207, 11.5, "500", theme.textMuted.css, "", 2),
-      diagnostic: label(right, 18, 265, 11.5, "500", theme.diagnostic.css, "", 5),
+      detailDescription: label(right, 18, 109, 12, "500", theme.textMuted.css, "Select a scene in the browser to inspect its metadata.", 3),
+      detailMetadata: label(right, 18, 171, 11.5, "600", theme.text.css, "", 3),
+      detailKey: label(right, 18, 238, 11.5, "500", theme.textMuted.css, "", 2),
+      detailVersion: label(right, 18, 270, 11.5, "500", theme.textMuted.css, ""),
+      detailHash: label(right, 18, 296, 11.5, "500", theme.textMuted.css, "", 2),
+      diagnostic: label(right, 18, 350, 11.5, "500", theme.diagnostic.css, "", 5),
+      scenarioState: new HudText(scenarioStateFrame(this.layout), { size: 11, weight: "600", color: theme.textMutedStrong.css }),
       modalTitle: label(modalRect(size), 25, 28, 18, "700", theme.text.css, "Replace current scene?"),
       modalCandidate: label(modalRect(size), 25, 65, 14, "600", theme.text.css, "", 2),
       modalMessage: label(modalRect(size), 25, 112, 12.5, "500", theme.textMuted.css,
@@ -98,10 +116,25 @@ export class ScenarioHudFeature {
     };
     this.useButton = new Button(this.useRect(), interaction, { label: "Use Scene", onClick: () => this.requestUse() });
     this.resetButton = new Button(this.resetRect(), interaction, { icon: "refresh", onClick: resetView });
+    this.scenarioNameField = new TextField(scenarioNameRect(this.layout), interaction, {
+      placeholder: "Scenario name",
+      onCommit: (value) => {
+        try {
+          this.scenarioName = this.scenarioActions.rename(value);
+          this.scenarioNameField.setValue(this.scenarioName);
+        } catch (error) {
+          this.scenarioNameField.setValue(this.scenarioName);
+          this.setScenarioStatus(message(error), true);
+        }
+      }
+    }, "Untitled scenario");
+    this.newButton = new Button(scenarioButtonRect(this.layout, 0), interaction, { label: "New", onClick: () => void this.runScenarioAction("Creating new scenario…", () => this.scenarioActions.create()) });
+    this.openButton = new Button(scenarioButtonRect(this.layout, 1), interaction, { label: "Open", onClick: () => void this.runScenarioAction("Opening scenario…", () => this.scenarioActions.open()) });
+    this.saveButton = new Button(scenarioButtonRect(this.layout, 2), interaction, { label: "Save", onClick: () => void this.runScenarioAction("Saving scenario…", () => this.scenarioActions.save()) });
     const leftDivider = new Panel({ x: left.x, y: 40, width: left.width, height: 1 }, { fill: theme.borderSubtle.hex, radius: 0 });
     const rightDivider = new Panel({ x: right.x, y: 40, width: right.width, height: 1 }, { fill: theme.borderSubtle.hex, radius: 0 });
     this.left.root.add(leftDivider.root, ...Object.entries(this.labels).filter(([key]) => ["leftTitle", "activeHeader", "active", "candidateHeader", "candidate", "status"].includes(key)).map(([, value]) => value.root), this.useButton.root);
-    this.right.root.add(rightDivider.root, ...Object.entries(this.labels).filter(([key]) => ["inspectorTitle", "detailName", "detailKey", "detailVersion", "detailHash", "diagnostic"].includes(key)).map(([, value]) => value.root));
+    this.right.root.add(rightDivider.root, ...Object.entries(this.labels).filter(([key]) => ["inspectorTitle", "detailName", "detailDescription", "detailMetadata", "detailKey", "detailVersion", "detailHash", "diagnostic"].includes(key)).map(([, value]) => value.root));
     this.dividers = [leftDivider, rightDivider];
 
     this.backdrop = new Panel({ x: 0, y: 0, width: size.width, height: size.height }, { fill: 0x0d1520, fillOpacity: 0.55, radius: 0, z: 4.5 });
@@ -113,7 +146,8 @@ export class ScenarioHudFeature {
     this.modalRoot.visible = false;
     this.unregisterBackdrop = interaction.register(this.backdrop.root, { onClick: () => this.cancel() });
     this.unregisterModal = interaction.register(this.modal.root, { onPointerDown: () => {} });
-    this.scene.add(this.left.root, this.agentInspector.root, this.right.root, this.browser.root, this.agentBrowser.root, this.scenesTab.root, this.agentsTab.root, this.resetButton.root, this.modalRoot);
+    this.scene.add(this.left.root, this.agentInspector.root, this.right.root, this.browser.root, this.agentBrowser.root, this.scenesTab.root, this.agentsTab.root,
+      this.scenarioNameField.root, this.newButton.root, this.openButton.root, this.saveButton.root, this.labels.scenarioState.root, this.resetButton.root, this.modalRoot);
     this.showTab("scenes");
     this.update();
   }
@@ -193,6 +227,20 @@ export class ScenarioHudFeature {
     this.invalidate();
   }
 
+  setScenarioState(name: string, dirty: boolean): void {
+    this.scenarioName = name;
+    this.scenarioNameField.setValue(name);
+    this.labels.scenarioState.setText(dirty ? "Unsaved changes" : "Saved");
+    this.labels.scenarioState.setStyle({ color: theme.textMutedStrong.css });
+    this.invalidate();
+  }
+
+  setScenarioStatus(text: string, diagnostic = false): void {
+    this.labels.scenarioState.setText(text);
+    this.labels.scenarioState.setStyle({ color: diagnostic ? theme.diagnostic.css : theme.textMutedStrong.css });
+    this.invalidate();
+  }
+
   sceneReplaced(): void {
     this.cancelPlacement();
     this.agentBrowser.setSelected(null);
@@ -201,11 +249,21 @@ export class ScenarioHudFeature {
   }
 
   selectExistingAgent(agent: AgentSnapshot | null): void {
-    if (!agent) return;
+    if (!agent) { this.clearAgentSelection(); return; }
     this.cancelPlacement();
     this.showTab("agents");
     this.agentBrowser.setSelected(agent.asset.id);
     this.agentInspector.selectExisting(agent);
+  }
+
+  clearAgentSelection(): void {
+    this.agentBrowser.setSelected(null);
+    this.agentInspector.clearSelection();
+    this.invalidate();
+  }
+
+  setAgentStatus(messageText: string, diagnostic = false): void {
+    this.agentInspector.setStatus(messageText, diagnostic);
   }
 
   getPlacementDraft(): AgentDraft | null { return this.placementDraft; }
@@ -236,6 +294,7 @@ export class ScenarioHudFeature {
     if (this.activeTab === "scenes") this.browser.update(dt);
     else this.agentBrowser.update(dt);
     this.agentInspector.update(dt);
+    this.scenarioNameField.update(dt);
   }
 
   invalidate(): void {
@@ -306,6 +365,7 @@ export class ScenarioHudFeature {
 
   private async load(choice: SceneChoice): Promise<void> {
     this.busy = true;
+    this.updateScenarioButtons();
     this.labels.status.setText(`Loading ${choice.label}…`);
     this.update();
     try {
@@ -317,8 +377,28 @@ export class ScenarioHudFeature {
       if (!this.disposed) this.labels.status.setText(message(error));
     } finally {
       this.busy = false;
+      this.updateScenarioButtons();
       if (!this.disposed) this.update();
     }
+  }
+
+  private async runScenarioAction(progress: string, action: () => Promise<void>): Promise<void> {
+    if (this.scenarioBusy) return;
+    this.scenarioBusy = true;
+    this.setScenarioStatus(progress);
+    this.updateScenarioButtons();
+    try { await action(); }
+    catch (error) { if (!this.disposed) this.setScenarioStatus(message(error), true); }
+    finally {
+      this.scenarioBusy = false;
+      if (!this.disposed) this.updateScenarioButtons();
+    }
+  }
+
+  private updateScenarioButtons(): void {
+    this.newButton.setDisabled(this.scenarioBusy || this.busy);
+    this.openButton.setDisabled(this.scenarioBusy || this.busy);
+    this.saveButton.setDisabled(this.scenarioBusy || this.busy);
   }
 
   handleKeyDown(event: KeyboardEvent): void {
@@ -334,7 +414,9 @@ export class ScenarioHudFeature {
     this.labels.candidate.setText(this.candidate?.label ?? "No scene selected");
     this.useButton.setDisabled(this.busy || !this.candidate?.available || sameSceneReference(this.candidate.reference, this.active));
     this.labels.detailName.setText(this.candidate?.label ?? "No scene selected");
-    this.labels.detailKey.setText(this.candidate ? `Package: ${this.candidate.reference.key === "." ? "root" : this.candidate.reference.key}` : "Select a scene in the browser to inspect its package.");
+    this.labels.detailDescription.setText(this.candidate?.description ?? (this.candidate ? "" : "Select a scene in the browser to inspect its metadata."));
+    this.labels.detailMetadata.setText(this.candidate ? sceneMetadata(this.candidate) : "");
+    this.labels.detailKey.setText(this.candidate ? `Package: ${this.candidate.reference.key === "." ? "root" : this.candidate.reference.key}` : "");
     this.labels.detailVersion.setText(this.candidate ? `Format version: ${this.candidate.reference.formatVersion}` : "");
     this.labels.detailHash.setText(this.candidate ? `Model SHA-256: ${this.candidate.reference.modelSha256.slice(0, 18)}…` : "");
     this.labels.diagnostic.setText(this.candidate?.available ? "" : this.candidate?.diagnostics.join(" ") ?? "");
@@ -352,15 +434,21 @@ export class ScenarioHudFeature {
     this.browser.setRect(this.layout.assetBrowser);
     this.agentBrowser.setRect(this.layout.assetBrowser);
     this.agentInspector.setRect(this.layout.leftPanel);
+    this.scenarioNameField.setRect(scenarioNameRect(this.layout));
+    this.newButton.setRect(scenarioButtonRect(this.layout, 0));
+    this.openButton.setRect(scenarioButtonRect(this.layout, 1));
+    this.saveButton.setRect(scenarioButtonRect(this.layout, 2));
+    this.labels.scenarioState.setFrame(scenarioStateFrame(this.layout));
     this.dividers[0].setRect({ x: 0, y: 40, width: this.layout.leftPanel.width, height: 1 });
     this.dividers[1].setRect({ x: this.layout.inspectorPanel.x, y: 40, width: this.layout.inspectorPanel.width, height: 1 });
     for (const [name, y, panel] of [
       ["leftTitle", 12, this.layout.leftPanel], ["activeHeader", 63, this.layout.leftPanel], ["active", 89, this.layout.leftPanel],
       ["candidateHeader", 156, this.layout.leftPanel], ["candidate", 182, this.layout.leftPanel],
       ["status", this.layout.leftPanel.height - 120, this.layout.leftPanel], ["inspectorTitle", 12, this.layout.inspectorPanel],
-      ["detailName", 64, this.layout.inspectorPanel], ["detailKey", 109, this.layout.inspectorPanel],
-      ["detailVersion", 181, this.layout.inspectorPanel], ["detailHash", 207, this.layout.inspectorPanel],
-      ["diagnostic", 265, this.layout.inspectorPanel]
+      ["detailName", 64, this.layout.inspectorPanel], ["detailDescription", 109, this.layout.inspectorPanel],
+      ["detailMetadata", 171, this.layout.inspectorPanel], ["detailKey", 238, this.layout.inspectorPanel],
+      ["detailVersion", 270, this.layout.inspectorPanel], ["detailHash", 296, this.layout.inspectorPanel],
+      ["diagnostic", 350, this.layout.inspectorPanel]
     ] as const) this.labels[name].setFrame({ x: panel.x + 18, y: panel.y + y, width: Math.max(panel.width - 36, 1), maxLines: name === "status" ? 4 : name === "diagnostic" ? 5 : 3 });
     this.useButton.setRect(this.useRect());
     this.resetButton.setRect(this.resetRect());
@@ -390,6 +478,10 @@ export class ScenarioHudFeature {
     this.right.dispose();
     this.useButton.dispose();
     this.resetButton.dispose();
+    this.scenarioNameField.dispose();
+    this.newButton.dispose();
+    this.openButton.dispose();
+    this.saveButton.dispose();
     this.backdrop.dispose();
     this.modal.dispose();
     this.cancelButton.dispose();
@@ -405,6 +497,27 @@ function shell(size: ViewportSize): ShellRects {
     leftPanelWidth: size.width < 640 ? Math.min(200, size.width * 0.5) : 280,
     inspectorPanelWidth: 300
   });
+}
+
+function scenarioNameRect(layout: ShellRects): Rect {
+  const viewport = layout.viewport;
+  const compact = viewport.width < 520;
+  return { x: viewport.x + 10, y: 10, width: compact ? Math.max(viewport.width - 64, 90) : Math.min(220, Math.max(viewport.width - 280, 120)), height: 34 };
+}
+
+function scenarioButtonRect(layout: ShellRects, index: number): Rect {
+  const viewport = layout.viewport;
+  const name = scenarioNameRect(layout);
+  if (viewport.width < 520) {
+    const width = Math.max(Math.floor((viewport.width - 32) / 3), 44);
+    return { x: viewport.x + 10 + index * (width + 6), y: 50, width, height: 30 };
+  }
+  return { x: name.x + name.width + 8 + index * 68, y: 10, width: 62, height: 34 };
+}
+
+function scenarioStateFrame(layout: ShellRects) {
+  const viewport = layout.viewport;
+  return { x: viewport.x + 12, y: viewport.width < 520 ? 86 : 51, width: Math.max(viewport.width - 24, 1), maxLines: 2 };
 }
 
 function sideStyle(side: "left" | "right") {
@@ -438,6 +551,13 @@ function modalButtonRect(size: ViewportSize, primary: boolean): Rect {
 }
 
 function message(error: unknown): string { return error instanceof Error ? error.message : "Scene request failed."; }
+function sceneMetadata(choice: SceneChoice): string {
+  return [
+    choice.sceneSize === undefined ? null : `Scene size: ${choice.sceneSize} m`,
+    choice.cellSize === undefined ? null : `Cell size: ${choice.cellSize} m`,
+    choice.seed === undefined ? null : `Seed: ${choice.seed}`
+  ].filter((value): value is string => value !== null).join("\n");
+}
 function replacementMessage(count: number): string {
   return `This replaces the current environment and removes ${count} agent${count === 1 ? "" : "s"}. Cancel keeps the current scene and agents.`;
 }

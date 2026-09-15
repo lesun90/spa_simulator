@@ -11,12 +11,14 @@ import { exportGlb } from "../src/environment/glbExporter";
 import { disposeObject } from "../src/engine/disposeObject";
 import type { SceneChoice } from "../src/scenario-studio/domain/scene";
 import type { AgentChoice } from "../src/scenario-studio/domain/agent";
+import type { ScenarioRecord } from "../src/scenario-studio/domain/scenarioRecord";
 
 // Built-client walkthrough: real files and middleware, normal canvas clicks/keys.
 // Canvas text is observed for assertions; no application modules/state are injected.
 const temporary = await mkdtemp(join(tmpdir(), "scenario-studio-review-"));
 const assetRoot = join(temporary, "assets");
 const scenes = join(assetRoot, "scenes");
+const scenarioRoot = join(temporary, "scenarios");
 const output = resolve(process.env.SCENARIO_REVIEW_ARTIFACT_DIR ?? "/tmp/scenario-studio-review");
 const observations: Record<string, unknown> = {};
 let server: Awaited<ReturnType<typeof preview>> | undefined;
@@ -35,7 +37,7 @@ try {
   await mkdir(malformedAgent, { recursive: true });
   await writeFile(join(malformedAgent, "vehicle.json"), "{");
   await writeFile(join(malformedAgent, "malformed.glb"), "not a glb");
-  const template = JSON.parse(await readFile(join(scenes, "sample", "environment.json"), "utf8"));
+  const template = JSON.parse(await readFile(join(scenes, "Downtown", "environment.json"), "utf8"));
   const fixture = async (name: string, empty = false, metadata?: { name: string; description?: string; sceneSize?: number; cellSize?: number; seed?: number }) => {
     const root = new THREE.Group();
     root.name = "SteerlabEnvironment";
@@ -46,12 +48,14 @@ try {
     }
     const glb = await exportGlb(root);
     disposeObject(root);
-    const manifest = { ...template, ...(metadata ? { metadata } : {}), model: { ...template.model, sha256: createHash("sha256").update(glb).digest("hex") }, chunks: [], assets: [], cells: [], objects: [], navigation: { nodes: [], edges: [] } };
+    const manifest = { ...template, metadata: metadata ?? undefined, model: { ...template.model, sha256: createHash("sha256").update(glb).digest("hex") }, chunks: [], assets: [], cells: [], objects: [], navigation: { nodes: [], edges: [] } };
     const folder = join(scenes, name);
     await mkdir(folder, { recursive: true });
     await writeFile(join(folder, "environment.json"), JSON.stringify(manifest));
     await writeFile(join(folder, "environment.glb"), glb);
   };
+  await fixture("sample");
+  await fixture("scene2");
   await fixture("review-groundless"); // Deliberately retains manifest.ground; GLB has only a raised box.
   await fixture("review-empty", true);
   await fixture("review-metadata", false, { name: "Harbor Loop", description: "Compact harbor circuit.", sceneSize: 24, cellSize: 2, seed: 91 });
@@ -67,7 +71,7 @@ try {
     root.add(ground, water);
     const glb = await exportGlb(root);
     disposeObject(root);
-    const manifest = { ...template, model: { ...template.model, sha256: createHash("sha256").update(glb).digest("hex") }, chunks: [], assets: [], cells: [], objects: [], navigation: { nodes: [], edges: [] } };
+    const manifest = { ...template, metadata: undefined, model: { ...template.model, sha256: createHash("sha256").update(glb).digest("hex") }, chunks: [], assets: [], cells: [], objects: [], navigation: { nodes: [], edges: [] } };
     const folder = join(scenes, "review-water");
     await mkdir(folder, { recursive: true });
     await writeFile(join(folder, "environment.json"), JSON.stringify(manifest));
@@ -88,7 +92,7 @@ try {
     root.add(ground, water, bridge);
     const glb = await exportGlb(root);
     disposeObject(root);
-    const manifest = { ...template, model: { ...template.model, sha256: createHash("sha256").update(glb).digest("hex") }, chunks: [], assets: [], cells: [], objects: [], navigation: { nodes: [], edges: [] } };
+    const manifest = { ...template, metadata: undefined, model: { ...template.model, sha256: createHash("sha256").update(glb).digest("hex") }, chunks: [], assets: [], cells: [], objects: [], navigation: { nodes: [], edges: [] } };
     const folder = join(scenes, "review-bridge");
     await mkdir(folder, { recursive: true });
     await writeFile(join(folder, "environment.json"), JSON.stringify(manifest));
@@ -102,7 +106,7 @@ try {
     root.add(slope);
     const glb = await exportGlb(root);
     disposeObject(root);
-    const manifest = { ...template, model: { ...template.model, sha256: createHash("sha256").update(glb).digest("hex") }, chunks: [], assets: [], cells: [], objects: [], navigation: { nodes: [], edges: [] } };
+    const manifest = { ...template, metadata: undefined, model: { ...template.model, sha256: createHash("sha256").update(glb).digest("hex") }, chunks: [], assets: [], cells: [], objects: [], navigation: { nodes: [], edges: [] } };
     const folder = join(scenes, "review-steep");
     await mkdir(folder, { recursive: true });
     await writeFile(join(folder, "environment.json"), JSON.stringify(manifest));
@@ -114,7 +118,7 @@ try {
   const longKey = `review-${"long scene name ".repeat(10).trim()}`;
   await fixture(longKey);
   server = await preview({
-    configFile: false, root: process.cwd(), plugins: [scenarioStudioPlugin(assetRoot)],
+    configFile: false, root: process.cwd(), plugins: [scenarioStudioPlugin(assetRoot, scenarioRoot)],
     build: { outDir: "/tmp/steerlab-review-dist" },
     preview: { host: "127.0.0.1", port: 4174, strictPort: true }
   });
@@ -144,6 +148,29 @@ try {
     }
     throw new Error(`Canvas did not draw: ${fragment}; recent text: ${text.slice(-30).join(" | ")}`);
   };
+  const sawSince = async (fragment: string, start: number) => {
+    for (let attempt = 0; attempt < 80; attempt++) {
+      if (text.slice(start).some((value) => value.includes(fragment))) return;
+      await page.waitForTimeout(100);
+    }
+    throw new Error(`Canvas did not newly draw: ${fragment}; recent text: ${text.slice(-30).join(" | ")}`);
+  };
+  const answerDialogs = (answers: Array<{ type: "prompt" | "confirm"; value?: string; accept?: boolean }>) => {
+    let index = 0;
+    const handler = async (dialog: import("@playwright/test").Dialog) => {
+      const answer = answers[index++];
+      assert(answer, `Unexpected ${dialog.type()} dialog: ${dialog.message()}`);
+      assert.equal(dialog.type(), answer.type);
+      if (answer.accept === false) await dialog.dismiss();
+      else await dialog.accept(answer.value);
+    };
+    page.on("dialog", handler);
+    return async () => {
+      for (let attempt = 0; attempt < 80 && index < answers.length; attempt++) await page.waitForTimeout(100);
+      page.off("dialog", handler);
+      assert.equal(index, answers.length, "Expected browser dialogs were not shown");
+    };
+  };
   let query = "";
   const search = async (value: string) => {
     await page.mouse.click(150, 736);
@@ -165,6 +192,10 @@ try {
   const agentCatalog = async () => (await (await page.request.get("http://127.0.0.1:4174/api/scenario-studio/agents")).json()).agents as AgentChoice[];
   await page.goto("http://127.0.0.1:4174/scenario_studio");
   await saw("scene");
+  await saw("Untitled scenario");
+  await saw("New");
+  await saw("Open");
+  await saw("Save");
   await page.waitForTimeout(1200);
   const choices = await catalog();
   assert(choices.some((item) => item.reference.key === "." && item.available));
@@ -234,6 +265,92 @@ try {
   await settle();
   await page.mouse.click(202, 639); // Delete copy, retaining the original.
   await settle();
+  await page.mouse.click(390, 27); // Scenario name.
+  for (const _ of "Untitled scenario") await page.keyboard.press("Backspace");
+  await page.keyboard.type("Harbor traffic");
+  await page.keyboard.press("Enter");
+  await saw("Unsaved changes");
+  const initialSaveResponse = page.waitForResponse((item) => item.request().method() === "PUT" && item.url().includes("/api/scenario-studio/scenarios/"));
+  await page.mouse.click(685, 27); // Save.
+  const initialSave = await initialSaveResponse;
+  const initialSaveBody = await initialSave.text();
+  assert.equal(initialSave.status(), 200, initialSaveBody);
+  const saved = (JSON.parse(initialSaveBody) as { scenario: ScenarioRecord }).scenario;
+  assert.equal(saved.version, 1);
+  assert.equal(saved.name, "Harbor traffic");
+  assert.equal(saved.engineKey, "rapier");
+  assert.equal(saved.agents.length, 2);
+  await saw("Harbor traffic saved.");
+  const scenarioList = await (await page.request.get("http://127.0.0.1:4174/api/scenario-studio/scenarios")).json() as { scenarios: Array<{ id: string; name: string; agentCount: number }> };
+  assert.deepEqual(scenarioList.scenarios.map((item) => ({ id: item.id, name: item.name, agentCount: item.agentCount })), [{ id: saved.id, name: "Harbor traffic", agentCount: 2 }]);
+  const invalid = structuredClone(saved) as unknown as { agents: Array<Record<string, unknown>> };
+  invalid.agents[0].mass = null;
+  const invalidSave = await page.request.put(`http://127.0.0.1:4174/api/scenario-studio/scenarios/${encodeURIComponent(saved.id)}`, { data: { scenario: invalid } });
+  assert.equal(invalidSave.status(), 400);
+  assert.equal(((await (await page.request.get(`http://127.0.0.1:4174/api/scenario-studio/scenarios/${encodeURIComponent(saved.id)}`)).json()).scenario as ScenarioRecord).agents.length, 2);
+
+  await page.mouse.click(683, 447); // Mutate the workspace to one agent.
+  await page.mouse.click(202, 639);
+  await settle();
+  const openedAt = text.length;
+  const finishOpenDialogs = answerDialogs([{ type: "prompt", value: saved.id }, { type: "confirm" }]);
+  const openResponse = page.waitForResponse((item) => item.request().method() === "GET" && item.url().endsWith(`/scenarios/${encodeURIComponent(saved.id)}`));
+  await page.mouse.click(617, 27); // Open.
+  await finishOpenDialogs();
+  assert.equal((await openResponse).status(), 200);
+  await sawSince("Harbor traffic opened.", openedAt);
+  const reopenedSaveResponse = page.waitForResponse((item) => item.request().method() === "PUT" && item.url().endsWith(`/scenarios/${encodeURIComponent(saved.id)}`));
+  await page.mouse.click(685, 27);
+  assert.equal(((await (await reopenedSaveResponse).json()).scenario as ScenarioRecord).agents.length, 2);
+
+  await page.mouse.click(390, 27);
+  for (const _ of "Harbor traffic") await page.keyboard.press("Backspace");
+  await page.keyboard.type("Recoverable workspace");
+  await page.keyboard.press("Enter");
+  await page.route(`**/api/scenario-studio/scenarios/${encodeURIComponent(saved.id)}`, async (route) => {
+    if (route.request().method() === "GET") await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ scenario: { version: 999 } }) });
+    else await route.continue();
+  }, { times: 1 });
+  const failedOpenAt = text.length;
+  const finishFailedOpenDialogs = answerDialogs([{ type: "prompt", value: saved.id }, { type: "confirm" }]);
+  await page.mouse.click(617, 27);
+  await finishFailedOpenDialogs();
+  await sawSince("Unsupported scenario record version 999.", failedOpenAt);
+  const preservedAfterOpenResponse = page.waitForResponse((item) => item.request().method() === "PUT" && item.url().endsWith(`/scenarios/${encodeURIComponent(saved.id)}`));
+  await page.mouse.click(685, 27);
+  const preservedAfterOpen = (await (await preservedAfterOpenResponse).json()).scenario as ScenarioRecord;
+  assert.equal(preservedAfterOpen.name, "Recoverable workspace");
+  assert.equal(preservedAfterOpen.agents.length, 2);
+
+  await page.mouse.click(390, 27);
+  for (const _ of "Recoverable workspace") await page.keyboard.press("Backspace");
+  await page.keyboard.type("Unsaved save failure");
+  await page.keyboard.press("Enter");
+  await page.route(`**/api/scenario-studio/scenarios/${encodeURIComponent(saved.id)}`, async (route) => {
+    if (route.request().method() === "PUT") await route.fulfill({ status: 500, contentType: "application/json", body: JSON.stringify({ error: "Simulated save failure; current work kept." }) });
+    else await route.continue();
+  }, { times: 1 });
+  const failedSaveAt = text.length;
+  await page.mouse.click(685, 27);
+  await sawSince("Simulated save failure; current work kept.", failedSaveAt);
+  const storedAfterFailedSave = (await (await page.request.get(`http://127.0.0.1:4174/api/scenario-studio/scenarios/${encodeURIComponent(saved.id)}`)).json()).scenario as ScenarioRecord;
+  assert.equal(storedAfterFailedSave.name, "Recoverable workspace");
+  const retrySaveResponse = page.waitForResponse((item) => item.request().method() === "PUT" && item.url().endsWith(`/scenarios/${encodeURIComponent(saved.id)}`));
+  await page.mouse.click(685, 27);
+  assert.equal(((await (await retrySaveResponse).json()).scenario as ScenarioRecord).name, "Unsaved save failure");
+
+  const newAt = text.length;
+  await page.mouse.click(549, 27); // New from a clean saved state.
+  await sawSince("New scenario ready.", newAt);
+  const finishFinalOpenDialog = answerDialogs([{ type: "prompt", value: saved.id }]);
+  const finalOpenResponse = page.waitForResponse((item) => item.request().method() === "GET" && item.url().endsWith(`/scenarios/${encodeURIComponent(saved.id)}`));
+  await page.mouse.click(617, 27);
+  await finishFinalOpenDialog();
+  await finalOpenResponse;
+  const finalSaveResponse = page.waitForResponse((item) => item.request().method() === "PUT" && item.url().endsWith(`/scenarios/${encodeURIComponent(saved.id)}`));
+  await page.mouse.click(685, 27);
+  assert.equal(((await (await finalSaveResponse).json()).scenario as ScenarioRecord).agents.length, 2);
+  observations.persistence = { scenarioId: saved.id, agents: 2, invalidSavePreserved: true, failedOpenPreserved: true, failedSavePreserved: true, newAndReopen: true };
   await page.mouse.click(470, 736); // Scenes tab.
   await select("review empty");
   await use();
@@ -410,7 +527,7 @@ try {
   await saw("24m · cell 2m · seed 91");
   assert.deepEqual(errors, [], "Browser errors");
   observations.result = "PASS";
-  observations.checks = ["default ground", "agent-only catalog with duplicate/malformed diagnostics", "two agent types at asset scale", "agent drag ghost and placement", "bridge placement above water", "overlap, water, and steep-surface rejection", "instance selection, transform, duplicate and delete", "scene warning count and successful population cleanup", "case-insensitive search and no matches", "selection preserved through filtering/refresh", "named confirmation, cancel/Escape/backdrop", "unchanged reference no-op", "sample and scene2 loading", "stale content rejected without replacement", "invalid package disabled", "empty geometry preserves previous scene", "groundless geometry without fallback", "orbit/zoom/reset and narrow layout", "root package and source routes", "catalog additions/removals", "rapid hover/refresh/resize"];
+  observations.checks = ["default ground", "agent-only catalog with duplicate/malformed diagnostics", "two agent types at asset scale", "agent drag ghost and placement", "scenario save/reopen and New", "atomic invalid-save preservation", "failed open and failed save preserve current work", "bridge placement above water", "overlap, water, and steep-surface rejection", "instance selection, transform, duplicate and delete", "scene warning count and successful population cleanup", "case-insensitive search and no matches", "selection preserved through filtering/refresh", "named confirmation, cancel/Escape/backdrop", "unchanged reference no-op", "sample and scene2 loading", "stale content rejected without replacement", "invalid package disabled", "empty geometry preserves previous scene", "groundless geometry without fallback", "orbit/zoom/reset and narrow layout", "root package and source routes", "catalog additions/removals", "rapid hover/refresh/resize"];
   observations.browser = await browser.version();
   observations.rendering = "headless Chromium / SwiftShader; functional evidence only, no FPS claim";
   observations.manifestRequests = manifestRequests;

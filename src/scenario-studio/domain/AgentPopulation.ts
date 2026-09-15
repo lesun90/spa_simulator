@@ -1,4 +1,4 @@
-import type { AgentDraft, AgentSnapshot } from "./agent";
+import { agentBoundsOverlap, type AgentDraft, type AgentSnapshot } from "./agent";
 import { AgentInstance } from "./AgentInstance";
 
 /** Allocates stable internal IDs and owns the authored agent collection. */
@@ -30,9 +30,39 @@ export class AgentPopulation {
     return Object.freeze([...this.instances.values()].map((instance) => instance.snapshot()));
   }
 
+  overlaps(draft: AgentDraft, ignoreId?: string): boolean {
+    for (const instance of this.instances.values()) {
+      const snapshot = instance.snapshot();
+      if (snapshot.id !== ignoreId && agentBoundsOverlap(draft, snapshot)) return true;
+    }
+    return false;
+  }
+
+  hasDependents(supportId: string): boolean {
+    for (const instance of this.instances.values()) {
+      const support = instance.snapshot().pose.support;
+      if (support?.kind === "agent" && support.id === supportId) return true;
+    }
+    return false;
+  }
+
   clear(): readonly AgentSnapshot[] {
     const removed = this.snapshots();
     this.instances.clear();
     return removed;
+  }
+
+  replace(agents: readonly AgentSnapshot[]): void {
+    const staged = new Map<string, AgentInstance>();
+    let nextIdentity = 1;
+    for (const agent of agents) {
+      if (staged.has(agent.id)) throw new Error(`Agent ${agent.id} already exists.`);
+      staged.set(agent.id, new AgentInstance(agent.id, agent));
+      const numericIdentity = /^agent-(\d+)$/.exec(agent.id)?.[1];
+      if (numericIdentity) nextIdentity = Math.max(nextIdentity, Number(numericIdentity) + 1);
+    }
+    this.instances.clear();
+    for (const [id, instance] of staged) this.instances.set(id, instance);
+    this.nextIdentity = nextIdentity;
   }
 }

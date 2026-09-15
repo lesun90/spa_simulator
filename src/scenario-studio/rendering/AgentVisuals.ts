@@ -1,7 +1,37 @@
 import * as THREE from "three";
 import { AssetManager } from "../../engine/AssetManager";
+import type { InteractionEvent, InteractionSystem } from "../../engine/InteractionSystem";
 import type { AssetCatalogEntry } from "../../editor-core/assets";
-import type { AgentDraft, AgentPresentation, AgentPresenter, AgentSnapshot, PlacementPreview, Ray3 } from "../domain/agent";
+import { ObjectTransformControls, type ObjectTransformControlMode } from "../../features/world/ObjectTransformControls";
+import {
+  hasTransformChanged,
+  moveOnGround,
+  rotateFromHorizontalDrag,
+  scaleFromGroundHandle,
+  transformModeForPointerButton
+} from "../../features/world/objectTransform";
+import { scaledAgentCollision, type AgentDraft, type AgentPresentation, type AgentPresenter, type AgentSnapshot, type PlacementPreview, type Ray3, type Vector3Value } from "../domain/agent";
+
+type AgentTransformMode = ObjectTransformControlMode | "move";
+
+interface AgentVisualCallbacks {
+  getGroundPoint(x: number, y: number): Vector3Value | null;
+  onSelect(id: string): void;
+  onTransformCommit(id: string, draft: AgentDraft, mode: AgentTransformMode, x: number, y: number): Promise<void>;
+  onTransformError(message: string): void;
+  setCursor(cursor: string): void;
+}
+
+interface ActiveAgentTransform {
+  readonly id: string;
+  readonly mode: AgentTransformMode;
+  readonly start: AgentSnapshot;
+  readonly startScreenX: number;
+  readonly startPointer: Vector3Value;
+  readonly center: Vector3Value;
+  current: AgentDraft;
+  changed: boolean;
+}
 
 class PreparedAgentVisual implements AgentPresentation {
   private disposed = false;
@@ -17,19 +47,25 @@ class PreparedAgentVisual implements AgentPresentation {
 export class AgentVisuals implements AgentPresenter {
   private readonly assets = new AssetManager();
   private readonly instances = new Map<string, THREE.Object3D>();
-  private readonly selection = new THREE.Box3Helper(new THREE.Box3(), 0x2e7cf6);
+  private readonly agents = new Map<string, AgentSnapshot>();
   private readonly ghost = new THREE.Mesh(
     new THREE.BoxGeometry(1, 1, 1),
     new THREE.MeshBasicMaterial({ color: 0x27a86b, transparent: true, opacity: 0.28, depthWrite: false })
   );
+  private selectionControls: ObjectTransformControls | null = null;
+  private selectedId: string | null = null;
+  private activeTransform: ActiveAgentTransform | null = null;
+  private committing = false;
   private disposed = false;
 
-  constructor(private readonly scene: THREE.Scene) {
-    this.selection.visible = false;
-    this.selection.renderOrder = 4;
+  constructor(
+    private readonly scene: THREE.Scene,
+    private readonly interaction: InteractionSystem,
+    private readonly callbacks: AgentVisualCallbacks
+  ) {
     this.ghost.visible = false;
     this.ghost.renderOrder = 3;
-    this.scene.add(this.selection, this.ghost);
+    this.scene.add(this.ghost);
   }
 
   async prepare(agent: AgentSnapshot): Promise<AgentPresentation> {
@@ -46,6 +82,7 @@ export class AgentVisuals implements AgentPresenter {
     const prepared = presentation as PreparedAgentVisual;
     if (this.disposed) { prepared.dispose(); return; }
     prepared.object.userData.scenarioAgentId = agent.id;
+    this.agents.set(agent.id, agent);
     this.instances.set(agent.id, prepared.object);
     this.scene.add(prepared.object);
   }
@@ -53,9 +90,10 @@ export class AgentVisuals implements AgentPresenter {
   update(agent: AgentSnapshot): void {
     const object = this.instances.get(agent.id);
     if (!object) return;
+    this.agents.set(agent.id, agent);
     object.name = agent.name;
     applyPose(object, agent);
-    if (this.selection.visible && this.selection.userData.agentId === agent.id) this.select(agent.id);
+    if (this.selectedId === agent.id) this.refreshSelectionControls();
   }
 
   remove(id: string): void {
@@ -63,7 +101,8 @@ export class AgentVisuals implements AgentPresenter {
     if (!object) return;
     object.removeFromParent();
     this.instances.delete(id);
-    if (this.selection.userData.agentId === id) this.select(null);
+    this.agents.delete(id);
+    if (this.selectedId === id) this.select(null);
   }
 
   clear(): void {
@@ -73,13 +112,99 @@ export class AgentVisuals implements AgentPresenter {
   }
 
   select(id: string | null): void {
+    this.clearSelectionControls();
     const object = id ? this.instances.get(id) : null;
-    this.selection.visible = Boolean(object);
-    this.selection.userData.agentId = object ? id : null;
-    if (object) {
-      this.selection.box.setFromObject(object);
-      this.selection.updateMatrixWorld(true);
+    this.selectedId = object && id ? id : null;
+    if (!object) return;
+    object.updateMatrixWorld(true);
+    this.selectionControls = new ObjectTransformControls(new THREE.Box3().setFromObject(object), this.interaction, {
+      onPointerDown: (mode, event) => this.beginTransform(id!, mode, event),
+      onPointerMove: (event) => this.updateTransform(event),
+      onPointerUp: (event) => this.finishTransform(event),
+      onResizeHover: (cursor) => { if (!this.activeTransform) this.callbacks.setCursor(cursor); }
+    });
+    this.scene.add(this.selectionControls.root);
+  }
+
+  startDirectTransform(id: string, event: InteractionEvent): void {
+    if (this.selectedId !== id) this.callbacks.onSelect(id);
+    const mode = transformModeForPointerButton(event.button);
+    if (mode) this.beginTransform(id, mode, event);
+  }
+
+  handlePointerMove(event: { x: number; y: number }): void { this.updateTransform(event); }
+  handlePointerUp(event: { x: number; y: number }): void { this.finishTransform(event); }
+  isTransforming(): boolean { return this.activeTransform !== null; }
+
+  private beginTransform(id: string, mode: AgentTransformMode, event: { x: number; y: number }): void {
+    if (this.committing) return;
+    const start = this.agents.get(id);
+    const object = this.instances.get(id);
+    const point = this.callbacks.getGroundPoint(event.x, event.y);
+    if (!start || !object || !point) return;
+    this.activeTransform = {
+      id,
+      mode,
+      start,
+      startScreenX: event.x,
+      startPointer: point,
+      center: { x: object.position.x, y: 0, z: object.position.z },
+      current: start,
+      changed: false
+    };
+    this.callbacks.setCursor(mode === "scale" ? "ew-resize" : "grabbing");
+  }
+
+  private updateTransform(event: { x: number; y: number }): void {
+    const active = this.activeTransform;
+    if (!active) return;
+    const object = this.instances.get(active.id);
+    if (!object) return;
+    let current: AgentDraft = active.current;
+    if (active.mode === "move") {
+      const point = this.callbacks.getGroundPoint(event.x, event.y);
+      if (!point) return;
+      const position = moveOnGround(active.start.pose.position, active.startPointer, point);
+      current = { ...active.start, pose: { ...active.start.pose, position: { ...position, y: active.start.pose.position.y } } };
+    } else if (active.mode === "scale") {
+      const point = this.callbacks.getGroundPoint(event.x, event.y);
+      if (!point) return;
+      current = { ...active.start, scale: scaleFromGroundHandle(active.start.scale, active.center, active.startPointer, point) };
+    } else {
+      current = { ...active.start, pose: { ...active.start.pose, headingRadians: rotateFromHorizontalDrag(active.start.pose.headingRadians, active.startScreenX, event.x) } };
     }
+    active.current = current;
+    active.changed ||= hasTransformChanged(transformSnapshot(active.start), transformSnapshot(current));
+    applyPose(object, current);
+    this.refreshSelectionControls();
+  }
+
+  private finishTransform(event: { x: number; y: number }): void {
+    const active = this.activeTransform;
+    if (!active) return;
+    this.updateTransform(event);
+    this.activeTransform = null;
+    this.callbacks.setCursor("default");
+    if (!active.changed) return;
+    this.committing = true;
+    void this.callbacks.onTransformCommit(active.id, active.current, active.mode, event.x, event.y).catch((error) => {
+      const object = this.instances.get(active.id);
+      if (object) applyPose(object, active.start);
+      this.refreshSelectionControls();
+      this.callbacks.onTransformError(error instanceof Error ? error.message : "Agent transform failed.");
+    }).finally(() => { this.committing = false; });
+  }
+
+  private refreshSelectionControls(): void {
+    const object = this.selectedId ? this.instances.get(this.selectedId) : null;
+    if (!object) return;
+    object.updateMatrixWorld(true);
+    this.selectionControls?.setBox(new THREE.Box3().setFromObject(object));
+  }
+
+  private clearSelectionControls(): void {
+    this.selectionControls?.dispose();
+    this.selectionControls = null;
   }
 
   pick(ray: Ray3): string | null {
@@ -100,8 +225,9 @@ export class AgentVisuals implements AgentPresenter {
 
   setGhost(draft: AgentDraft | null, preview: PlacementPreview | null): void {
     if (!draft || !preview?.pose) { this.ghost.visible = false; return; }
-    const half = draft.collision.halfExtents;
-    const center = draft.collision.center;
+    const collision = scaledAgentCollision(draft);
+    const half = collision.halfExtents;
+    const center = collision.center;
     const c = Math.cos(preview.pose.headingRadians), s = Math.sin(preview.pose.headingRadians);
     this.ghost.scale.set(half.x * 2, half.y * 2, half.z * 2);
     this.ghost.position.set(
@@ -118,10 +244,7 @@ export class AgentVisuals implements AgentPresenter {
     if (this.disposed) return;
     this.disposed = true;
     this.clear();
-    this.selection.removeFromParent();
-    this.selection.geometry.dispose();
-    const selectionMaterials = Array.isArray(this.selection.material) ? this.selection.material : [this.selection.material];
-    for (const material of selectionMaterials) material.dispose();
+    this.clearSelectionControls();
     this.ghost.removeFromParent();
     this.ghost.geometry.dispose();
     this.ghost.material.dispose();
@@ -129,11 +252,15 @@ export class AgentVisuals implements AgentPresenter {
   }
 }
 
-function applyPose(object: THREE.Object3D, agent: AgentSnapshot): void {
+function applyPose(object: THREE.Object3D, agent: AgentDraft): void {
   object.position.set(agent.pose.position.x, agent.pose.position.y, agent.pose.position.z);
   object.rotation.set(0, agent.pose.headingRadians, 0);
-  object.scale.setScalar(1 / agent.asset.unitsPerMeter);
+  object.scale.setScalar(agent.scale / agent.asset.unitsPerMeter);
   object.updateMatrixWorld(true);
+}
+
+function transformSnapshot(agent: AgentDraft) {
+  return { position: agent.pose.position, rotationY: agent.pose.headingRadians, scale: agent.scale };
 }
 
 function assetEntry(agent: AgentSnapshot): AssetCatalogEntry {

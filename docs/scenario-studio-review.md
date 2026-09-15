@@ -1,6 +1,6 @@
 # Scenario Studio review
 
-Steps 1–2 completed in `98cf824` and `b5a5000`, reviewed **2026-09-14**. [Design](scenario-studio-design.md) · [Progress/tasks](scenario-studio-implementation-plan.md)
+Steps 1–2 completed in `98cf824` and `b5a5000`; the Step 2 revision and Step 3 persistence milestone are reviewed in the working tree through **2026-09-15**. [Design](scenario-studio-design.md) · [Progress/tasks](scenario-studio-implementation-plan.md)
 
 ## Run review
 
@@ -50,6 +50,14 @@ Copy artifacts: `docker compose cp app:/tmp/scenario-studio-review ./scenario-st
 4. Failed empty-geometry replacement preserves two agents. Cancel/Escape/backdrop preserve them and the warning uses plural grammar; successful replacement clears the population and the next warning reports zero agents.
 5. Rapier runs in one dedicated worker behind the neutral registry/world contract. Imported transformed triangles provide support, non-supporting water blocks fall-through, and the default collider exists only for the null scene.
 
+## Step 3 walkthrough coverage
+
+1. The compact viewport toolbar exposes an editable scenario name plus New, Open and Save at desktop and narrow widths, with visible saved/dirty/progress/error status.
+2. A new scenario retains two normally placed authored agents through Save, workspace mutation and Open. The saved version, identity, name, Rapier engine key, asset references and authored snapshots are recovered through product controls.
+3. Scenario files live under an isolated `STEERLAB_SCENARIOS_DIR`. The server rejects malformed numeric data and preserves the prior file; writes use unique temporary files and atomic rename.
+4. Open validates record shape/version and resolves current scene and agent hashes before it changes physics, presentations, population or the document. A malformed response leaves the current named two-agent workspace recoverable.
+5. A failed Save leaves both the current dirty document and prior saved file intact; retry succeeds. New and dirty Open use native discard confirmation, and dirty navigation registers the browser unload safeguard.
+
 ## Results and evidence
 
 Chromium **151.0.7922.34**, SwiftShader, **1366 × 900** and **390 × 844**. Functional evidence only; no hardware FPS/100-agent acceptance or historical GLB byte-equivalence claim.
@@ -57,7 +65,7 @@ Chromium **151.0.7922.34**, SwiftShader, **1366 × 900** and **390 × 844**. Fun
 | Check | Recorded result |
 | --- | --- |
 | Docker build/check and review build | TypeScript + Vite passed. |
-| Built-client walkthrough | Step 1 plus Step 2 agent/catalog/placement/replacement groups passed; ten manifest requests; zero browser errors. |
+| Built-client walkthrough | Steps 1–3 scene/catalog/placement/persistence groups passed; two-agent reopen plus invalid-save, failed-open and failed-save preservation passed; ten manifest requests; zero browser errors. |
 | Application workflows | Editing, save/reopen, undo/redo, WFC, export/import/failure preservation, both studios/viewer passed; zero browser errors. Historical comparison not requested. |
 | Lifecycle | Three cycles per app/viewer left zero listeners/frames; zero late thumbnail renders; pruning retained replacement; five failed loads released slots; held handles stayed distinct after duplicate disposal. |
 | Existing regressions | Scoped gate: 36 tests across the main tree and an existing worktree copy passed; no new unit tests. The repository-wide run recorded 587 passing tests and five unrelated failures from `.worktrees/scene-environment-export/tests/roadTilesAssets.test.ts`, whose obsolete asset path is absent in that worktree. |

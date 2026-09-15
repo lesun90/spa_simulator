@@ -19,6 +19,7 @@ declare global {
     verificationViewer: { camera: THREE.PerspectiveCamera; grid: THREE.GridHelper };
     verificationFiles: Record<string, Blob>;
     verificationDownload: { name: string; blob: Blob } | null;
+    verificationWorkerOperations: string[];
   }
 }
 
@@ -27,7 +28,9 @@ const sceneDirectory = await mkdtemp(join(tmpdir(), "lean-modular-scenes-"));
 const outputDirectory = process.env.WORKFLOW_ARTIFACT_DIR ?? "/tmp/lean-modular-workflows";
 await mkdir(outputDirectory, { recursive: true });
 const previousSceneDirectory = process.env.STEERLAB_USER_DATA_DIR;
+const previousScenarioDirectory = process.env.STEERLAB_SCENARIOS_DIR;
 process.env.STEERLAB_USER_DATA_DIR = sceneDirectory;
+process.env.STEERLAB_SCENARIOS_DIR = join(sceneDirectory, "scenarios");
 const server = await createServer({ cacheDir: join(sceneDirectory, ".vite-cache"), server: { host: "127.0.0.1", port: 5198, strictPort: true, hmr: false, watch: null } });
 let browser;
 const observations: Record<string, unknown> = {};
@@ -38,6 +41,15 @@ try {
   page.setDefaultTimeout(60000);
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
+  await page.addInitScript(() => {
+    window.verificationWorkerOperations = [];
+    const postMessage = Worker.prototype.postMessage;
+    Worker.prototype.postMessage = function (message: unknown, ...rest: unknown[]) {
+      const operation = (message as { operation?: { type?: unknown } })?.operation?.type;
+      if (typeof operation === "string") window.verificationWorkerOperations.push(operation);
+      return Reflect.apply(postMessage, this, [message, ...rest]);
+    };
+  });
   // Expose the actual entry-point object only in the verification browser; production files stay untouched.
   await page.route("**/src/scene-studio/main.ts*", async (route) => {
     const response = await route.fetch();
@@ -196,6 +208,158 @@ try {
   });
   await page.mouse.click(800, 536);
   await page.waitForFunction((key) => window.verificationScenario.verificationSession.document.sceneReference?.key === key && !window.verificationScenario.verificationHud.modalRoot.visible, selectedKey);
+  observations.scenarioInspector = await page.evaluate(() => {
+    const hud = window.verificationScenario.verificationHud as unknown as {
+      candidate: SceneChoice | null;
+      labels: Record<string, { text: string }>;
+    };
+    const metadata = hud.labels.detailMetadata.text;
+    if (hud.candidate?.sceneSize !== undefined && !metadata.includes(`Scene size: ${hud.candidate.sceneSize} m`)) throw new Error("Scene Inspector omitted scene size metadata");
+    if (hud.candidate?.cellSize !== undefined && !metadata.includes(`Cell size: ${hud.candidate.cellSize} m`)) throw new Error("Scene Inspector omitted cell size metadata");
+    if (hud.candidate?.seed !== undefined && !metadata.includes(`Seed: ${hud.candidate.seed}`)) throw new Error("Scene Inspector omitted seed metadata");
+    return { description: hud.labels.detailDescription.text, metadata };
+  });
+  await page.mouse.click(550, 736); // Agents tab.
+  await page.mouse.click(80, 810); // First available agent asset.
+  await page.waitForFunction(() => (window.verificationScenario.verificationHud as unknown as { agentInspector: { context: unknown } }).agentInspector.context !== null);
+  await page.mouse.click(92, 131); // Name field help.
+  await page.waitForFunction(() => (window.verificationScenario.verificationHud as unknown as { agentInspector: { status: { text: string } } }).agentInspector.status.text.includes("name used to identify"));
+  observations.agentPlacement = await page.evaluate(async () => {
+    const app = window.verificationScenario as unknown as {
+      session: ScenarioSession;
+      hud: { agentInspector: { currentPlacementDraft(): import("../src/scenario-studio/domain/agent").AgentDraft | null }; setPopulation(agents: readonly import("../src/scenario-studio/domain/agent").AgentSnapshot[]): void };
+    };
+    const draft = app.hud.agentInspector.currentPlacementDraft();
+    if (!draft) throw new Error("Agent Inspector did not expose its configured placement draft");
+    let ray: import("../src/scenario-studio/domain/agent").Ray3 | null = null;
+    const coordinates = [0, 3, -3, 6, -6, 9, -9, 12, -12, 15, -15, 18, -18];
+    for (const z of coordinates) for (const x of coordinates) {
+      if (ray) break;
+      const candidate = { origin: { x, y: 100, z }, direction: { x: 0, y: -1, z: 0 } };
+      const previews = await Promise.all([
+        app.session.previewAgentPlacement(draft, candidate),
+        app.session.previewAgentPlacement({ ...draft, scale: 0.75 }, candidate),
+        app.session.previewAgentPlacement({ ...draft, pose: { ...draft.pose, headingRadians: 0.25 } }, candidate)
+      ]);
+      if (previews.every((preview) => preview.valid)) ray = candidate;
+    }
+    if (!ray) throw new Error("No valid authored placement was found on the active scene surface");
+    await app.session.placeAgent(draft, ray);
+    app.hud.setPopulation(app.session.agents);
+    const base = app.session.agents[0];
+    const stackedDraft = { ...draft, name: `${draft.name} stacked`, scale: 0.5 };
+    const stackRay = { origin: { x: base.pose.position.x, y: base.pose.position.y + 50, z: base.pose.position.z }, direction: { x: 0, y: -1, z: 0 } };
+    const stackPreview = await app.session.previewAgentPlacement(stackedDraft, stackRay);
+    if (!stackPreview.valid || stackPreview.pose?.support?.kind !== "agent" || stackPreview.pose.support.id !== base.id) {
+      throw new Error(`Authored object was not available as a supporting surface: ${JSON.stringify(stackPreview)}`);
+    }
+    await app.session.placeAgent(stackedDraft, stackRay);
+    const stacked = app.session.agents.find((agent) => agent.id !== base.id)!;
+    let transformRejected = "";
+    try {
+      await app.session.updateAgent(base.id, { ...base, scale: base.scale * 0.9 });
+    } catch (error) {
+      transformRejected = error instanceof Error ? error.message : String(error);
+    }
+    if (!transformRejected.includes("resting on this agent")) throw new Error("A supporting agent transform was not rejected");
+    let deletionRejected = "";
+    try {
+      await app.session.deleteAgent(base.id);
+    } catch (error) {
+      deletionRejected = error instanceof Error ? error.message : String(error);
+    }
+    if (!deletionRejected.includes("resting on this agent")) throw new Error("A supporting agent deletion was not rejected");
+    await app.session.deleteAgent(stacked.id);
+    app.hud.setPopulation(app.session.agents);
+    return { id: base.id, support: base.pose.support, stackedSupport: stackPreview.pose.support, transformRejected, deletionRejected };
+  });
+  const transformedAgentId = (observations.agentPlacement as { id: string }).id;
+  await page.evaluate((id) => (window.verificationScenario as unknown as { selectAgent(id: string): void }).selectAgent(id), transformedAgentId);
+  const transformPoint = async (kind: "move" | "resize" | "rotate") => page.evaluate(({ id, kind }) => {
+    const app = window.verificationScenario as unknown as {
+      viewport: { size: { width: number; height: number } };
+      world: { camera: THREE.PerspectiveCamera };
+      agentVisuals: {
+        instances: Map<string, THREE.Object3D>;
+        selectionControls: {
+          outline: { box: THREE.Box3 };
+          resizeEdges: Array<{ mesh: THREE.Object3D }>;
+          rotateHandle: { ring: THREE.Object3D };
+        };
+      };
+    };
+    const object = app.agentVisuals.instances.get(id)!;
+    object.updateMatrixWorld(true);
+    const center = object.position.clone().project(app.world.camera);
+    let point = object.position.clone();
+    if (kind === "move") point = app.agentVisuals.selectionControls.outline.box.getCenter(point);
+    else if (kind === "resize") point = app.agentVisuals.selectionControls.resizeEdges[1].mesh.getWorldPosition(point);
+    else if (kind === "rotate") {
+      point.set(1, 0, 0);
+      app.agentVisuals.selectionControls.rotateHandle.ring.localToWorld(point);
+    }
+    point.project(app.world.camera);
+    const screen = (value: THREE.Vector3) => ({
+      x: (value.x + 1) * app.viewport.size.width / 2,
+      y: (1 - value.y) * app.viewport.size.height / 2
+    });
+    return { point: screen(point), center: screen(center) };
+  }, { id: transformedAgentId, kind });
+  const beforeTransform = await page.evaluate((id) => {
+    const agent = window.verificationScenario.verificationSession.agents.find((candidate) => candidate.id === id)!;
+    return { scale: agent.scale, heading: agent.pose.headingRadians, position: agent.pose.position };
+  }, transformedAgentId);
+  const resize = await transformPoint("resize");
+  await page.mouse.move(resize.point.x, resize.point.y);
+  await page.mouse.down();
+  await page.mouse.move(resize.point.x + (resize.center.x - resize.point.x) * 0.22, resize.point.y + (resize.center.y - resize.point.y) * 0.22, { steps: 6 });
+  await page.mouse.up();
+  await page.waitForFunction(({ id, scale }) => window.verificationScenario.verificationSession.agents.find((candidate) => candidate.id === id)?.scale !== scale,
+    { id: transformedAgentId, scale: beforeTransform.scale });
+  const rotate = await transformPoint("rotate");
+  await page.mouse.move(rotate.point.x, rotate.point.y);
+  await page.mouse.down();
+  await page.mouse.move(rotate.point.x + 24, rotate.point.y, { steps: 6 });
+  await page.mouse.up();
+  await page.waitForFunction(({ id, heading }) => window.verificationScenario.verificationSession.agents.find((candidate) => candidate.id === id)?.pose.headingRadians !== heading,
+    { id: transformedAgentId, heading: beforeTransform.heading });
+  const move = await transformPoint("move");
+  await page.mouse.move(move.point.x, move.point.y);
+  await page.mouse.down();
+  await page.mouse.move(move.point.x + 12, move.point.y + 4, { steps: 6 });
+  await page.mouse.up();
+  await page.waitForFunction(({ id, position }) => {
+    const next = window.verificationScenario.verificationSession.agents.find((candidate) => candidate.id === id)?.pose.position;
+    return next && (Math.abs(next.x - position.x) > 0.001 || Math.abs(next.z - position.z) > 0.001);
+  }, { id: transformedAgentId, position: beforeTransform.position });
+  observations.agentTransforms = await page.evaluate((id) => {
+    const app = window.verificationScenario as unknown as {
+      agentVisuals: { selectedId: string | null };
+      hud: { agentInspector: { context: unknown } };
+    };
+    const agent = window.verificationScenario.verificationSession.agents.find((candidate) => candidate.id === id)!;
+    return { scale: agent.scale, heading: agent.pose.headingRadians, position: agent.pose.position, selected: app.agentVisuals.selectedId };
+  }, transformedAgentId);
+  await page.screenshot({ path: join(outputDirectory, "scenario-studio-agent-inspector.png") });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.screenshot({ path: join(outputDirectory, "scenario-studio-agent-inspector-narrow.png") });
+  await page.setViewportSize({ width: 1366, height: 900 });
+  await page.evaluate(() => {
+    const app = window.verificationScenario as unknown as { agentVisuals: { selectionControls: { root: THREE.Object3D } | null } };
+    (window as unknown as { verificationSelectionRoot: THREE.Object3D | null }).verificationSelectionRoot = app.agentVisuals.selectionControls?.root ?? null;
+  });
+  await page.mouse.click(420, 110); // Empty viewport clears the selected agent.
+  await page.waitForFunction(() => {
+    const app = window.verificationScenario as unknown as { agentVisuals: { selectedId: string | null; selectionControls: unknown }; hud: { agentInspector: { context: unknown } } };
+    const root = (window as unknown as { verificationSelectionRoot: THREE.Object3D | null }).verificationSelectionRoot;
+    return app.agentVisuals.selectedId === null && app.agentVisuals.selectionControls === null && app.hud.agentInspector.context === null && root?.parent === null;
+  });
+  observations.scenarioPhysicsOperations = await page.evaluate(() => {
+    const operations = [...window.verificationWorkerOperations];
+    const authoredBodyOperations = operations.filter((operation) => ["addAgent", "updateAgent", "removeAgent"].includes(operation));
+    if (authoredBodyOperations.length) throw new Error(`Scenario authoring created agent physics bodies: ${authoredBodyOperations.join(", ")}`);
+    return operations;
+  });
   observations.scenarioLoad = await page.evaluate(async () => {
     const session = window.verificationScenario.verificationSession;
     const selected = session.document.sceneReference!;
@@ -244,5 +408,7 @@ try {
   await server.close();
   if (previousSceneDirectory === undefined) delete process.env.STEERLAB_USER_DATA_DIR;
   else process.env.STEERLAB_USER_DATA_DIR = previousSceneDirectory;
+  if (previousScenarioDirectory === undefined) delete process.env.STEERLAB_SCENARIOS_DIR;
+  else process.env.STEERLAB_SCENARIOS_DIR = previousScenarioDirectory;
   await rm(sceneDirectory, { recursive: true, force: true });
 }

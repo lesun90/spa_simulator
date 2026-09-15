@@ -6,7 +6,7 @@ import { RenderLoop } from "../engine/RenderLoop";
 import { Viewport } from "../engine/Viewport";
 import { HttpSceneCatalog } from "./catalog/HttpSceneCatalog";
 import { HttpAgentCatalog } from "./catalog/HttpAgentCatalog";
-import { ScenarioDocument } from "./domain/ScenarioDocument";
+import { newScenarioRecord, ScenarioDocument } from "./domain/ScenarioDocument";
 import { ScenarioSession } from "./domain/ScenarioSession";
 import { ScenarioViewport } from "./rendering/ScenarioViewport";
 import { AgentVisuals } from "./rendering/AgentVisuals";
@@ -16,6 +16,7 @@ import { ScenarioHudFeature } from "./ui/ScenarioHudFeature";
 import { PhysicsEngineRegistry } from "./physics/PhysicsEngineRegistry";
 import { RapierPhysicsEngineFactory } from "./physics/RapierPhysicsWorld";
 import type { PlacementPreview } from "./domain/agent";
+import { HttpScenarioRepository } from "./persistence/HttpScenarioRepository";
 
 /** Owns the same renderer, viewport, input, and HUD composition used by Scene Studio. */
 export class ScenarioStudioApp {
@@ -37,6 +38,11 @@ export class ScenarioStudioApp {
   private placementPreview: PlacementPreview | null = null;
   private placementGeneration = 0;
   private placementBusy = false;
+  private readonly beforeUnload = (event: BeforeUnloadEvent) => {
+    if (!this.session.document.isDirty) return;
+    event.preventDefault();
+    event.returnValue = "";
+  };
 
   constructor(host: HTMLElement) {
     this.canvas = document.createElement("canvas");
@@ -52,11 +58,30 @@ export class ScenarioStudioApp {
     this.world = new ScenarioViewport(this.canvas);
     const catalog = new HttpSceneCatalog();
     const agentCatalog = new HttpAgentCatalog();
-    this.agentVisuals = new AgentVisuals(this.world.scene);
+    const scenarios = new HttpScenarioRepository();
+    this.agentVisuals = new AgentVisuals(this.world.scene, this.interaction, {
+      getGroundPoint: (x, y) => this.world.groundPointFromCanvasPoint(x, y, this.viewport.size.width, this.viewport.size.height),
+      onSelect: (id) => this.selectAgent(id),
+      onTransformCommit: async (id, draft, mode, x, y) => {
+        const ray = mode === "move" ? this.world.rayFromCanvasPoint(x, y, this.viewport.size.width, this.viewport.size.height) : undefined;
+        await this.session.updateAgent(id, draft, ray);
+        if (!this.disposed) {
+          this.hud.setPopulation(this.session.agents);
+          this.syncScenarioState();
+        }
+      },
+      onTransformError: (message) => this.hud.setAgentStatus(message, true),
+      setCursor: (cursor) => { this.canvas.style.cursor = cursor; }
+    });
     const physicsEngines = new PhysicsEngineRegistry();
     physicsEngines.register(new RapierPhysicsEngineFactory());
-    this.session = new ScenarioSession(new ScenarioDocument(), catalog, this.world, physicsEngines.create("rapier"), this.agentVisuals,
-      (agents) => { if (!this.disposed) this.hud?.setPopulation(agents); });
+    this.session = new ScenarioSession(new ScenarioDocument(), catalog, agentCatalog, this.world, physicsEngines.create("rapier"), "rapier", this.agentVisuals,
+      (agents) => {
+        if (!this.disposed) {
+          this.hud?.setPopulation(agents);
+          this.syncScenarioState();
+        }
+      });
     this.hud = new ScenarioHudFeature(
       this.viewport.size,
       this.interaction,
@@ -68,6 +93,7 @@ export class ScenarioStudioApp {
           this.hud.setActive(this.session.document.sceneReference);
           this.hud.setPopulation(this.session.agents);
           this.hud.sceneReplaced();
+          this.syncScenarioState();
           this.agentVisuals.select(null);
           this.clearPlacement();
         }
@@ -78,8 +104,51 @@ export class ScenarioStudioApp {
       async (id) => { const copy = await this.session.duplicateAgent(id); this.hud.setPopulation(this.session.agents); this.selectAgent(copy); },
       async (id) => { await this.session.deleteAgent(id); this.hud.setPopulation(this.session.agents); this.agentVisuals.select(null); },
       () => this.world.resetView(),
-      this.sceneThumbnails
+      this.sceneThumbnails,
+      {
+        rename: (name) => {
+          this.session.document.rename(name);
+          this.syncScenarioState();
+          return this.session.document.name;
+        },
+        create: async () => {
+          if (!this.confirmDiscard("create a new scenario")) {
+            this.hud.setScenarioStatus("New scenario canceled.");
+            return;
+          }
+          await this.session.open(newScenarioRecord());
+          this.afterScenarioOpen("New scenario ready.");
+        },
+        open: async () => {
+          const summaries = await scenarios.list();
+          if (!summaries.length) {
+            this.hud.setScenarioStatus("No saved scenarios yet. Save this scenario first.");
+            return;
+          }
+          const lines = summaries.slice(0, 20).map((item) => `${item.name} — ${item.id}`);
+          const answer = window.prompt(`Open a scenario by name or ID:\n\n${lines.join("\n")}`, summaries[0].id);
+          if (answer === null) { this.hud.setScenarioStatus("Open canceled."); return; }
+          const query = answer.trim().toLowerCase();
+          const matches = summaries.filter((item) => item.id.toLowerCase() === query || item.name.toLowerCase() === query);
+          if (matches.length !== 1) throw new Error(matches.length ? "More than one scenario has that name. Enter its ID." : "No saved scenario matches that name or ID.");
+          if (!this.confirmDiscard("open another scenario")) {
+            this.hud.setScenarioStatus("Open canceled; current work kept.");
+            return;
+          }
+          const record = await scenarios.open(matches[0].id);
+          await this.session.open(record);
+          this.afterScenarioOpen(`${record.name} opened.`);
+        },
+        save: async () => {
+          const saved = await scenarios.save(this.session.document.toRecord());
+          const currentWasSaved = this.session.document.markSaved(saved);
+          this.syncScenarioState();
+          this.hud.setScenarioStatus(currentWasSaved ? `${saved.name} saved.` : "Saved the previous revision; newer changes remain unsaved.");
+        }
+      }
     );
+    this.syncScenarioState();
+    window.addEventListener("beforeunload", this.beforeUnload);
     this.hudCache = new ScenarioHudCache();
     this.interaction.setLayers([
       { scene: this.hud.scene, camera: this.hud.camera },
@@ -90,24 +159,32 @@ export class ScenarioStudioApp {
         this.interaction.blurField();
         const overHud = this.interaction.isPointerOverInteractiveLayer(x, y);
         const draft = this.hud.getPlacementDraft();
+        let directAgent = false;
+        this.interaction.handlePointerDown(x, y, event);
         if (draft && !overHud) {
           this.world.setCameraControlsEnabled(false);
           if (!this.placementBusy && this.placementPreview?.valid) void this.commitPlacement(draft, this.world.rayFromCanvasPoint(x, y, this.viewport.size.width, this.viewport.size.height));
-        } else if (!overHud) {
+        } else if (!overHud && !this.interaction.isCaptured()) {
           const id = this.agentVisuals.pick(this.world.rayFromCanvasPoint(x, y, this.viewport.size.width, this.viewport.size.height));
-          if (id) this.selectAgent(id);
+          if (id) {
+            directAgent = true;
+            this.selectAgent(id);
+            this.agentVisuals.startDirectTransform(id, { x, y, target: null, button: event.button, buttons: event.buttons, shiftKey: event.shiftKey, originalEvent: event });
+          }
           this.world.setCameraControlsEnabled(!id);
         } else this.world.setCameraControlsEnabled(false);
-        this.interaction.handlePointerDown(x, y, event);
+        if (!draft && !overHud && !this.interaction.isCaptured() && !directAgent) this.clearAgentSelection();
         this.hud.invalidate();
       },
       onPointerMove: (x, y, event) => {
         this.interaction.handlePointerMove(x, y, event);
-        if (!this.interaction.isCaptured()) this.world.setCameraControlsEnabled(!this.interaction.isPointerOverInteractiveLayer(x, y));
+        if (!this.interaction.isCaptured()) this.agentVisuals.handlePointerMove({ x, y });
+        if (!this.interaction.isCaptured()) this.world.setCameraControlsEnabled(!this.agentVisuals.isTransforming() && !this.interaction.isPointerOverInteractiveLayer(x, y));
         if (this.hud.getPlacementDraft() && !this.interaction.isPointerOverInteractiveLayer(x, y)) this.previewPlacement(x, y);
         this.hud.invalidate();
       },
       onPointerUp: (x, y, event) => {
+        if (!this.interaction.isCaptured()) this.agentVisuals.handlePointerUp({ x, y });
         this.interaction.handlePointerUp(x, y, event);
         this.world.setCameraControlsEnabled(!this.interaction.isPointerOverInteractiveLayer(x, y));
         this.hud.invalidate();
@@ -160,6 +237,26 @@ export class ScenarioStudioApp {
     this.renderer.dispose();
     this.viewport.dispose();
     this.canvas.remove();
+    window.removeEventListener("beforeunload", this.beforeUnload);
+  }
+
+  private confirmDiscard(action: string): boolean {
+    return !this.session.document.isDirty || window.confirm(`Discard unsaved changes and ${action}?`);
+  }
+
+  private syncScenarioState(): void {
+    this.hud?.setScenarioState(this.session.document.name, this.session.document.isDirty);
+  }
+
+  private afterScenarioOpen(status: string): void {
+    if (this.disposed) return;
+    this.agentVisuals.select(null);
+    this.clearPlacement();
+    this.hud.setActive(this.session.document.sceneReference);
+    this.hud.setPopulation(this.session.agents);
+    this.hud.sceneReplaced();
+    this.syncScenarioState();
+    this.hud.setScenarioStatus(status);
   }
 
   private previewPlacement(x: number, y: number): void {
@@ -197,6 +294,11 @@ export class ScenarioStudioApp {
     if (!agent) return;
     this.agentVisuals.select(id);
     this.hud.selectExistingAgent(agent);
+  }
+
+  private clearAgentSelection(): void {
+    this.agentVisuals.select(null);
+    this.hud.clearAgentSelection();
   }
 
   private clearPlacement(): void {

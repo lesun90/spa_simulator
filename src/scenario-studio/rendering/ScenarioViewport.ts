@@ -100,6 +100,18 @@ export class ScenarioViewport implements ScenePresenter {
     };
   }
 
+  groundPointFromCanvasPoint(x: number, y: number, width: number, height: number): { x: number; y: number; z: number } | null {
+    const ray = this.rayFromCanvasPoint(x, y, width, height);
+    if (Math.abs(ray.direction.y) < 0.0001) return null;
+    const distance = -ray.origin.y / ray.direction.y;
+    if (distance < 0) return null;
+    return {
+      x: ray.origin.x + ray.direction.x * distance,
+      y: 0,
+      z: ray.origin.z + ray.direction.z * distance
+    };
+  }
+
   show(presentation: ScenePresentation): void {
     if (this.disposed) return;
     const rendered = presentation as RenderedScenePresentation;

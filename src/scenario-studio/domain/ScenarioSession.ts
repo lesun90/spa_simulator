@@ -1,11 +1,13 @@
 import type { SceneCatalog } from "../catalog/SceneCatalog";
+import type { AgentCatalog } from "../catalog/AgentCatalog";
 import type { PhysicsWorld } from "../physics/PhysicsWorld";
-import type { AgentDraft, AgentPresenter, AgentSnapshot, PlacementPreview, Ray3 } from "./agent";
-import { validateAgentDraft } from "./agent";
+import type { AgentDraft, AgentPresenter, AgentSnapshot, PlacementPreview, Ray3, Vector3Value } from "./agent";
+import { agentFootprintContainsPoint, agentSupportsFootprint, authoredBounds, placementOriginY, scaledAgentCollision, validateAgentDraft } from "./agent";
 import { AgentPopulation } from "./AgentPopulation";
 import type { ScenePresentation, ScenePresenter } from "./ScenePresentation";
 import { ScenarioDocument } from "./ScenarioDocument";
 import { sameSceneReference, type SceneReference } from "./scene";
+import { validateScenarioRecord, type ScenarioRecord } from "./scenarioRecord";
 
 /** Coordinates transactional scene and agent commits while rejecting obsolete asynchronous work. */
 export class ScenarioSession {
@@ -20,8 +22,10 @@ export class ScenarioSession {
   constructor(
     readonly document: ScenarioDocument,
     private readonly catalog: SceneCatalog,
+    private readonly agentCatalog: AgentCatalog,
     private readonly presenter: ScenePresenter,
     physics: Promise<PhysicsWorld>,
+    private readonly engineKey: string,
     private readonly agentPresenter: AgentPresenter,
     private readonly onPopulationChanged: (agents: readonly AgentSnapshot[]) => void = () => {}
   ) {
@@ -33,6 +37,53 @@ export class ScenarioSession {
   }
 
   get agents(): readonly AgentSnapshot[] { return this.population.snapshots(); }
+
+  async open(record: ScenarioRecord): Promise<void> {
+    if (this.disposed) throw new Error("Scenario session was disposed.");
+    const stagedRecord = validateScenarioRecord(record);
+    if (stagedRecord.engineKey !== this.engineKey) throw new Error(`Physics engine “${stagedRecord.engineKey}” is not available.`);
+    const request = ++this.generation;
+    let scenePresentation: ScenePresentation | null = null;
+    const agentPresentations: { agent: AgentSnapshot; presentation: import("./agent").AgentPresentation }[] = [];
+    try {
+      const [world, choices, sceneData] = await Promise.all([
+        this.physics,
+        stagedRecord.agents.length ? this.agentCatalog.list() : Promise.resolve([]),
+        stagedRecord.sceneReference ? this.catalog.load(stagedRecord.sceneReference) : Promise.resolve(null)
+      ]);
+      const agents = stagedRecord.agents.map((agent) => {
+        const choice = choices.find((item) => item.asset.id === agent.asset.id && item.asset.key === agent.asset.key);
+        if (!choice?.available) throw new Error(`Agent asset “${agent.asset.label}” is missing or unavailable.`);
+        if (choice.asset.modelSha256 !== agent.asset.modelSha256 || choice.asset.metadataSha256 !== agent.asset.metadataSha256) {
+          throw new Error(`Agent asset “${agent.asset.label}” changed since this scenario was saved.`);
+        }
+        return Object.freeze({ ...agent, asset: choice.asset });
+      });
+      const stagedPopulation = new AgentPopulation();
+      stagedPopulation.replace(agents);
+      scenePresentation = sceneData ? await this.presenter.prepare(sceneData) : this.presenter.createDefault();
+      for (const agent of agents) agentPresentations.push({ agent, presentation: await this.agentPresenter.prepare(agent) });
+      await this.ready;
+      if (this.disposed || request !== this.generation) throw new Error("The scenario open result is stale. Try again.");
+      const nextRevision = await world.replaceScene(scenePresentation.geometry);
+      if (this.disposed || request !== this.generation) throw new Error("The scenario open result is stale. Try again.");
+
+      this.presenter.show(scenePresentation);
+      const oldPresentation = this.presentation;
+      this.presentation = scenePresentation;
+      scenePresentation = null;
+      this.agentPresenter.clear();
+      this.population.replace(agents);
+      for (const staged of agentPresentations.splice(0)) this.agentPresenter.show(staged.agent, staged.presentation);
+      this.sceneRevision = nextRevision;
+      this.document.replaceWith({ ...stagedRecord, agents });
+      this.onPopulationChanged(this.agents);
+      oldPresentation.dispose();
+    } finally {
+      scenePresentation?.dispose();
+      for (const staged of agentPresentations) staged.presentation.dispose();
+    }
+  }
 
   async replaceScene(reference: SceneReference): Promise<void> {
     if (this.disposed) return;
@@ -66,7 +117,14 @@ export class ScenarioSession {
     const validDraft = validateAgentDraft(draft);
     await this.ready;
     if (this.disposed) throw new Error("Scenario session was disposed.");
-    return (await this.physics).previewAgentPlacement(validDraft, ray, ignoreAgentId);
+    const scenePreview = await (await this.physics).previewAgentPlacement(validDraft, ray, ignoreAgentId);
+    const authoredPreview = previewAuthoredSupport(validDraft, ray, this.agents, ignoreAgentId, this.sceneRevision);
+    const preview = nearestPreview(validDraft, ray, scenePreview, authoredPreview);
+    if (!preview.valid || !preview.pose) return preview;
+    const candidate = validateAgentDraft({ ...validDraft, pose: preview.pose });
+    return this.population.overlaps(candidate, ignoreAgentId)
+      ? { ...preview, valid: false, reason: "This position overlaps another agent." }
+      : preview;
   }
 
   async placeAgent(draft: AgentDraft, ray: Ray3): Promise<void> {
@@ -77,17 +135,24 @@ export class ScenarioSession {
     await this.commitAgent({ ...validDraft, pose: preview.pose }, preview.sceneRevision, request);
   }
 
-  async updateAgent(id: string, draft: AgentDraft): Promise<void> {
+  async updateAgent(id: string, draft: AgentDraft, placementRay?: Ray3): Promise<void> {
     const instance = this.population.get(id);
     if (!instance) throw new Error("The selected agent no longer exists.");
     const validDraft = validateAgentDraft(draft);
-    const ray: Ray3 = { origin: { x: validDraft.pose.position.x, y: validDraft.pose.position.y + 100, z: validDraft.pose.position.z }, direction: { x: 0, y: -1, z: 0 } };
+    const current = instance.snapshot();
+    if (!placementChanged(current, validDraft)) {
+      instance.replace(validateAgentDraft({ ...validDraft, pose: { ...validDraft.pose, support: current.pose.support } }));
+      this.agentPresenter.update(instance.snapshot());
+      this.syncDocument();
+      return;
+    }
+    if (this.population.hasDependents(id)) {
+      throw new Error("Move or delete the agents resting on this agent before transforming it.");
+    }
+    const ray: Ray3 = placementRay ?? { origin: { x: validDraft.pose.position.x, y: validDraft.pose.position.y + 100, z: validDraft.pose.position.z }, direction: { x: 0, y: -1, z: 0 } };
     const preview = await this.previewAgentPlacement(validDraft, ray, id);
     if (!preview.valid || !preview.pose) throw new Error(preview.reason ?? "Agent transform is invalid.");
-    if (Math.abs(preview.pose.position.y - validDraft.pose.position.y) > 0.5) throw new Error("Agent position must remain seated on a support surface.");
     const committed = validateAgentDraft({ ...validDraft, pose: preview.pose });
-    const snapshot = Object.freeze({ id, ...committed });
-    await (await this.physics).updateAgent(snapshot, preview.sceneRevision);
     instance.replace(committed);
     this.agentPresenter.update(instance.snapshot());
     this.syncDocument();
@@ -96,8 +161,8 @@ export class ScenarioSession {
   async duplicateAgent(id: string): Promise<string> {
     const source = this.population.get(id)?.snapshot();
     if (!source) throw new Error("The selected agent no longer exists.");
-    const spacingX = source.collision.halfExtents.x * 2 + 0.6;
-    const spacingZ = source.collision.halfExtents.z * 2 + 0.6;
+    const spacingX = source.collision.halfExtents.x * source.scale * 2 + 0.6;
+    const spacingZ = source.collision.halfExtents.z * source.scale * 2 + 0.6;
     const offsets = [[spacingX, 0], [-spacingX, 0], [0, spacingZ], [0, -spacingZ]];
     for (const [x, z] of offsets) {
       const draft = validateAgentDraft({ ...source, name: `${source.name} copy`, pose: { ...source.pose, position: { x: source.pose.position.x + x, y: source.pose.position.y, z: source.pose.position.z + z } } });
@@ -111,7 +176,9 @@ export class ScenarioSession {
 
   async deleteAgent(id: string): Promise<void> {
     if (!this.population.get(id)) return;
-    await (await this.physics).removeAgent(id);
+    if (this.population.hasDependents(id)) {
+      throw new Error("Move or delete the agents resting on this agent before deleting it.");
+    }
     this.population.remove(id);
     this.agentPresenter.remove(id);
     this.syncDocument();
@@ -121,19 +188,14 @@ export class ScenarioSession {
     const instance = this.population.create(draft);
     const snapshot = instance.snapshot();
     const presentation = await this.agentPresenter.prepare(snapshot);
-    let physicsCommitted = false;
     try {
       if (this.disposed || request !== this.generation || revision !== this.sceneRevision) throw new Error("The placement result is stale. Try again.");
-      await (await this.physics).addAgent(snapshot, revision);
-      physicsCommitted = true;
-      if (this.disposed || request !== this.generation) throw new Error("The placement result is stale. Try again.");
       this.agentPresenter.show(snapshot, presentation);
       this.population.commit(instance);
       this.syncDocument();
       return instance.id;
     } catch (error) {
       presentation.dispose();
-      if (physicsCommitted) await (await this.physics).removeAgent(instance.id);
       throw error;
     }
   }
@@ -153,4 +215,67 @@ export class ScenarioSession {
     const world = await this.physics.catch(() => null);
     await world?.dispose();
   }
+}
+
+function placementChanged(current: AgentSnapshot, draft: AgentDraft): boolean {
+  const epsilon = 0.000001;
+  return Math.abs(current.scale - draft.scale) > epsilon ||
+    Math.abs(current.pose.headingRadians - draft.pose.headingRadians) > epsilon ||
+    Math.abs(current.pose.position.x - draft.pose.position.x) > epsilon ||
+    Math.abs(current.pose.position.y - draft.pose.position.y) > epsilon ||
+    Math.abs(current.pose.position.z - draft.pose.position.z) > epsilon;
+}
+
+function previewAuthoredSupport(
+  draft: AgentDraft,
+  ray: Ray3,
+  agents: readonly AgentSnapshot[],
+  ignoreAgentId: string | undefined,
+  sceneRevision: number
+): PlacementPreview | null {
+  if (ray.direction.y >= -0.0001) return null;
+  let nearest: { distance: number; support: AgentSnapshot; point: Vector3Value } | null = null;
+  for (const support of agents) {
+    if (support.id === ignoreAgentId) continue;
+    const bounds = authoredBounds(support);
+    const distance = (bounds.max.y - ray.origin.y) / ray.direction.y;
+    if (distance < 0 || (nearest && distance >= nearest.distance)) continue;
+    const point = addScaled(ray.origin, ray.direction, distance);
+    if (!agentFootprintContainsPoint(support, point)) continue;
+    nearest = { distance, support, point };
+  }
+  if (!nearest) return null;
+  const pose = {
+    position: { ...nearest.point, y: placementOriginY(draft, nearest.point.y) },
+    headingRadians: draft.pose.headingRadians,
+    support: { kind: "agent" as const, id: nearest.support.id }
+  };
+  const supported = agentSupportsFootprint(nearest.support, { ...draft, pose });
+  return {
+    valid: supported,
+    pose,
+    reason: supported ? null : "The agent footprint is not fully supported by this object.",
+    sceneRevision
+  };
+}
+
+function nearestPreview(draft: AgentDraft, ray: Ray3, scene: PlacementPreview, authored: PlacementPreview | null): PlacementPreview {
+  if (!authored?.pose) return scene;
+  if (!scene.pose) return authored;
+  return previewDistance(draft, ray, authored) < previewDistance(draft, ray, scene) ? authored : scene;
+}
+
+function previewDistance(draft: AgentDraft, ray: Ray3, preview: PlacementPreview): number {
+  if (!preview.pose) return Number.POSITIVE_INFINITY;
+  const collision = scaledAgentCollision(draft);
+  const surfaceY = preview.pose.position.y + collision.center.y - collision.halfExtents.y - draft.placement.clearance;
+  const numerator = (preview.pose.position.x - ray.origin.x) * ray.direction.x +
+    (surfaceY - ray.origin.y) * ray.direction.y +
+    (preview.pose.position.z - ray.origin.z) * ray.direction.z;
+  const denominator = ray.direction.x ** 2 + ray.direction.y ** 2 + ray.direction.z ** 2;
+  return numerator / Math.max(denominator, 0.0001);
+}
+
+function addScaled(a: Vector3Value, b: Vector3Value, scale: number): Vector3Value {
+  return { x: a.x + b.x * scale, y: a.y + b.y * scale, z: a.z + b.z * scale };
 }

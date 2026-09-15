@@ -1,13 +1,13 @@
 /// <reference lib="webworker" />
 import RAPIER from "@dimforge/rapier3d-compat";
-import type { AgentDraft, AgentSnapshot, PlacementHit, PlacementPreview, Ray3, Vector3Value } from "../domain/agent";
+import { placementOriginY, scaledAgentCollision, type AgentDraft, type AgentSnapshot, type PlacementHit, type PlacementPreview, type Ray3, type Vector3Value } from "../domain/agent";
 import type { SceneGeometryDescription } from "./PhysicsWorld";
 import type { PhysicsWorkerRequest, PhysicsWorkerResponse } from "./PhysicsWorkerClient";
 
 let world: RAPIER.World | null = null;
 let sceneRevision = 0;
 let initialized: Promise<void> | null = null;
-const environmentHandles = new Set<number>();
+const environmentHandles = new Map<number, string>();
 const nonSupportingHandles = new Set<number>();
 const agentColliders = new Map<string, RAPIER.Collider>();
 
@@ -41,6 +41,7 @@ async function ensureInitialized(): Promise<void> {
 function replaceScene(scene: SceneGeometryDescription): number {
   const next = new RAPIER.World({ x: 0, y: -9.81, z: 0 });
   const nextHandles = new Set<number>();
+  const nextLabels = new Map<number, string>();
   const nextNonSupportingHandles = new Set<number>();
   try {
     if (scene.kind === "default-ground") {
@@ -50,12 +51,14 @@ function replaceScene(scene: SceneGeometryDescription): number {
       }
       const collider = next.createCollider(RAPIER.ColliderDesc.cuboid(ground.width / 2, 0.05, ground.depth / 2).setTranslation(0, ground.y - 0.05, 0));
       nextHandles.add(collider.handle);
+      nextLabels.set(collider.handle, "scene:default-ground");
     } else {
       if (!scene.meshes.length) throw new Error("The imported scene has no supported solid geometry.");
-      for (const mesh of scene.meshes) {
+      for (const [index, mesh] of scene.meshes.entries()) {
         if (mesh.vertices.length < 9 || mesh.indices.length < 3) continue;
         const collider = next.createCollider(RAPIER.ColliderDesc.trimesh(mesh.vertices, mesh.indices));
         nextHandles.add(collider.handle);
+        nextLabels.set(collider.handle, `scene:${index}:${mesh.label}`);
       }
       for (const mesh of scene.nonSupportingMeshes ?? []) {
         if (mesh.vertices.length < 9 || mesh.indices.length < 3) continue;
@@ -72,7 +75,7 @@ function replaceScene(scene: SceneGeometryDescription): number {
   world?.free();
   world = next;
   environmentHandles.clear();
-  for (const handle of nextHandles) environmentHandles.add(handle);
+  for (const [handle, label] of nextLabels) environmentHandles.set(handle, label);
   nonSupportingHandles.clear();
   for (const handle of nextNonSupportingHandles) nonSupportingHandles.add(handle);
   agentColliders.clear();
@@ -88,6 +91,7 @@ function pickSurface(ray: Ray3): PlacementHit | null {
   return {
     point: addScaled(ray.origin, ray.direction, hit.timeOfImpact),
     normal: vector(hit.normal),
+    support: { kind: "scene", id: environmentHandles.get(hit.collider.handle) ?? "scene:unknown" },
     sceneRevision
   };
 }
@@ -95,20 +99,23 @@ function pickSurface(ray: Ray3): PlacementHit | null {
 function previewPlacement(draft: AgentDraft, ray: Ray3, ignoreAgentId?: string): PlacementPreview {
   const hit = pickSurface(ray);
   if (!hit) return invalid("Choose a solid surface inside the environment.");
-  const pose = { position: { ...hit.point, y: hit.point.y + draft.placement.clearance }, headingRadians: draft.pose.headingRadians };
+  const pose = { position: { ...hit.point, y: placementOriginY(draft, hit.point.y) }, headingRadians: draft.pose.headingRadians, support: hit.support };
   if (hit.normal.y < Math.cos(draft.placement.maxSlopeDegrees * Math.PI / 180)) return invalid("This surface is too steep.", pose);
   const supportProblem = validateFootprint(draft, pose.position, pose.headingRadians, hit);
   if (supportProblem) return invalid(supportProblem, pose);
-  if (overlapsAgent(draft, pose.position, pose.headingRadians, ignoreAgentId)) return invalid("This position overlaps another agent.", pose);
   return { valid: true, pose, reason: null, sceneRevision };
 }
 
 function validateFootprint(draft: AgentDraft, position: Vector3Value, heading: number, centerHit: PlacementHit): string | null {
-  const half = draft.collision.halfExtents;
-  const center = rotate(draft.collision.center.x, draft.collision.center.z, heading);
-  const insetX = Math.max(half.x * 0.86, 0.05);
-  const insetZ = Math.max(half.z * 0.86, 0.05);
-  for (const [localX, localZ] of [[-insetX, -insetZ], [insetX, -insetZ], [-insetX, insetZ], [insetX, insetZ]]) {
+  const collision = scaledAgentCollision(draft);
+  const half = collision.halfExtents;
+  const center = rotate(collision.center.x, collision.center.z, heading);
+  const sampleSpacing = 0.2;
+  const columns = Math.max(1, Math.ceil(half.x * 2 / sampleSpacing));
+  const rows = Math.max(1, Math.ceil(half.z * 2 / sampleSpacing));
+  for (let column = 0; column <= columns; column++) for (let row = 0; row <= rows; row++) {
+    const localX = -half.x + half.x * 2 * column / columns;
+    const localZ = -half.z + half.z * 2 * row / rows;
     const offset = rotate(localX, localZ, heading);
     const footprint = { x: center.x + offset.x, z: center.z + offset.z };
     const origin = { x: position.x + footprint.x, y: position.y + Math.max(half.y * 2 + 1, 3), z: position.z + footprint.z };
@@ -123,7 +130,8 @@ function validateFootprint(draft: AgentDraft, position: Vector3Value, heading: n
 
 function overlapsAgent(draft: AgentDraft, position: Vector3Value, heading: number, ignoreAgentId?: string): boolean {
   const active = requireWorld();
-  const shape = new RAPIER.Cuboid(draft.collision.halfExtents.x, draft.collision.halfExtents.y, draft.collision.halfExtents.z);
+  const half = scaledAgentCollision(draft).halfExtents;
+  const shape = new RAPIER.Cuboid(half.x, half.y, half.z);
   const center = collisionCenter(draft, position, heading);
   const ignored = ignoreAgentId ? agentColliders.get(ignoreAgentId) : undefined;
   return active.intersectionWithShape(center, rotation(heading), shape, undefined, undefined, ignored, undefined,
@@ -151,7 +159,8 @@ function createAgentCollider(agent: AgentSnapshot): void {
   const active = requireWorld();
   if (overlapsAgent(agent, agent.pose.position, agent.pose.headingRadians, agent.id)) throw new Error("This position overlaps another agent.");
   const center = collisionCenter(agent, agent.pose.position, agent.pose.headingRadians);
-  const collider = active.createCollider(RAPIER.ColliderDesc.cuboid(agent.collision.halfExtents.x, agent.collision.halfExtents.y, agent.collision.halfExtents.z)
+  const half = scaledAgentCollision(agent).halfExtents;
+  const collider = active.createCollider(RAPIER.ColliderDesc.cuboid(half.x, half.y, half.z)
     .setTranslation(center.x, center.y, center.z).setRotation(rotation(agent.pose.headingRadians)).setMass(agent.mass));
   agentColliders.set(agent.id, collider);
   active.step();
@@ -174,7 +183,8 @@ function addScaled(a: Vector3Value, b: Vector3Value, scale: number): Vector3Valu
 function rotate(x: number, z: number, heading: number): { x: number; z: number } { const c = Math.cos(heading), s = Math.sin(heading); return { x: x * c + z * s, z: -x * s + z * c }; }
 function rotation(heading: number): RAPIER.Rotation { return { x: 0, y: Math.sin(heading / 2), z: 0, w: Math.cos(heading / 2) }; }
 function collisionCenter(draft: AgentDraft, position: Vector3Value, heading: number): Vector3Value {
-  const horizontal = rotate(draft.collision.center.x, draft.collision.center.z, heading);
-  return { x: position.x + horizontal.x, y: position.y + draft.collision.center.y, z: position.z + horizontal.z };
+  const center = scaledAgentCollision(draft).center;
+  const horizontal = rotate(center.x, center.z, heading);
+  return { x: position.x + horizontal.x, y: position.y + center.y, z: position.z + horizontal.z };
 }
 function dispose(): void { world?.free(); world = null; environmentHandles.clear(); nonSupportingHandles.clear(); agentColliders.clear(); }

@@ -1,17 +1,46 @@
 import type { SceneReference } from "./scene";
 import type { AgentSnapshot } from "./agent";
+import { freezeRecord, SCENARIO_RECORD_VERSION, validateScenarioRecord, type ScenarioRecord } from "./scenarioRecord";
 
-/** Owns the authored scene choice; later steps add authored agents and scripts here. */
+/** Owns persisted scenario identity, authored state, and dirty-state transitions. */
 export class ScenarioDocument {
+  private identity: string;
+  private scenarioName: string;
+  private physicsEngineKey: string;
   private activeScene: SceneReference | null = null;
   private authoredAgents: readonly AgentSnapshot[] = Object.freeze([]);
+  private modified = false;
+
+  constructor(record: ScenarioRecord = newScenarioRecord()) {
+    const valid = validateScenarioRecord(record);
+    this.identity = valid.id;
+    this.scenarioName = valid.name;
+    this.physicsEngineKey = valid.engineKey;
+    this.activeScene = valid.sceneReference;
+    this.authoredAgents = valid.agents;
+  }
+
+  get id(): string { return this.identity; }
+  get name(): string { return this.scenarioName; }
+  get engineKey(): string { return this.physicsEngineKey; }
+  get isDirty(): boolean { return this.modified; }
 
   get sceneReference(): SceneReference | null {
     return this.activeScene;
   }
 
-  replaceScene(reference: SceneReference): void {
-    this.activeScene = Object.freeze({ ...reference });
+  rename(name: string): void {
+    const trimmed = name.trim();
+    if (!trimmed) throw new Error("Scenario name is required.");
+    if (trimmed.length > 80) throw new Error("Scenario name must be 80 characters or fewer.");
+    if (trimmed === this.scenarioName) return;
+    this.scenarioName = trimmed;
+    this.modified = true;
+  }
+
+  replaceScene(reference: SceneReference | null): void {
+    this.activeScene = reference ? Object.freeze({ ...reference }) : null;
+    this.modified = true;
   }
 
   get agents(): readonly AgentSnapshot[] {
@@ -20,5 +49,36 @@ export class ScenarioDocument {
 
   replaceAgents(agents: readonly AgentSnapshot[]): void {
     this.authoredAgents = Object.freeze([...agents]);
+    this.modified = true;
   }
+
+  toRecord(): ScenarioRecord {
+    return freezeRecord({ version: SCENARIO_RECORD_VERSION, id: this.identity, name: this.scenarioName, sceneReference: this.activeScene, engineKey: this.physicsEngineKey, agents: this.authoredAgents });
+  }
+
+  replaceWith(record: ScenarioRecord): void {
+    const valid = validateScenarioRecord(record);
+    this.identity = valid.id;
+    this.scenarioName = valid.name;
+    this.physicsEngineKey = valid.engineKey;
+    this.activeScene = valid.sceneReference;
+    this.authoredAgents = valid.agents;
+    this.modified = false;
+  }
+
+  markSaved(record: ScenarioRecord): boolean {
+    const valid = validateScenarioRecord(record);
+    if (valid.id !== this.identity) throw new Error("Saved scenario identity does not match the open scenario.");
+    if (JSON.stringify(valid) !== JSON.stringify(this.toRecord())) return false;
+    this.replaceWith(valid);
+    return true;
+  }
+}
+
+export function newScenarioRecord(name = "Untitled scenario", id = createScenarioId()): ScenarioRecord {
+  return freezeRecord({ version: SCENARIO_RECORD_VERSION, id, name, sceneReference: null, engineKey: "rapier", agents: [] });
+}
+
+function createScenarioId(): string {
+  return `scenario-${globalThis.crypto.randomUUID()}`;
 }

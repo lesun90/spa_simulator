@@ -7,7 +7,7 @@ interface FileSystemFileHandleLike {
 /** Compresses the fixed package files and downloads one archive named after the scene. */
 export async function saveEnvironmentPackage(sceneName: string, manifestJson: string, glb: Uint8Array): Promise<void> {
   const archive = await createEnvironmentArchive(manifestJson, glb);
-  downloadFile(`${safeArchiveName(sceneName)}.zip`, new Blob([archive], { type: "application/zip" }));
+  downloadFile(`${safeArchiveName(sceneName)}.zip`, new Blob([Uint8Array.from(archive)], { type: "application/zip" }));
 }
 
 function createEnvironmentArchive(manifestJson: string, glb: Uint8Array): Promise<Uint8Array> {

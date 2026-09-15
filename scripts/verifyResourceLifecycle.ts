@@ -8,7 +8,9 @@ import { createServer } from "vite";
 // Real browser ownership probe. Instrument only the verification page, never product code.
 const directory = await mkdtemp(join(tmpdir(), "lean-lifecycle-scenes-"));
 const previousDirectory = process.env.STEERLAB_USER_DATA_DIR;
+const previousScenarioDirectory = process.env.STEERLAB_SCENARIOS_DIR;
 process.env.STEERLAB_USER_DATA_DIR = directory;
+process.env.STEERLAB_SCENARIOS_DIR = join(directory, "scenarios");
 const server = await createServer({ server: { host: "127.0.0.1", port: 5199, strictPort: true, hmr: false, watch: null } });
 const output = process.env.LIFECYCLE_ARTIFACT_DIR ?? "/tmp/lean-modular-lifecycle";
 let browser;
@@ -206,5 +208,7 @@ try {
   await server.close();
   if (previousDirectory === undefined) delete process.env.STEERLAB_USER_DATA_DIR;
   else process.env.STEERLAB_USER_DATA_DIR = previousDirectory;
+  if (previousScenarioDirectory === undefined) delete process.env.STEERLAB_SCENARIOS_DIR;
+  else process.env.STEERLAB_SCENARIOS_DIR = previousScenarioDirectory;
   await rm(directory, { recursive: true, force: true });
 }
