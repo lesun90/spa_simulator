@@ -2,6 +2,7 @@
 import RAPIER from "@dimforge/rapier3d-compat";
 import { placementOriginY, scaledAgentCollision, type AgentDraft, type AgentSnapshot, type PlacementHit, type PlacementPreview, type Ray3, type Vector3Value } from "../domain/agent";
 import { NEUTRAL_DRIVE_COMMAND, validateDriveCommand, type DriveCommand } from "../domain/playback";
+import { DEFAULT_MATERIAL_FRICTION } from "../domain/materialFriction";
 import type { AgentTransform, PlaybackSnapshot, SceneGeometryDescription } from "./PhysicsWorld";
 import type { PhysicsWorkerRequest, PhysicsWorkerResponse } from "./PhysicsWorkerClient";
 
@@ -26,6 +27,7 @@ let world: RAPIER.World | null = null;
 let sceneRevision = 0;
 let initialized: Promise<void> | null = null;
 const environmentHandles = new Map<number, string>();
+const environmentMaterials = new Map<number, string>();
 const nonSupportingHandles = new Set<number>();
 const agentColliders = new Map<string, RAPIER.Collider>();
 
@@ -46,7 +48,8 @@ async function dispatch(request: PhysicsWorkerRequest): Promise<unknown> {
   await ensureInitialized();
   const operation = request.operation;
   switch (operation.type) {
-    case "replaceScene": return replaceScene(operation.scene);
+    case "replaceScene": return replaceScene(operation.scene, operation.materialFriction);
+    case "updateGroundFriction": updateGroundFriction(operation.materialFriction); return undefined;
     case "pickSurface": return pickSurface(operation.ray);
     case "previewAgentPlacement": return previewPlacement(operation.draft, operation.ray, operation.ignoreAgentId);
     case "addAgent": return addAgent(operation.agent, operation.expectedSceneRevision);
@@ -66,10 +69,11 @@ async function ensureInitialized(): Promise<void> {
   await initialized;
 }
 
-function replaceScene(scene: SceneGeometryDescription): number {
+function replaceScene(scene: SceneGeometryDescription, materialFriction: Readonly<Record<string, number>>): number {
   const next = new RAPIER.World({ x: 0, y: -9.81, z: 0 });
   const nextHandles = new Set<number>();
   const nextLabels = new Map<number, string>();
+  const nextMaterials = new Map<number, string>();
   const nextNonSupportingHandles = new Set<number>();
   try {
     if (scene.kind === "default-ground") {
@@ -77,16 +81,18 @@ function replaceScene(scene: SceneGeometryDescription): number {
       if (!ground || !Number.isFinite(ground.width) || !Number.isFinite(ground.depth) || !Number.isFinite(ground.y) || ground.width <= 0 || ground.depth <= 0) {
         throw new Error("Default ground geometry is invalid.");
       }
-      const collider = next.createCollider(RAPIER.ColliderDesc.cuboid(ground.width / 2, 0.05, ground.depth / 2).setTranslation(0, ground.y - 0.05, 0));
+      const collider = next.createCollider(RAPIER.ColliderDesc.cuboid(ground.width / 2, 0.05, ground.depth / 2).setTranslation(0, ground.y - 0.05, 0).setFriction(DEFAULT_MATERIAL_FRICTION.default));
       nextHandles.add(collider.handle);
       nextLabels.set(collider.handle, "scene:default-ground");
     } else {
       if (!scene.meshes.length) throw new Error("The imported scene has no supported solid geometry.");
       for (const [index, mesh] of scene.meshes.entries()) {
         if (mesh.vertices.length < 9 || mesh.indices.length < 3) continue;
-        const collider = next.createCollider(RAPIER.ColliderDesc.trimesh(mesh.vertices, mesh.indices));
+        const friction = materialFriction[mesh.material] ?? DEFAULT_MATERIAL_FRICTION[mesh.material] ?? DEFAULT_MATERIAL_FRICTION.default;
+        const collider = next.createCollider(RAPIER.ColliderDesc.trimesh(mesh.vertices, mesh.indices).setFriction(friction));
         nextHandles.add(collider.handle);
         nextLabels.set(collider.handle, `scene:${index}:${mesh.label}`);
+        nextMaterials.set(collider.handle, mesh.material);
       }
       for (const mesh of scene.nonSupportingMeshes ?? []) {
         if (mesh.vertices.length < 9 || mesh.indices.length < 3) continue;
@@ -104,11 +110,22 @@ function replaceScene(scene: SceneGeometryDescription): number {
   world = next;
   environmentHandles.clear();
   for (const [handle, label] of nextLabels) environmentHandles.set(handle, label);
+  environmentMaterials.clear();
+  for (const [handle, material] of nextMaterials) environmentMaterials.set(handle, material);
   nonSupportingHandles.clear();
   for (const handle of nextNonSupportingHandles) nonSupportingHandles.add(handle);
   agentColliders.clear();
   clearPlaybackState();
   return ++sceneRevision;
+}
+
+function updateGroundFriction(materialFriction: Readonly<Record<string, number>>): void {
+  const active = requireWorld();
+  for (const [handle, material] of environmentMaterials) {
+    const collider = active.colliders.get(handle);
+    if (!collider) continue;
+    collider.setFriction(materialFriction[material] ?? DEFAULT_MATERIAL_FRICTION[material] ?? DEFAULT_MATERIAL_FRICTION.default);
+  }
 }
 
 function pickSurface(ray: Ray3): PlacementHit | null {
@@ -341,4 +358,4 @@ function collisionCenter(draft: AgentDraft, position: Vector3Value, heading: num
   const horizontal = rotate(center.x, center.z, heading);
   return { x: position.x + horizontal.x, y: position.y + center.y, z: position.z + horizontal.z };
 }
-function dispose(): void { world?.free(); world = null; environmentHandles.clear(); nonSupportingHandles.clear(); agentColliders.clear(); clearPlaybackState(); }
+function dispose(): void { world?.free(); world = null; environmentHandles.clear(); environmentMaterials.clear(); nonSupportingHandles.clear(); agentColliders.clear(); clearPlaybackState(); }

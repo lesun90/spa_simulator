@@ -38,7 +38,7 @@ export class ScenarioSession {
     this.presentation = presenter.createDefault();
     presenter.show(this.presentation);
     this.physics = physics;
-    this.ready = physics.then(async (world) => { this.sceneRevision = await world.replaceScene(this.presentation.geometry); });
+    this.ready = physics.then(async (world) => { this.sceneRevision = await world.replaceScene(this.presentation.geometry, this.document.materialFriction); });
     void this.ready.catch(() => {});
   }
 
@@ -74,7 +74,7 @@ export class ScenarioSession {
       for (const agent of agents) agentPresentations.push({ agent, presentation: await this.agentPresenter.prepare(agent) });
       await this.ready;
       if (this.disposed || request !== this.generation) throw new Error("The scenario open result is stale. Try again.");
-      const nextRevision = await world.replaceScene(scenePresentation.geometry);
+      const nextRevision = await world.replaceScene(scenePresentation.geometry, this.document.materialFriction);
       if (this.disposed || request !== this.generation) throw new Error("The scenario open result is stale. Try again.");
 
       this.presenter.show(scenePresentation);
@@ -105,7 +105,7 @@ export class ScenarioSession {
       prepared = await this.presenter.prepare(data);
       await this.ready;
       if (this.disposed || request !== this.generation) return;
-      const nextRevision = await world.replaceScene(prepared.geometry);
+      const nextRevision = await world.replaceScene(prepared.geometry, this.document.materialFriction);
       if (this.disposed) return;
       this.presenter.show(prepared);
       const old = this.presentation;
@@ -259,6 +259,10 @@ export class ScenarioSession {
       this.controlledAgentId = null;
       this.onPlaybackChanged(this.playbackState, error instanceof Error ? error.message : "Drive command failed.");
     });
+  }
+
+  updateMaterialFriction(): void {
+    void this.physics.then((world) => world.updateGroundFriction(this.document.materialFriction)).catch(() => {});
   }
 
   async stepPlayback(dt: number): Promise<readonly AgentTransform[] | null> {

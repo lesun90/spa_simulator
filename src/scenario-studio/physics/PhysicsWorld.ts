@@ -33,7 +33,9 @@ export interface PlaybackSnapshot {
 }
 
 export interface PhysicsWorld extends PlacementSurface {
-  replaceScene(scene: SceneGeometryDescription): Promise<number>;
+  replaceScene(scene: SceneGeometryDescription, materialFriction: Readonly<Record<string, number>>): Promise<number>;
+  /** Re-applies friction to the current ground colliders in place, without rebuilding geometry or disturbing agent colliders. */
+  updateGroundFriction(materialFriction: Readonly<Record<string, number>>): Promise<void>;
   previewAgentPlacement(draft: AgentDraft, ray: Ray3, ignoreAgentId?: string): Promise<PlacementPreview>;
   addAgent(agent: AgentSnapshot, expectedSceneRevision: number): Promise<void>;
   updateAgent(agent: AgentSnapshot, expectedSceneRevision: number): Promise<void>;

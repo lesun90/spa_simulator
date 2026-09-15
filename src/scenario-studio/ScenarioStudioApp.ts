@@ -168,7 +168,10 @@ export class ScenarioStudioApp {
         pause: () => this.session.pause(),
         reset: () => this.session.reset(),
         materialFriction: () => this.session.document.materialFriction,
-        setMaterialFriction: (material, value) => { this.session.document.setMaterialFriction(material, value); }
+        setMaterialFriction: (material, value) => {
+          this.session.document.setMaterialFriction(material, value);
+          this.session.updateMaterialFriction();
+        }
       }
     );
     this.syncScenarioState();

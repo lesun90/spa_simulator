@@ -3,7 +3,8 @@ import type { DriveCommand } from "../domain/playback";
 import type { PlaybackSnapshot, SceneGeometryDescription } from "./PhysicsWorld";
 
 export type PhysicsWorkerOperation =
-  | { type: "replaceScene"; scene: SceneGeometryDescription }
+  | { type: "replaceScene"; scene: SceneGeometryDescription; materialFriction: Readonly<Record<string, number>> }
+  | { type: "updateGroundFriction"; materialFriction: Readonly<Record<string, number>> }
   | { type: "pickSurface"; ray: Ray3 }
   | { type: "previewAgentPlacement"; draft: AgentDraft; ray: Ray3; ignoreAgentId?: string }
   | { type: "addAgent"; agent: AgentSnapshot; expectedSceneRevision: number }
@@ -31,7 +32,8 @@ export class PhysicsWorkerClient {
     this.worker.addEventListener("error", this.handleError);
   }
 
-  replaceScene(scene: SceneGeometryDescription): Promise<number> { return this.request({ type: "replaceScene", scene }); }
+  replaceScene(scene: SceneGeometryDescription, materialFriction: Readonly<Record<string, number>>): Promise<number> { return this.request({ type: "replaceScene", scene, materialFriction }); }
+  updateGroundFriction(materialFriction: Readonly<Record<string, number>>): Promise<void> { return this.request({ type: "updateGroundFriction", materialFriction }); }
   pickSurface(ray: Ray3): Promise<PlacementHit | null> { return this.request({ type: "pickSurface", ray }); }
   previewAgentPlacement(draft: AgentDraft, ray: Ray3, ignoreAgentId?: string): Promise<PlacementPreview> {
     return this.request({ type: "previewAgentPlacement", draft, ray, ignoreAgentId });

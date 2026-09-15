@@ -6,11 +6,12 @@ import { PhysicsWorkerClient } from "./PhysicsWorkerClient";
 export class RapierPhysicsWorld implements PhysicsWorld {
   private readonly client = new PhysicsWorkerClient();
 
-  replaceScene(scene: SceneGeometryDescription): Promise<number> {
+  replaceScene(scene: SceneGeometryDescription, materialFriction: Readonly<Record<string, number>>): Promise<number> {
     const cloneMeshes = (meshes: readonly SceneGeometryDescription["meshes"][number][]) => meshes.map((mesh) => ({ ...mesh, vertices: mesh.vertices.slice(), indices: mesh.indices.slice() }));
     const copy = { ...scene, meshes: cloneMeshes(scene.meshes), nonSupportingMeshes: cloneMeshes(scene.nonSupportingMeshes ?? []) };
-    return this.client.replaceScene(copy);
+    return this.client.replaceScene(copy, materialFriction);
   }
+  updateGroundFriction(materialFriction: Readonly<Record<string, number>>): Promise<void> { return this.client.updateGroundFriction(materialFriction); }
   pickSurface(ray: Ray3): Promise<PlacementHit | null> { return this.client.pickSurface(ray); }
   previewAgentPlacement(draft: AgentDraft, ray: Ray3, ignoreAgentId?: string): Promise<PlacementPreview> {
     return this.client.previewAgentPlacement(draft, ray, ignoreAgentId);
