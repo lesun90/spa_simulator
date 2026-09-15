@@ -166,7 +166,9 @@ export class ScenarioStudioApp {
         },
         play: async () => { await this.session.play(); },
         pause: () => this.session.pause(),
-        reset: () => this.session.reset()
+        reset: () => this.session.reset(),
+        materialFriction: () => this.session.document.materialFriction,
+        setMaterialFriction: (material, value) => { this.session.document.setMaterialFriction(material, value); }
       }
     );
     this.syncScenarioState();

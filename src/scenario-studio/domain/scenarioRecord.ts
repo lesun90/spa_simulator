@@ -10,6 +10,7 @@ export interface ScenarioRecord {
   readonly sceneReference: SceneReference | null;
   readonly engineKey: string;
   readonly agents: readonly AgentSnapshot[];
+  readonly materialFriction: Readonly<Record<string, number>>;
 }
 
 export interface ScenarioSummary {
@@ -25,6 +26,7 @@ export function validateScenarioRecord(value: unknown): ScenarioRecord {
   const id = identity(source.id, "Scenario ID");
   const name = requiredText(source.name, "Scenario name", 80);
   const engineKey = identity(source.engineKey, "Physics engine key");
+  const materialFriction = source.materialFriction === undefined ? {} : materialFrictionMap(source.materialFriction);
   const sceneReference = source.sceneReference === null ? null : validateSceneReference(source.sceneReference);
   if (!Array.isArray(source.agents)) throw new Error("Scenario agents must be an array.");
   const agents = source.agents.map(validateAgentSnapshot);
@@ -48,7 +50,7 @@ export function validateScenarioRecord(value: unknown): ScenarioRecord {
       support = agents.find((candidate) => candidate.id === support!.id)?.pose.support;
     }
   }
-  return freezeRecord({ version: SCENARIO_RECORD_VERSION, id, name, sceneReference, engineKey, agents });
+  return freezeRecord({ version: SCENARIO_RECORD_VERSION, id, name, sceneReference, engineKey, agents, materialFriction });
 }
 
 export function validateScenarioSummary(value: unknown): ScenarioSummary {
@@ -71,7 +73,8 @@ export function freezeRecord(value: ScenarioRecord): ScenarioRecord {
     name: value.name,
     engineKey: value.engineKey,
     sceneReference: value.sceneReference ? Object.freeze({ ...value.sceneReference }) : null,
-    agents: Object.freeze(value.agents.map((agent) => Object.freeze({ id: agent.id, ...validateAgentDraft(agent) })))
+    agents: Object.freeze(value.agents.map((agent) => Object.freeze({ id: agent.id, ...validateAgentDraft(agent) }))),
+    materialFriction: Object.freeze({ ...value.materialFriction })
   });
 }
 
@@ -174,6 +177,13 @@ function validateWheel(value: unknown): WheelDescriptor {
     radius: positive(source.radius, "Wheel radius"),
     steerable: typeof source.steerable === "boolean" ? source.steerable : (() => { throw new Error("Wheel steerable flag must be a boolean."); })()
   });
+}
+
+function materialFrictionMap(value: unknown): Record<string, number> {
+  const source = record(value, "Scenario material friction");
+  const result: Record<string, number> = {};
+  for (const [material, friction] of Object.entries(source)) result[material] = positive(friction, `Friction for material "${material}"`);
+  return result;
 }
 
 function record(value: unknown, label: string): Record<string, unknown> {

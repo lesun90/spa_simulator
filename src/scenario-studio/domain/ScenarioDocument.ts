@@ -10,6 +10,7 @@ export class ScenarioDocument {
   private physicsEngineKey: string;
   private activeScene: SceneReference | null = null;
   private authoredAgents: readonly AgentSnapshot[] = Object.freeze([]);
+  private materialFrictionOverrides: Readonly<Record<string, number>> = Object.freeze({});
   private modified = false;
 
   constructor(record: ScenarioRecord = newScenarioRecord()) {
@@ -19,6 +20,7 @@ export class ScenarioDocument {
     this.physicsEngineKey = valid.engineKey;
     this.activeScene = valid.sceneReference;
     this.authoredAgents = valid.agents;
+    this.materialFrictionOverrides = valid.materialFriction;
   }
 
   get id(): string { return this.identity; }
@@ -48,13 +50,22 @@ export class ScenarioDocument {
     return this.authoredAgents;
   }
 
+  get materialFriction(): Readonly<Record<string, number>> { return this.materialFrictionOverrides; }
+
   replaceAgents(agents: readonly AgentSnapshot[]): void {
     this.authoredAgents = Object.freeze([...agents]);
     this.modified = true;
   }
 
+  setMaterialFriction(material: string, friction: number): void {
+    if (!Number.isFinite(friction) || friction <= 0) throw new Error("Material friction must be a positive number.");
+    if (this.materialFrictionOverrides[material] === friction) return;
+    this.materialFrictionOverrides = Object.freeze({ ...this.materialFrictionOverrides, [material]: friction });
+    this.modified = true;
+  }
+
   toRecord(): ScenarioRecord {
-    return freezeRecord({ version: SCENARIO_RECORD_VERSION, id: this.identity, name: this.scenarioName, sceneReference: this.activeScene, engineKey: this.physicsEngineKey, agents: this.authoredAgents });
+    return freezeRecord({ version: SCENARIO_RECORD_VERSION, id: this.identity, name: this.scenarioName, sceneReference: this.activeScene, engineKey: this.physicsEngineKey, agents: this.authoredAgents, materialFriction: this.materialFrictionOverrides });
   }
 
   replaceWith(record: ScenarioRecord): void {
@@ -64,6 +75,7 @@ export class ScenarioDocument {
     this.physicsEngineKey = valid.engineKey;
     this.activeScene = valid.sceneReference;
     this.authoredAgents = valid.agents;
+    this.materialFrictionOverrides = valid.materialFriction;
     this.modified = false;
   }
 
@@ -77,7 +89,7 @@ export class ScenarioDocument {
 }
 
 export function newScenarioRecord(name = "Untitled scenario", id = createScenarioId()): ScenarioRecord {
-  return freezeRecord({ version: SCENARIO_RECORD_VERSION, id, name, sceneReference: null, engineKey: "rapier", agents: [] });
+  return freezeRecord({ version: SCENARIO_RECORD_VERSION, id, name, sceneReference: null, engineKey: "rapier", agents: [], materialFriction: {} });
 }
 
 function createScenarioId(): string {

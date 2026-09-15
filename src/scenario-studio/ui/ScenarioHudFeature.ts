@@ -9,12 +9,16 @@ import { Panel } from "../../features/hud/kit/Panel";
 import { TextField } from "../../features/hud/kit/TextField";
 import { sameSceneReference, type SceneChoice, type SceneReference } from "../domain/scene";
 import { createAgentDraft, type AgentChoice, type AgentDraft, type AgentSnapshot, type PlacementPreview } from "../domain/agent";
+import { frictionForMaterial } from "../domain/materialFriction";
 import type { PlaybackState } from "../domain/playback";
 import { HudText } from "./HudText";
 import { SceneBrowserPanel } from "./SceneBrowserPanel";
 import type { ScenarioSceneThumbnails } from "../rendering/ScenarioSceneThumbnails";
 import { AgentBrowserTab } from "./AgentBrowserTab";
 import { AgentInspectorPanel } from "./AgentInspectorPanel";
+
+/** Vertical spacing between stacked material-friction rows in the scene inspector. */
+const CONTROL_HEIGHT_STEP = 30;
 
 interface ScenarioActions {
   rename(name: string): string;
@@ -24,6 +28,8 @@ interface ScenarioActions {
   play(): Promise<void>;
   pause(): void;
   reset(): void;
+  materialFriction(): Readonly<Record<string, number>>;
+  setMaterialFriction(material: string, value: number): void;
 }
 
 /** Reuses Scene Studio's shell geometry, panel chrome, tiles, buttons, and text renderer. */
@@ -43,6 +49,8 @@ export class ScenarioHudFeature {
   private readonly roadWidthField: TextField;
   /** Session-only road-width edits, keyed by scene reference key; unset scenes fall back to their authored metadata. */
   private readonly roadWidthOverrides = new Map<string, number>();
+  private readonly materialFrictionLabels = new Map<string, HudText>();
+  private readonly materialFrictionFields = new Map<string, TextField>();
   private readonly newButton: Button;
   private readonly openButton: Button;
   private readonly saveButton: Button;
@@ -326,6 +334,7 @@ export class ScenarioHudFeature {
     this.agentInspector.update(dt);
     this.scenarioNameField.update(dt);
     this.roadWidthField.update(dt);
+    for (const field of this.materialFrictionFields.values()) field.update(dt);
   }
 
   invalidate(): void {
@@ -361,6 +370,67 @@ export class ScenarioHudFeature {
     const parsed = Number.parseFloat(value);
     if (Number.isFinite(parsed) && parsed >= 0) this.roadWidthOverrides.set(this.candidate.reference.key, parsed);
     this.roadWidthField.setValue(String(this.candidateRoadWidthMeters()));
+  }
+
+  private syncMaterialFrictionRows(): void {
+    const materials = this.candidate?.materials ?? [];
+    for (const [material, field] of this.materialFrictionFields) if (!materials.includes(material)) {
+      field.dispose(); this.materialFrictionFields.delete(material);
+      this.materialFrictionLabels.get(material)?.dispose(); this.materialFrictionLabels.delete(material);
+    }
+    materials.forEach((material, index) => {
+      let field = this.materialFrictionFields.get(material);
+      if (!field) {
+        field = new TextField(this.materialFrictionFieldRect(index), this.interaction, {
+          numeric: true, placeholder: "0.6", onCommit: (value) => this.commitMaterialFriction(material, value)
+        }, "");
+        this.materialFrictionFields.set(material, field);
+        this.right.root.add(field.root);
+      }
+      field.setRect(this.materialFrictionFieldRect(index));
+      field.setValue(String(frictionForMaterial(material, this.scenarioActions.materialFriction())));
+      let label = this.materialFrictionLabels.get(material);
+      if (!label) {
+        label = new HudText(this.materialFrictionLabelRect(index), { size: 11.5, weight: "600", color: theme.textMutedStrong.css });
+        label.setText(material);
+        this.materialFrictionLabels.set(material, label);
+        this.right.root.add(label.root);
+      }
+      label.setFrame(this.materialFrictionLabelRect(index));
+    });
+  }
+
+  private materialFrictionRowCount(): number { return this.candidate?.materials?.length ?? 0; }
+
+  private materialFrictionFieldRect(index: number): Rect {
+    const field = this.roadWidthFieldRect();
+    return { x: field.x, y: field.y + (index + 1) * (CONTROL_HEIGHT_STEP), width: field.width, height: 26 };
+  }
+
+  private materialFrictionLabelRect(index: number): Rect {
+    const field = this.materialFrictionFieldRect(index);
+    return { x: field.x - 100, y: field.y, width: 100, height: 26 };
+  }
+
+  private commitMaterialFriction(material: string, value: string): void {
+    const parsed = Number.parseFloat(value);
+    if (Number.isFinite(parsed) && parsed > 0) this.scenarioActions.setMaterialFriction(material, parsed);
+    this.materialFrictionFields.get(material)?.setValue(String(frictionForMaterial(material, this.scenarioActions.materialFriction())));
+  }
+
+  /** Repositions the fixed-offset inspector labels that sit below the material-friction rows, whose
+   * count varies with the currently-inspected scene's material list. */
+  private positionDetailLabels(): void {
+    const panel = this.layout.inspectorPanel;
+    const shift = this.materialFrictionRowCount() * CONTROL_HEIGHT_STEP;
+    for (const [name, y, maxLines] of [
+      ["detailKey", 255 + shift, 3],
+      ["detailVersion", 287 + shift, 3],
+      ["detailHash", 313 + shift, 3],
+      ["diagnostic", 367 + shift, 5]
+    ] as const) {
+      this.labels[name].setFrame({ x: panel.x + 18, y: panel.y + y, width: Math.max(panel.width - 36, 1), maxLines });
+    }
   }
 
   private armPlacement(draft: AgentDraft): void {
@@ -489,6 +559,8 @@ export class ScenarioHudFeature {
     this.labels.roadWidthLabel.root.visible = Boolean(this.candidate);
     this.roadWidthField.root.visible = Boolean(this.candidate);
     this.roadWidthField.setValue(String(this.candidateRoadWidthMeters()));
+    this.syncMaterialFrictionRows();
+    this.positionDetailLabels();
     this.labels.detailKey.setText(this.candidate ? `Package: ${this.candidate.reference.key === "." ? "root" : this.candidate.reference.key}` : "");
     this.labels.detailVersion.setText(this.candidate ? `Format version: ${this.candidate.reference.formatVersion}` : "");
     this.labels.detailHash.setText(this.candidate ? `Model SHA-256: ${this.candidate.reference.modelSha256.slice(0, 18)}…` : "");
@@ -523,12 +595,11 @@ export class ScenarioHudFeature {
       ["candidateHeader", 156, this.layout.leftPanel], ["candidate", 182, this.layout.leftPanel],
       ["status", this.layout.leftPanel.height - 120, this.layout.leftPanel], ["inspectorTitle", 12, this.layout.inspectorPanel],
       ["detailName", 64, this.layout.inspectorPanel], ["detailDescription", 109, this.layout.inspectorPanel],
-      ["detailMetadata", 171, this.layout.inspectorPanel], ["roadWidthLabel", 222, this.layout.inspectorPanel],
-      ["detailKey", 255, this.layout.inspectorPanel],
-      ["detailVersion", 287, this.layout.inspectorPanel], ["detailHash", 313, this.layout.inspectorPanel],
-      ["diagnostic", 367, this.layout.inspectorPanel]
-    ] as const) this.labels[name].setFrame({ x: panel.x + 18, y: panel.y + y, width: Math.max(panel.width - 36, 1), maxLines: name === "status" ? 4 : name === "diagnostic" ? 5 : 3 });
+      ["detailMetadata", 171, this.layout.inspectorPanel], ["roadWidthLabel", 222, this.layout.inspectorPanel]
+    ] as const) this.labels[name].setFrame({ x: panel.x + 18, y: panel.y + y, width: Math.max(panel.width - 36, 1), maxLines: name === "status" ? 4 : 3 });
     this.roadWidthField.setRect(this.roadWidthFieldRect());
+    this.syncMaterialFrictionRows();
+    this.positionDetailLabels();
     this.useButton.setRect(this.useRect());
     this.resetButton.setRect(this.resetRect());
     this.scenesTab.setRect(this.sceneTabRect());
@@ -559,6 +630,8 @@ export class ScenarioHudFeature {
     this.resetButton.dispose();
     this.scenarioNameField.dispose();
     this.roadWidthField.dispose();
+    for (const field of this.materialFrictionFields.values()) field.dispose();
+    for (const label of this.materialFrictionLabels.values()) label.dispose();
     this.newButton.dispose();
     this.openButton.dispose();
     this.saveButton.dispose();
