@@ -166,7 +166,7 @@ export class AgentInspectorPanel extends BasePanel {
   update(dt: number): void { for (const field of [...Object.values(this.fields), ...Object.values(this.vehicleFields)]) field.update(dt); }
 
   private visibleVehicleSpecs(): typeof VEHICLE_FIELD_SPECS {
-    return this.currentDraft()?.asset.category === "vehicles" ? VEHICLE_FIELD_SPECS : [];
+    return this.currentDraft()?.vehicle ? VEHICLE_FIELD_SPECS : [];
   }
 
   protected layout(): void {
@@ -264,6 +264,7 @@ export class AgentInspectorPanel extends BasePanel {
     this.fields.scale.setValue(format(draft.scale)); this.fields.heading.setValue(format(draft.pose.headingRadians * 180 / Math.PI)); this.fields.mass.setValue(format(draft.mass));
     this.fields.slope.setValue(format(draft.placement.maxSlopeDegrees)); this.fields.clearance.setValue(format(draft.placement.clearance));
     if (draft.vehicle) for (const { key } of VEHICLE_FIELD_SPECS) this.vehicleFields[key].setValue(format(draft.vehicle[key]));
+    else for (const { key } of VEHICLE_FIELD_SPECS) this.vehicleFields[key].setValue("");
   }
   private clearFields(): void { for (const field of [...Object.values(this.fields), ...Object.values(this.vehicleFields)]) field.setValue(""); }
   private updateState(): void {

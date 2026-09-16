@@ -375,8 +375,10 @@ export class ScenarioHudFeature {
   private syncMaterialFrictionRows(): void {
     const materials = this.candidate?.materials ?? [];
     for (const [material, field] of this.materialFrictionFields) if (!materials.includes(material)) {
-      field.dispose(); this.materialFrictionFields.delete(material);
-      this.materialFrictionLabels.get(material)?.dispose(); this.materialFrictionLabels.delete(material);
+      field.root.removeFromParent(); field.dispose(); this.materialFrictionFields.delete(material);
+      const label = this.materialFrictionLabels.get(material);
+      if (label) { label.root.removeFromParent(); label.dispose(); }
+      this.materialFrictionLabels.delete(material);
     }
     materials.forEach((material, index) => {
       let field = this.materialFrictionFields.get(material);
@@ -630,8 +632,8 @@ export class ScenarioHudFeature {
     this.resetButton.dispose();
     this.scenarioNameField.dispose();
     this.roadWidthField.dispose();
-    for (const field of this.materialFrictionFields.values()) field.dispose();
-    for (const label of this.materialFrictionLabels.values()) label.dispose();
+    for (const field of this.materialFrictionFields.values()) { field.root.removeFromParent(); field.dispose(); }
+    for (const label of this.materialFrictionLabels.values()) { label.root.removeFromParent(); label.dispose(); }
     this.newButton.dispose();
     this.openButton.dispose();
     this.saveButton.dispose();

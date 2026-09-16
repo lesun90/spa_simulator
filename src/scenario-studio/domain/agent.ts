@@ -68,7 +68,7 @@ export interface VehicleTuning {
   readonly wheelFrictionSlip: number;
 }
 
-const DEFAULT_VEHICLE_TUNING: VehicleTuning = Object.freeze({
+export const DEFAULT_VEHICLE_TUNING: VehicleTuning = Object.freeze({
   maxEngineForceN: 4000,
   maxBrakeForceN: 6000,
   maxSteeringAngleDegrees: 35,

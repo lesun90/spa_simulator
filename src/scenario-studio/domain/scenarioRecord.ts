@@ -1,4 +1,4 @@
-import { validateAgentDraft, type AgentAssetReference, type AgentSnapshot, type Vector3Value, type VehicleTuning, type WheelDescriptor } from "./agent";
+import { DEFAULT_VEHICLE_TUNING, validateAgentDraft, type AgentAssetReference, type AgentSnapshot, type Vector3Value, type VehicleTuning, type WheelDescriptor } from "./agent";
 import type { SceneReference } from "./scene";
 
 export const SCENARIO_RECORD_VERSION = 1 as const;
@@ -113,7 +113,12 @@ function validateAgentSnapshot(value: unknown): AgentSnapshot {
     scale: numeric(source.scale, "Agent scale"),
     pose: { position: vector(pose.position, "Agent position"), headingRadians: numeric(pose.headingRadians, "Agent heading"), support },
     mass: numeric(source.mass, "Agent mass"),
-    vehicle: source.vehicle === null || source.vehicle === undefined ? null : validateVehicleTuningRecord(source.vehicle),
+    vehicle:
+      source.vehicle === undefined
+        ? asset.category === "vehicles" ? DEFAULT_VEHICLE_TUNING : null
+        : source.vehicle === null
+          ? null
+          : validateVehicleTuningRecord(source.vehicle),
     collision: { center: vector(collision.center, "Collision center"), halfExtents: vector(collision.halfExtents, "Collision half-extents") },
     placement: { maxSlopeDegrees: numeric(placement.maxSlopeDegrees, "Maximum placement slope"), clearance: numeric(placement.clearance, "Placement clearance") },
     inputEligible: source.inputEligible

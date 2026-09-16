@@ -11,6 +11,9 @@ export const DEFAULT_MATERIAL_FRICTION: Readonly<Record<string, number>> = Objec
   gravel: 0.75,
   sand: 0.6,
   water: 0.05,
+  grey_asphalt: 0.7,
+  alternate_dirt: 0.75,
+  stone: 0.75,
   default: 0.6
 });
 
