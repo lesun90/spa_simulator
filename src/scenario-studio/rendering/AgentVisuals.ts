@@ -10,10 +10,19 @@ import {
   scaleFromGroundHandle,
   transformModeForPointerButton
 } from "../../features/world/objectTransform";
-import { scaledAgentCollision, type AgentDraft, type AgentPresentation, type AgentPresenter, type AgentSnapshot, type PlacementPreview, type Ray3, type Vector3Value } from "../domain/agent";
+import { scaledAgentCollision, scaledVehicleTuning, type AgentDraft, type AgentPresentation, type AgentPresenter, type AgentSnapshot, type PlacementPreview, type Ray3, type Vector3Value } from "../domain/agent";
 import type { AgentTransform } from "../physics/PhysicsWorld";
 
 type AgentTransformMode = ObjectTransformControlMode | "move";
+
+interface WheelVisualNodes {
+  readonly steering: THREE.Object3D;
+  readonly wheel: THREE.Object3D;
+  readonly suspension: THREE.Object3D;
+  readonly restPosition: THREE.Vector3;
+  readonly restSteering: THREE.Quaternion;
+  readonly restRotation: THREE.Quaternion;
+}
 
 interface AgentVisualCallbacks {
   getGroundPoint(x: number, y: number): Vector3Value | null;
@@ -49,7 +58,7 @@ export class AgentVisuals implements AgentPresenter {
   private readonly assets = new AssetManager();
   private readonly instances = new Map<string, THREE.Object3D>();
   private readonly agents = new Map<string, AgentSnapshot>();
-  private readonly wheelNodes = new Map<string, ReadonlyArray<{ steering: THREE.Object3D; wheel: THREE.Object3D } | null>>();
+  private readonly wheelNodes = new Map<string, ReadonlyArray<WheelVisualNodes | null>>();
   private readonly ghost = new THREE.Mesh(
     new THREE.BoxGeometry(1, 1, 1),
     new THREE.MeshBasicMaterial({ color: 0x27a86b, transparent: true, opacity: 0.28, depthWrite: false })
@@ -95,6 +104,13 @@ export class AgentVisuals implements AgentPresenter {
     this.agents.set(agent.id, agent);
     object.name = agent.name;
     applyPose(object, agent);
+    for (const node of this.wheelNodes.get(agent.id) ?? []) {
+      if (!node) continue;
+      node.suspension.position.copy(node.restPosition);
+      node.steering.quaternion.copy(node.restSteering);
+      node.wheel.quaternion.copy(node.restRotation);
+    }
+    object.updateMatrixWorld(true);
     if (this.selectedId === agent.id) this.refreshSelectionControls();
   }
 
@@ -104,21 +120,26 @@ export class AgentVisuals implements AgentPresenter {
       const object = this.instances.get(transform.id);
       if (!object) continue;
       object.position.set(transform.position.x, transform.position.y, transform.position.z);
-      object.rotation.set(0, transform.headingRadians, 0);
+      object.quaternion.set(transform.rotation.x, transform.rotation.y, transform.rotation.z, transform.rotation.w);
       if (transform.wheels) {
         const nodes = this.resolveWheelNodes(transform.id);
+        const snapshot = this.agents.get(transform.id);
+        // restPosition already sits at the authored (rest-length) wheel height, so only the deviation from rest should move it.
+        const restSuspensionLength = snapshot?.vehicle ? scaledVehicleTuning(snapshot.vehicle, snapshot.mass, snapshot.scale).suspensionRestLength : 0;
         transform.wheels.forEach((wheel, index) => {
           const node = nodes?.[index];
           if (!node) return;
           node.steering.rotation.y = wheel.steeringRadians;
           node.wheel.rotation.x = wheel.rotationRadians;
+          node.suspension.position.copy(node.restPosition);
+          node.suspension.position.y -= (wheel.suspensionLength - restSuspensionLength) / object.scale.y;
         });
       }
       object.updateMatrixWorld(true);
     }
   }
 
-  private resolveWheelNodes(id: string): ReadonlyArray<{ steering: THREE.Object3D; wheel: THREE.Object3D } | null> | null {
+  private resolveWheelNodes(id: string): ReadonlyArray<WheelVisualNodes | null> | null {
     const cached = this.wheelNodes.get(id);
     if (cached) return cached;
     const object = this.instances.get(id);
@@ -127,7 +148,13 @@ export class AgentVisuals implements AgentPresenter {
     const resolved = wheels.map((wheel) => {
       const steering = object.getObjectByName(wheel.steeringNode);
       const wheelNode = object.getObjectByName(wheel.wheelNode);
-      return steering && wheelNode ? { steering, wheel: wheelNode } : null;
+      const suspension = object.getObjectByName(wheel.suspensionNode);
+      return steering && wheelNode && suspension ? {
+        steering, wheel: wheelNode, suspension,
+        restPosition: suspension.position.clone(),
+        restSteering: steering.quaternion.clone(),
+        restRotation: wheelNode.quaternion.clone()
+      } : null;
     });
     this.wheelNodes.set(id, resolved);
     return resolved;

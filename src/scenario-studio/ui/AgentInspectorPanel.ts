@@ -5,6 +5,7 @@ import { BasePanel } from "../../features/hud/kit/BasePanel";
 import { Button } from "../../features/hud/kit/Button";
 import type { Rect } from "../../features/hud/kit/layout";
 import { Panel } from "../../features/hud/kit/Panel";
+import { ScrollRegion } from "../../features/hud/kit/ScrollRegion";
 import { TextField } from "../../features/hud/kit/TextField";
 import { createAgentDraft, freezeDraft, scaledAgentCollision, validateAgentDraft, type AgentChoice, type AgentDraft, type AgentSnapshot } from "../domain/agent";
 import { HudText } from "./HudText";
@@ -45,12 +46,15 @@ export class AgentInspectorPanel extends BasePanel {
   private readonly eligibilityLabel: HudText;
   private readonly status: HudText;
   private readonly divider: Panel;
+  private readonly scroll: ScrollRegion;
+  private readonly sectionLabels: HudText[];
   private readonly fieldLabels: HudText[];
   private readonly helpButtons: Button[];
   private readonly fields: Record<AgentFieldKey, TextField>;
   private readonly vehicleFieldLabels: HudText[];
   private readonly vehicleHelpButtons: Button[];
   private readonly vehicleFields: Record<VehicleFieldKey, TextField>;
+  private readonly vehicleToggle: Button;
   private readonly primary: Button;
   private readonly duplicate: Button;
   private readonly remove: Button;
@@ -60,6 +64,7 @@ export class AgentInspectorPanel extends BasePanel {
   private readonly existing = new Map<string, AgentSnapshot>();
   private context: Context = null;
   private busy = false;
+  private vehicleTuningExpanded = false;
 
   constructor(
     rect: Rect,
@@ -78,6 +83,8 @@ export class AgentInspectorPanel extends BasePanel {
     this.eligibilityLabel = text("", 11, "500", theme.textMuted.css);
     this.status = text("", 11.5, "500", theme.diagnostic.css);
     this.divider = new Panel({ x: rect.x, y: 40, width: rect.width, height: 1 }, { fill: theme.borderSubtle.hex, radius: 0 });
+    this.scroll = new ScrollRegion({ x: rect.x, y: rect.y + 126, width: rect.width, height: 1 }, interaction, { axis: "vertical" });
+    this.sectionLabels = ["Identity", "Transform", "Body & placement", "Vehicle tuning", "Suspension"].map((label) => text(label, 10.5, "700", theme.textMutedStrong.css));
     this.fieldLabels = FIELD_SPECS.map(({ label }) => text(label, 10.5, "600", theme.textMutedStrong.css));
     this.helpButtons = FIELD_SPECS.map(({ help }) => new Button({ x: 0, y: 0, width: 20, height: 20 }, interaction, {
       label: "?", fontSize: 11, paddingX: 0, onClick: () => this.setStatus(help)
@@ -88,10 +95,19 @@ export class AgentInspectorPanel extends BasePanel {
       label: "?", fontSize: 11, paddingX: 0, onClick: () => this.setStatus(help)
     }));
     this.vehicleFields = Object.fromEntries(VEHICLE_FIELD_SPECS.map(({ key }) => [key, new TextField({ x: 0, y: 0, width: 1, height: 30 }, interaction, { numeric: true })])) as typeof this.vehicleFields;
+    this.vehicleToggle = new Button({ x: 0, y: 0, width: 1, height: 30 }, interaction, {
+      label: "Show vehicle tuning", fontSize: 11.5, onClick: () => { this.vehicleTuningExpanded = !this.vehicleTuningExpanded; this.updateState(); }
+    });
     this.primary = new Button({ x: 0, y: 0, width: 1, height: 34 }, interaction, { label: "Add", onClick: () => this.primaryAction() });
     this.duplicate = new Button({ x: 0, y: 0, width: 1, height: 32 }, interaction, { label: "Duplicate", onClick: () => void this.execute(() => this.context?.kind === "existing" ? this.onDuplicate(this.context.key) : Promise.resolve()) });
     this.remove = new Button({ x: 0, y: 0, width: 1, height: 32 }, interaction, { label: "Delete", onClick: () => void this.execute(() => this.context?.kind === "existing" ? this.onDelete(this.context.key) : Promise.resolve()) });
-    this.root.add(this.divider.root, this.title.root, this.contextLabel.root, this.assetLabel.root, ...this.fieldLabels.map((item) => item.root), ...this.helpButtons.map((item) => item.root), ...Object.values(this.fields).map((item) => item.root), ...this.vehicleFieldLabels.map((item) => item.root), ...this.vehicleHelpButtons.map((item) => item.root), ...Object.values(this.vehicleFields).map((item) => item.root), this.collisionLabel.root, this.eligibilityLabel.root, this.status.root, this.primary.root, this.duplicate.root, this.remove.root);
+    this.scroll.content.add(
+      ...this.sectionLabels.map((item) => item.root),
+      ...this.fieldLabels.map((item) => item.root), ...this.helpButtons.map((item) => item.root), ...Object.values(this.fields).map((item) => item.root),
+      ...this.vehicleFieldLabels.map((item) => item.root), ...this.vehicleHelpButtons.map((item) => item.root), ...Object.values(this.vehicleFields).map((item) => item.root),
+      this.collisionLabel.root, this.eligibilityLabel.root
+    );
+    this.root.add(this.divider.root, this.title.root, this.contextLabel.root, this.assetLabel.root, this.vehicleToggle.root, this.scroll.root, this.status.root, this.primary.root, this.duplicate.root, this.remove.root);
     this.layout();
     this.updateState();
   }
@@ -166,7 +182,7 @@ export class AgentInspectorPanel extends BasePanel {
   update(dt: number): void { for (const field of [...Object.values(this.fields), ...Object.values(this.vehicleFields)]) field.update(dt); }
 
   private visibleVehicleSpecs(): typeof VEHICLE_FIELD_SPECS {
-    return this.currentDraft()?.vehicle ? VEHICLE_FIELD_SPECS : [];
+    return this.currentDraft()?.vehicle && this.vehicleTuningExpanded ? VEHICLE_FIELD_SPECS : [];
   }
 
   protected layout(): void {
@@ -175,22 +191,39 @@ export class AgentInspectorPanel extends BasePanel {
     this.divider?.setRect({ x: this.rect.x, y: 40, width: this.rect.width, height: 1 });
     this.title?.setFrame({ x, y: this.rect.y + 12, width });
     this.contextLabel?.setFrame({ x, y: this.rect.y + 58, width, maxLines: 2 });
-    this.assetLabel?.setFrame({ x, y: this.rect.y + 91, width, maxLines: 2 });
-    const start = this.rect.y + 126;
+    this.assetLabel?.setFrame({ x, y: this.rect.y + 88, width, maxLines: 2 });
+    this.vehicleToggle?.setRect({ x, y: this.rect.y + 112, width, height: 30 });
+    const scrollTop = this.rect.y + 150;
+    const buttonY = this.rect.y + this.rect.height - 42;
+    const statusY = buttonY - 96;
+    this.scroll?.setRect({ x: this.rect.x + 8, y: scrollTop, width: Math.max(this.rect.width - 10, 1), height: Math.max(statusY - scrollTop - 8, 1) });
+    const start = scrollTop + 24;
     const row = 38;
-    this.fieldLabels?.forEach((label, index) => label.setFrame({ x, y: start + index * row, width: 63 }));
-    this.helpButtons?.forEach((button, index) => button.setRect({ x: x + 64, y: start - 5 + index * row, width: 20, height: 20 }));
-    FIELD_SPECS.forEach(({ key }, index) => this.fields?.[key].setRect({ x: x + 91, y: start - 8 + index * row, width: Math.max(width - 91, 1), height: 30 }));
+    const labelWidth = 90;
+    const helpX = x + labelWidth + 4;
+    const fieldX = helpX + 25;
+    const fieldWidth = Math.max(width - (fieldX - x), 1);
+    const sectionStarts = [start, start + row * 2 + 14, start + row * 7 + 28];
+    this.sectionLabels[0]?.setFrame({ x, y: sectionStarts[0] - 24, width });
+    this.sectionLabels[1]?.setFrame({ x, y: sectionStarts[1] - 24, width });
+    this.sectionLabels[2]?.setFrame({ x, y: sectionStarts[2] - 24, width });
+    const fieldY = [sectionStarts[0], sectionStarts[1], sectionStarts[1] + row, sectionStarts[1] + row * 2, sectionStarts[1] + row * 3, sectionStarts[1] + row * 4, sectionStarts[2], sectionStarts[2] + row, sectionStarts[2] + row * 2];
+    this.fieldLabels?.forEach((label, index) => label.setFrame({ x, y: fieldY[index], width: labelWidth }));
+    this.helpButtons?.forEach((button, index) => button.setRect({ x: helpX, y: fieldY[index] - 5, width: 20, height: 20 }));
+    FIELD_SPECS.forEach(({ key }, index) => this.fields?.[key].setRect({ x: fieldX, y: fieldY[index] - 8, width: fieldWidth, height: 30 }));
     const vehicleSpecs = this.visibleVehicleSpecs();
-    const vehicleStart = start + FIELD_SPECS.length * row;
-    this.vehicleFieldLabels?.forEach((label, index) => label.setFrame({ x, y: vehicleStart + index * row, width: 63 }));
-    this.vehicleHelpButtons?.forEach((button, index) => button.setRect({ x: x + 64, y: vehicleStart - 5 + index * row, width: 20, height: 20 }));
-    VEHICLE_FIELD_SPECS.forEach(({ key }, index) => this.vehicleFields?.[key].setRect({ x: x + 91, y: vehicleStart - 8 + index * row, width: Math.max(width - 91, 1), height: 30 }));
-    const detailY = vehicleStart + vehicleSpecs.length * row + 2;
+    const vehicleStart = sectionStarts[2] + row * 3 + 38;
+    this.sectionLabels[3]?.setFrame({ x, y: vehicleStart - 24, width });
+    this.sectionLabels[4]?.setFrame({ x, y: vehicleStart + row * 4 - 24, width });
+    this.vehicleFieldLabels?.forEach((label, index) => label.setFrame({ x, y: vehicleStart + index * row + (index >= 4 ? 14 : 0), width: labelWidth }));
+    this.vehicleHelpButtons?.forEach((button, index) => button.setRect({ x: helpX, y: vehicleStart - 5 + index * row + (index >= 4 ? 14 : 0), width: 20, height: 20 }));
+    VEHICLE_FIELD_SPECS.forEach(({ key }, index) => this.vehicleFields?.[key].setRect({ x: fieldX, y: vehicleStart - 8 + index * row + (index >= 4 ? 14 : 0), width: fieldWidth, height: 30 }));
+    const detailY = vehicleSpecs.length ? vehicleStart + vehicleSpecs.length * row + 18 : sectionStarts[2] + row * 3 + 8;
     this.collisionLabel?.setFrame({ x, y: detailY, width, maxLines: 2 });
     this.eligibilityLabel?.setFrame({ x, y: detailY + 34, width, maxLines: 2 });
-    this.status?.setFrame({ x, y: Math.max(detailY + 66, this.rect.y + this.rect.height - 132), width, maxLines: 3 });
-    const buttonY = this.rect.y + this.rect.height - 50;
+    this.scroll?.setContentSize(Math.max(detailY + 62 - scrollTop, 0));
+    this.scroll?.applyClipping();
+    this.status?.setFrame({ x, y: statusY, width, maxLines: 2 });
     this.primary?.setRect({ x, y: buttonY, width, height: 34 });
     this.duplicate?.setRect({ x, y: buttonY - 38, width: (width - 8) / 2, height: 32 });
     this.remove?.setRect({ x: x + (width - 8) / 2 + 8, y: buttonY - 38, width: (width - 8) / 2, height: 32 });
@@ -276,6 +309,7 @@ export class AgentInspectorPanel extends BasePanel {
     this.collisionLabel.setText(collision ? `Collision box: ${format(collision.halfExtents.x * 2)} × ${format(collision.halfExtents.y * 2)} × ${format(collision.halfExtents.z * 2)} m` : "");
     this.eligibilityLabel.setText(draft ? `Input eligible: ${draft.inputEligible ? "Yes" : "No"}` : "");
     this.primary.setLabel(existing ? "Apply Changes" : "Add");
+    this.vehicleToggle.setLabel(this.vehicleTuningExpanded ? "Hide vehicle tuning" : "Show vehicle tuning");
     const available = this.context?.kind !== "new" || this.newAvailability.get(this.context.key) === true;
     this.primary.setDisabled(this.busy || !draft || !available);
     this.duplicate.setDisabled(this.busy || !existing);
@@ -283,19 +317,24 @@ export class AgentInspectorPanel extends BasePanel {
     for (const field of Object.values(this.fields)) field.root.visible = Boolean(draft);
     for (const label of this.fieldLabels) label.root.visible = Boolean(draft);
     for (const button of this.helpButtons) button.root.visible = Boolean(draft);
+    for (const label of this.sectionLabels.slice(0, 3)) label.root.visible = Boolean(draft);
+    this.vehicleToggle.root.visible = Boolean(draft?.vehicle);
     const vehicleVisible = this.visibleVehicleSpecs().length > 0;
     for (const field of Object.values(this.vehicleFields)) field.root.visible = vehicleVisible;
     for (const label of this.vehicleFieldLabels) label.root.visible = vehicleVisible;
     for (const button of this.vehicleHelpButtons) button.root.visible = vehicleVisible;
+    for (const label of this.sectionLabels.slice(3)) label.root.visible = vehicleVisible;
     this.layout();
     this.onVisualChange();
   }
 
   dispose(): void {
     this.title.dispose(); this.contextLabel.dispose(); this.assetLabel.dispose(); this.collisionLabel.dispose(); this.eligibilityLabel.dispose(); this.status.dispose(); this.divider.dispose();
+    this.scroll.dispose();
+    for (const label of this.sectionLabels) label.dispose();
     for (const label of this.fieldLabels) label.dispose(); for (const button of this.helpButtons) button.dispose(); for (const field of Object.values(this.fields)) field.dispose();
     for (const label of this.vehicleFieldLabels) label.dispose(); for (const button of this.vehicleHelpButtons) button.dispose(); for (const field of Object.values(this.vehicleFields)) field.dispose();
-    this.primary.dispose(); this.duplicate.dispose(); this.remove.dispose(); super.dispose();
+    this.vehicleToggle.dispose(); this.primary.dispose(); this.duplicate.dispose(); this.remove.dispose(); super.dispose();
   }
 }
 

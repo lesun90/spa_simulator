@@ -73,8 +73,8 @@ export const DEFAULT_VEHICLE_TUNING: VehicleTuning = Object.freeze({
   maxBrakeForceN: 6000,
   maxSteeringAngleDegrees: 35,
   steeringSpeedDegreesPerSecond: 120,
-  suspensionStiffness: 24,
-  suspensionDamping: 2.3,
+  suspensionStiffness: 60000,
+  suspensionDamping: 900,
   suspensionRestLength: 0.12,
   suspensionMaxTravel: 0.2,
   wheelFrictionSlip: 1.6
@@ -178,6 +178,59 @@ export function freezeDraft(draft: AgentDraft): AgentDraft {
   });
 }
 
+// Below this, a wheel's raycast travel is smaller than ordinary road-mesh seams and camber, so a scaled-down
+// vehicle bounces off geometry a full-size car would roll over without noticing. This is a terrain-precision
+// floor, independent of the mass/force scaling below: real bumps don't shrink just because the car did.
+const MIN_SUSPENSION_REST_LENGTH_M = 0.06;
+const MIN_SUSPENSION_MAX_TRAVEL_M = 0.1;
+
+export interface ScaledVehicleTuning {
+  readonly mass: number;
+  readonly maxEngineForceN: number;
+  readonly maxBrakeForceN: number;
+  readonly maxSteeringAngleDegrees: number;
+  readonly steeringSpeedDegreesPerSecond: number;
+  readonly suspensionStiffness: number;
+  readonly suspensionDamping: number;
+  readonly suspensionRestLength: number;
+  readonly suspensionMaxTravel: number;
+  readonly wheelFrictionSlip: number;
+}
+
+/**
+ * The mass an agent actually simulates with at its placed scale: every authored asset is treated as a
+ * uniformly scaled, constant-density copy of itself, so mass follows volume (scale^3) rather than staying
+ * at its authored value while the body shrinks around it. The single source of this rule — every place that
+ * needs a simulated mass, vehicle or not, calls this instead of scaling `draft.mass` inline.
+ */
+export function scaledMass(mass: number, scale: number): number {
+  return mass * scale ** 3;
+}
+
+/**
+ * The tuning actually used to simulate a vehicle at its placed scale, treating it as a uniformly scaled,
+ * constant-density copy of the authored (scale-1) car rather than the authored car's full mass and power
+ * squeezed into a smaller body. For a scale factor s: length terms (suspension travel) scale as s; mass
+ * scales as s^3 (volume, via scaledMass); force scales as s^3 (so acceleration — force/mass — stays the
+ * same); suspension stiffness is force/length so it scales as s^3/s = s^2; damping scales as s^2.5 to hold
+ * the damping ratio (~stiffness*mass) constant instead of leaving the suspension under- or over-damped at
+ * small scales. Angles and the dimensionless friction-slip coefficient don't scale.
+ */
+export function scaledVehicleTuning(vehicle: VehicleTuning, mass: number, scale: number): ScaledVehicleTuning {
+  return {
+    mass: scaledMass(mass, scale),
+    maxEngineForceN: vehicle.maxEngineForceN * scale ** 3,
+    maxBrakeForceN: vehicle.maxBrakeForceN * scale ** 3,
+    maxSteeringAngleDegrees: vehicle.maxSteeringAngleDegrees,
+    steeringSpeedDegreesPerSecond: vehicle.steeringSpeedDegreesPerSecond,
+    suspensionStiffness: vehicle.suspensionStiffness * scale ** 2,
+    suspensionDamping: vehicle.suspensionDamping * scale ** 2.5,
+    suspensionRestLength: Math.max(vehicle.suspensionRestLength * scale, MIN_SUSPENSION_REST_LENGTH_M),
+    suspensionMaxTravel: Math.max(vehicle.suspensionMaxTravel * scale, MIN_SUSPENSION_MAX_TRAVEL_M),
+    wheelFrictionSlip: vehicle.wheelFrictionSlip
+  };
+}
+
 export function scaledAgentCollision(draft: AgentDraft): AgentDraft["collision"] {
   const scale = draft.scale;
   return {
@@ -241,7 +294,11 @@ export function agentSupportsFootprint(support: AgentDraft, candidate: AgentDraf
 
 export function placementOriginY(draft: AgentDraft, surfaceY: number): number {
   const collision = scaledAgentCollision(draft);
-  return surfaceY + draft.placement.clearance - (collision.center.y - collision.halfExtents.y);
+  let bottom = collision.center.y - collision.halfExtents.y;
+  for (const wheel of draft.asset.wheels ?? []) {
+    bottom = Math.min(bottom, (wheel.position.y - wheel.radius) * draft.scale);
+  }
+  return surfaceY + draft.placement.clearance - bottom;
 }
 
 interface CollisionFrame {

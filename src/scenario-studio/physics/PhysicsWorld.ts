@@ -25,8 +25,10 @@ export interface AgentTransform {
   readonly id: string;
   readonly position: Vector3Value;
   readonly headingRadians: number;
-  /** Per-wheel steer/spin angles for bodies driven by a wheel controller, index-paired with `agent.asset.wheels`. */
-  readonly wheels?: readonly { readonly steeringRadians: number; readonly rotationRadians: number }[];
+  /** Full body orientation, including pitch and roll on uneven terrain. */
+  readonly rotation: { readonly x: number; readonly y: number; readonly z: number; readonly w: number };
+  /** Wheel poses, index-paired with `agent.asset.wheels`; suspension length is in meters. */
+  readonly wheels?: readonly { readonly steeringRadians: number; readonly rotationRadians: number; readonly suspensionLength: number }[];
 }
 
 export interface PlaybackSnapshot {

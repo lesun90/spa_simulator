@@ -302,7 +302,7 @@ export class ScenarioStudioApp {
 
   private updateDriveCommand(): void {
     const throttle = (this.driveKeys.has("KeyW") || this.driveKeys.has("ArrowUp") ? 1 : 0) - (this.driveKeys.has("KeyS") || this.driveKeys.has("ArrowDown") ? 1 : 0);
-    const steering = (this.driveKeys.has("KeyD") || this.driveKeys.has("ArrowRight") ? 1 : 0) - (this.driveKeys.has("KeyA") || this.driveKeys.has("ArrowLeft") ? 1 : 0);
+    const steering = (this.driveKeys.has("KeyA") || this.driveKeys.has("ArrowLeft") ? 1 : 0) - (this.driveKeys.has("KeyD") || this.driveKeys.has("ArrowRight") ? 1 : 0);
     const brake = this.driveKeys.has("Space") ? 1 : 0;
     const next: DriveCommand = { throttle, steering, brake };
     if (next.throttle === this.currentDriveCommand.throttle && next.steering === this.currentDriveCommand.steering && next.brake === this.currentDriveCommand.brake) return;

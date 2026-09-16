@@ -1,6 +1,6 @@
 /// <reference lib="webworker" />
 import RAPIER from "@dimforge/rapier3d-compat";
-import { placementOriginY, scaledAgentCollision, type AgentDraft, type AgentSnapshot, type PlacementHit, type PlacementPreview, type Ray3, type Vector3Value } from "../domain/agent";
+import { placementOriginY, scaledAgentCollision, scaledMass, scaledVehicleTuning, type AgentDraft, type AgentSnapshot, type PlacementHit, type PlacementPreview, type Ray3, type ScaledVehicleTuning, type Vector3Value } from "../domain/agent";
 import { NEUTRAL_DRIVE_COMMAND, validateDriveCommand, type DriveCommand } from "../domain/playback";
 import { DEFAULT_MATERIAL_FRICTION } from "../domain/materialFriction";
 import type { AgentTransform, PlaybackSnapshot, SceneGeometryDescription } from "./PhysicsWorld";
@@ -16,6 +16,8 @@ interface PlaybackBody {
   readonly localCenter: Vector3Value;
   readonly controller?: RAPIER.DynamicRayCastVehicleController;
   readonly wheelCount: number;
+  /** Computed once from the agent's placed scale in preparePlayback; drive-force application reuses this instead of rescaling every substep. */
+  readonly tuning?: ScaledVehicleTuning;
 }
 
 let world: RAPIER.World | null = null;
@@ -234,40 +236,47 @@ function preparePlayback(agents: readonly AgentSnapshot[], controlledAgentId: st
     const localCenter = collision.center;
     const half = collision.halfExtents;
     const center = collisionCenter(agent, agent.pose.position, agent.pose.headingRadians);
-    // Only the controlled vehicle is wheel-driven; every other body stays the plain dynamic cuboid it was, damping included.
-    const drive = agent.id === controlledAgentId && kind === "vehicle" && agent.vehicle && agent.asset.wheels?.length
+    // Every vehicle needs wheel support; only the selected one receives driver input.
+    const drive = kind === "vehicle" && agent.vehicle && agent.asset.wheels?.length
       ? { tuning: agent.vehicle, wheels: agent.asset.wheels }
       : null;
     const body = active.createRigidBody(RAPIER.RigidBodyDesc.dynamic()
       .setTranslation(center.x, center.y, center.z)
       .setRotation(rotation(agent.pose.headingRadians))
-      .setLinearDamping(drive ? 0.02 : 0.15)
-      .setAngularDamping(drive ? 0.3 : 0.6));
-    active.createCollider(RAPIER.ColliderDesc.cuboid(half.x, half.y, half.z).setMass(agent.mass).setFriction(1), body);
-
+      .setLinearDamping(drive && agent.id === controlledAgentId ? 0.02 : 0.15)
+      .setAngularDamping(drive && agent.id === controlledAgentId ? 0.3 : 0.6));
     if (drive) {
       const { tuning, wheels } = drive;
+      // Treat the vehicle as a uniformly scaled, constant-density copy of the authored car rather than the
+      // authored car's full mass and power squeezed into a smaller body — see scaledVehicleTuning for the
+      // scaling law. That keeps mass and rotational inertia consistent (both derived from the same scaled
+      // collider), so Rapier's normal setMass-derived inertia is correct again without an explicit override.
+      const scaled = scaledVehicleTuning(tuning, agent.mass, agent.scale);
+      active.createCollider(RAPIER.ColliderDesc.cuboid(half.x, half.y, half.z).setMass(scaled.mass).setFriction(1), body);
       const controller = active.createVehicleController(body);
       controller.indexUpAxis = 1;
       // Rapier 0.20 exposes the forward-axis setter under this (upstream misspelled) name; `indexForwardAxis` is read-only.
       controller.setIndexForwardAxis = 2;
       wheels.forEach((wheel, index) => {
         // Wheel metadata shares the asset's unscaled model frame, so scale it before rebasing onto the chassis collider's center.
+        // Rapier raycasts down from the connection point by suspensionRestLength to find the resting wheel position, so the
+        // connection point itself sits one rest length above the authored (ground-touching) wheel center.
         const local = {
           x: wheel.position.x * agent.scale - localCenter.x,
-          y: wheel.position.y * agent.scale - localCenter.y,
+          y: wheel.position.y * agent.scale - localCenter.y + scaled.suspensionRestLength,
           z: wheel.position.z * agent.scale - localCenter.z
         };
         // The axle points to the vehicle's right (-X here, since assets author +X as left); with up=+Y that makes +Z the drive direction.
-        controller.addWheel(local, { x: 0, y: -1, z: 0 }, { x: -1, y: 0, z: 0 }, tuning.suspensionRestLength, wheel.radius * agent.scale);
-        controller.setWheelSuspensionStiffness(index, tuning.suspensionStiffness);
-        controller.setWheelSuspensionCompression(index, tuning.suspensionDamping);
-        controller.setWheelSuspensionRelaxation(index, tuning.suspensionDamping);
-        controller.setWheelMaxSuspensionTravel(index, tuning.suspensionMaxTravel);
-        controller.setWheelFrictionSlip(index, tuning.wheelFrictionSlip);
+        controller.addWheel(local, { x: 0, y: -1, z: 0 }, { x: -1, y: 0, z: 0 }, scaled.suspensionRestLength, wheel.radius * agent.scale);
+        controller.setWheelSuspensionStiffness(index, scaled.suspensionStiffness);
+        controller.setWheelSuspensionCompression(index, scaled.suspensionDamping);
+        controller.setWheelSuspensionRelaxation(index, scaled.suspensionDamping);
+        controller.setWheelMaxSuspensionTravel(index, scaled.suspensionMaxTravel);
+        controller.setWheelFrictionSlip(index, scaled.wheelFrictionSlip);
       });
-      playbackBodies.set(agent.id, { body, kind, localCenter, controller, wheelCount: wheels.length });
+      playbackBodies.set(agent.id, { body, kind, localCenter, controller, wheelCount: wheels.length, tuning: scaled });
     } else {
+      active.createCollider(RAPIER.ColliderDesc.cuboid(half.x, half.y, half.z).setMass(scaledMass(agent.mass, agent.scale)).setFriction(1), body);
       playbackBodies.set(agent.id, { body, kind, localCenter, wheelCount: 0 });
     }
     if (agent.id === controlledAgentId) controlledKind = kind;
@@ -337,24 +346,27 @@ function clearPlaybackState(): void {
 }
 
 function applyDriveForces(agents: readonly AgentSnapshot[]): void {
-  if (!controlledBodyId) return;
-  const entry = playbackBodies.get(controlledBodyId);
-  const agent = agents.find((candidate) => candidate.id === controlledBodyId);
+  for (const agent of agents) updateVehicle(agent);
+}
+
+function updateVehicle(agent: AgentSnapshot): void {
+  const entry = playbackBodies.get(agent.id);
   const controller = entry?.controller;
-  if (!controller || !agent?.vehicle || !agent.asset.wheels) return;
-  const tuning = agent.vehicle;
+  const tuning = entry?.tuning;
+  if (!controller || !tuning || !agent.asset.wheels) return;
+  const command = agent.id === controlledBodyId ? driveCommand : NEUTRAL_DRIVE_COMMAND;
   const maxSteeringRadians = tuning.maxSteeringAngleDegrees * Math.PI / 180;
-  const targetSteering = driveCommand.steering * maxSteeringRadians;
-  const currentSteering = wheelSteeringRadians.get(controlledBodyId) ?? 0;
+  const targetSteering = command.steering * maxSteeringRadians;
+  const currentSteering = wheelSteeringRadians.get(agent.id) ?? 0;
   const steeringStep = tuning.steeringSpeedDegreesPerSecond * Math.PI / 180 * FIXED_STEP;
   const nextSteering = Math.abs(targetSteering - currentSteering) <= steeringStep
     ? targetSteering
     : currentSteering + Math.sign(targetSteering - currentSteering) * steeringStep;
-  wheelSteeringRadians.set(controlledBodyId, nextSteering);
+  wheelSteeringRadians.set(agent.id, nextSteering);
 
   agent.asset.wheels.forEach((wheel, index) => {
-    controller.setWheelEngineForce(index, driveCommand.throttle * tuning.maxEngineForceN);
-    controller.setWheelBrake(index, driveCommand.brake * tuning.maxBrakeForceN);
+    controller.setWheelEngineForce(index, command.throttle * tuning.maxEngineForceN);
+    controller.setWheelBrake(index, command.brake * tuning.maxBrakeForceN);
     if (wheel.steerable) controller.setWheelSteering(index, nextSteering);
     // The ground collider from the previous step's contact; the design accepts that one-step lag over re-raycasting here.
     const groundFriction = controller.wheelGroundObject(index)?.friction() ?? 1;
@@ -368,17 +380,19 @@ function collectTransforms(): AgentTransform[] {
   for (const [id, entry] of playbackBodies) {
     const translation = entry.body.translation();
     const rot = entry.body.rotation();
-    const heading = 2 * Math.atan2(rot.y, rot.w);
-    const offset = rotate(entry.localCenter.x, entry.localCenter.z, heading);
+    const heading = Math.atan2(2 * (rot.x * rot.z + rot.w * rot.y), 1 - 2 * (rot.x * rot.x + rot.y * rot.y));
+    const offset = rotateVector(entry.localCenter, rot);
     const controller = entry.controller;
     const wheels = controller ? Array.from({ length: entry.wheelCount }, (_, index) => ({
       steeringRadians: controller.wheelSteering(index) ?? 0,
-      rotationRadians: controller.wheelRotation(index) ?? 0
+      rotationRadians: controller.wheelRotation(index) ?? 0,
+      suspensionLength: controller.wheelSuspensionLength(index) ?? 0
     })) : undefined;
     transforms.push({
       id,
-      position: { x: translation.x - offset.x, y: translation.y - entry.localCenter.y, z: translation.z - offset.z },
+      position: { x: translation.x - offset.x, y: translation.y - offset.y, z: translation.z - offset.z },
       headingRadians: heading,
+      rotation: { x: rot.x, y: rot.y, z: rot.z, w: rot.w },
       ...(wheels ? { wheels } : {})
     });
   }
@@ -395,6 +409,17 @@ function invalid(reason: string, pose: PlacementPreview["pose"] = null): Placeme
 function vector(value: { x: number; y: number; z: number }): Vector3Value { return { x: value.x, y: value.y, z: value.z }; }
 function addScaled(a: Vector3Value, b: Vector3Value, scale: number): Vector3Value { return { x: a.x + b.x * scale, y: a.y + b.y * scale, z: a.z + b.z * scale }; }
 function rotate(x: number, z: number, heading: number): { x: number; z: number } { const c = Math.cos(heading), s = Math.sin(heading); return { x: x * c + z * s, z: -x * s + z * c }; }
+function rotateVector(value: Vector3Value, q: RAPIER.Rotation): Vector3Value {
+  // q * value * inverse(q), for the normalized body quaternion.
+  const tx = 2 * (q.y * value.z - q.z * value.y);
+  const ty = 2 * (q.z * value.x - q.x * value.z);
+  const tz = 2 * (q.x * value.y - q.y * value.x);
+  return {
+    x: value.x + q.w * tx + q.y * tz - q.z * ty,
+    y: value.y + q.w * ty + q.z * tx - q.x * tz,
+    z: value.z + q.w * tz + q.x * ty - q.y * tx
+  };
+}
 function rotation(heading: number): RAPIER.Rotation { return { x: 0, y: Math.sin(heading / 2), z: 0, w: Math.cos(heading / 2) }; }
 function collisionCenter(draft: AgentDraft, position: Vector3Value, heading: number): Vector3Value {
   const center = scaledAgentCollision(draft).center;
