@@ -1,7 +1,6 @@
 import * as THREE from "three";
-import { AssetManager } from "../../engine/AssetManager";
+import type { AssetManager } from "../../engine/AssetManager";
 import type { InteractionEvent, InteractionSystem } from "../../engine/InteractionSystem";
-import type { AssetCatalogEntry } from "../../editor-core/assets";
 import { ObjectTransformControls, type ObjectTransformControlMode } from "../../features/world/ObjectTransformControls";
 import {
   hasTransformChanged,
@@ -10,7 +9,7 @@ import {
   scaleFromGroundHandle,
   transformModeForPointerButton
 } from "../../features/world/objectTransform";
-import { scaledAgentCollision, scaledVehicleTuning, type AgentDraft, type AgentPresentation, type AgentPresenter, type AgentSnapshot, type PlacementPreview, type Ray3, type Vector3Value } from "../domain/agent";
+import { assetEntry, scaledAgentCollision, scaledVehicleTuning, type AgentDraft, type AgentPresentation, type AgentPresenter, type AgentSnapshot, type PlacementPreview, type Ray3, type Vector3Value } from "../domain/agent";
 import type { AgentTransform } from "../physics/PhysicsWorld";
 
 type AgentTransformMode = ObjectTransformControlMode | "move";
@@ -53,9 +52,8 @@ class PreparedAgentVisual implements AgentPresentation {
   }
 }
 
-/** Owns borrowed visual clones while AssetManager owns their shared GPU resources. */
+/** Owns borrowed visual clones; the injected AssetManager owns their shared GPU resources. */
 export class AgentVisuals implements AgentPresenter {
-  private readonly assets = new AssetManager();
   private readonly instances = new Map<string, THREE.Object3D>();
   private readonly agents = new Map<string, AgentSnapshot>();
   private readonly wheelNodes = new Map<string, ReadonlyArray<WheelVisualNodes | null>>();
@@ -71,6 +69,7 @@ export class AgentVisuals implements AgentPresenter {
 
   constructor(
     private readonly scene: THREE.Scene,
+    private readonly assets: AssetManager,
     private readonly interaction: InteractionSystem,
     private readonly callbacks: AgentVisualCallbacks
   ) {
@@ -313,7 +312,6 @@ export class AgentVisuals implements AgentPresenter {
     this.ghost.removeFromParent();
     this.ghost.geometry.dispose();
     this.ghost.material.dispose();
-    this.assets.dispose();
   }
 }
 
@@ -326,16 +324,4 @@ function applyPose(object: THREE.Object3D, agent: AgentDraft): void {
 
 function transformSnapshot(agent: AgentDraft) {
   return { position: agent.pose.position, rotationY: agent.pose.headingRadians, scale: agent.scale };
-}
-
-function assetEntry(agent: AgentSnapshot): AssetCatalogEntry {
-  return {
-    id: `${agent.asset.id}:${agent.asset.modelSha256}:${agent.asset.metadataSha256}`,
-    label: agent.asset.label,
-    category: agent.asset.category,
-    source: "shared",
-    implementation: "glb",
-    modelUrl: agent.asset.modelUrl,
-    thumbnailUrl: agent.asset.thumbnailUrl ?? undefined
-  };
 }

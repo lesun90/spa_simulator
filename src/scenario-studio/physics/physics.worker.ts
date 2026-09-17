@@ -1,23 +1,53 @@
 /// <reference lib="webworker" />
 import RAPIER from "@dimforge/rapier3d-compat";
-import { placementOriginY, scaledAgentCollision, scaledMass, scaledVehicleTuning, type AgentDraft, type AgentSnapshot, type PlacementHit, type PlacementPreview, type Ray3, type ScaledVehicleTuning, type Vector3Value } from "../domain/agent";
+import { placementOriginY, scaledAgentCollision, scaledMass, scaledVehicleTuning, type AgentDraft, type AgentSnapshot, type PlacementHit, type PlacementPreview, type Ray3, type ScaledVehicleTuning, type Vector3Value, type WheelDescriptor } from "../domain/agent";
 import { NEUTRAL_DRIVE_COMMAND, validateDriveCommand, type DriveCommand } from "../domain/playback";
 import { DEFAULT_MATERIAL_FRICTION } from "../domain/materialFriction";
-import type { AgentTransform, PlaybackSnapshot, SceneGeometryDescription } from "./PhysicsWorld";
+import type { AgentPhysicsInput, AgentTransform, PlaybackSnapshot, SceneGeometryDescription } from "./PhysicsWorld";
 import type { PhysicsWorkerRequest, PhysicsWorkerResponse } from "./PhysicsWorkerClient";
 
 const FIXED_STEP = 1 / 60;
 // Comfortably above RenderLoop's 0.1s per-frame dt clamp so a normal slow frame never loses simulated time.
 const MAX_SUBSTEPS_PER_CALL = 8;
 
+// Realistic-model tuning with no raycast-controller equivalent to derive from; expect empirical iteration.
+const WHEEL_MASS_FRACTION = 0.015;
+const CONNECTOR_BODY_MASS_KG = 5;
+const STEERING_JOINT_STIFFNESS = 5e4;
+const STEERING_JOINT_DAMPING = 2e3;
+const WHEEL_ROUND_BORDER_RADIUS = 0.01;
+const SPIN_MOTOR_TARGET_RAD_PER_S = 1000; // unreachable target; setMotorMaxForce is the real throttle limiter.
+// Rotates a collider's default +Y axis onto the vehicle's local -X (spin) axis: 90 degrees about Z.
+const WHEEL_COLLIDER_ROTATION: RAPIER.Rotation = { x: 0, y: 0, z: Math.SQRT1_2, w: Math.SQRT1_2 };
+
 interface PlaybackBody {
   readonly body: RAPIER.RigidBody;
   readonly kind: "generic" | "vehicle";
   readonly localCenter: Vector3Value;
   readonly controller?: RAPIER.DynamicRayCastVehicleController;
+  readonly rig?: RealisticVehicleRig;
   readonly wheelCount: number;
   /** Computed once from the agent's placed scale in preparePlayback; drive-force application reuses this instead of rescaling every substep. */
   readonly tuning?: ScaledVehicleTuning;
+}
+
+/** One wheel's real rigid-body chain: chassis -[steer?]- knuckle? -[suspension]- carriage -[spin]- wheel. */
+interface RealisticWheelRig {
+  readonly steeringJoint: RAPIER.RevoluteImpulseJoint | null;
+  readonly suspensionJoint: RAPIER.PrismaticImpulseJoint;
+  readonly spinJoint: RAPIER.RevoluteImpulseJoint;
+  readonly knuckleBody: RAPIER.RigidBody | null;
+  readonly carriageBody: RAPIER.RigidBody;
+  readonly wheelBody: RAPIER.RigidBody;
+  /** The wheel's connection point in the chassis's local frame, scaled; used to derive suspensionLength for fixed wheels. */
+  readonly localAnchor: Vector3Value;
+  readonly radiusScaled: number;
+  /** Accumulated spin angle; Rapier's joints expose no angle getter, so this worker integrates it itself each step. */
+  spinRadians: number;
+}
+
+interface RealisticVehicleRig {
+  readonly wheels: readonly RealisticWheelRig[];
 }
 
 let world: RAPIER.World | null = null;
@@ -223,7 +253,7 @@ function removeAgent(id: string): void {
 
 function clearAgents(): void { for (const id of [...agentColliders.keys()]) removeAgent(id); }
 
-function preparePlayback(agents: readonly AgentSnapshot[], controlledAgentId: string | null, expectedSceneRevision: number, generation: number): void {
+function preparePlayback(agents: readonly AgentPhysicsInput[], controlledAgentId: string | null, expectedSceneRevision: number, generation: number): void {
   assertRevision(expectedSceneRevision);
   const active = requireWorld();
   teardownPlaybackBodies(active);
@@ -240,6 +270,18 @@ function preparePlayback(agents: readonly AgentSnapshot[], controlledAgentId: st
     const drive = kind === "vehicle" && agent.vehicle && agent.asset.wheels?.length
       ? { tuning: agent.vehicle, wheels: agent.asset.wheels }
       : null;
+
+    if (drive && agent.vehiclePhysicsModel === "realistic") {
+      const scaled = scaledVehicleTuning(drive.tuning, agent.mass, agent.scale);
+      const body = buildRealisticChassisBody(active, agent, center, agent.pose.headingRadians, agent.chassisHullPoints, scaled.mass);
+      body.setLinearDamping(agent.id === controlledAgentId ? 0.02 : 0.15);
+      body.setAngularDamping(agent.id === controlledAgentId ? 0.3 : 0.6);
+      const wheels = drive.wheels.map((wheel) => buildRealisticWheelRig(active, body, agent, localCenter, wheel, scaled));
+      playbackBodies.set(agent.id, { body, kind, localCenter, rig: { wheels }, wheelCount: wheels.length, tuning: scaled });
+      if (agent.id === controlledAgentId) controlledKind = kind;
+      continue;
+    }
+
     const body = active.createRigidBody(RAPIER.RigidBodyDesc.dynamic()
       .setTranslation(center.x, center.y, center.z)
       .setRotation(rotation(agent.pose.headingRadians))
@@ -290,6 +332,83 @@ function preparePlayback(agents: readonly AgentSnapshot[], controlledAgentId: st
   active.step();
 }
 
+function scalePoints(points: Float32Array, scale: number): Float32Array {
+  if (scale === 1) return points;
+  const scaled = new Float32Array(points.length);
+  for (let index = 0; index < points.length; index++) scaled[index] = points[index] * scale;
+  return scaled;
+}
+
+/** Builds the realistic-model chassis body: a convex hull of the real mesh when available, else the authored box. */
+function buildRealisticChassisBody(active: RAPIER.World, agent: AgentSnapshot, center: Vector3Value, heading: number, hullPoints: Float32Array | undefined, mass: number): RAPIER.RigidBody {
+  const body = active.createRigidBody(RAPIER.RigidBodyDesc.dynamic()
+    .setTranslation(center.x, center.y, center.z)
+    .setRotation(rotation(heading)));
+  const hullDesc = hullPoints && hullPoints.length >= 12 ? RAPIER.ColliderDesc.convexHull(scalePoints(hullPoints, agent.scale)) : null;
+  if (hullDesc) {
+    active.createCollider(hullDesc.setMass(mass).setFriction(1), body);
+  } else {
+    const half = scaledAgentCollision(agent).halfExtents;
+    active.createCollider(RAPIER.ColliderDesc.cuboid(half.x, half.y, half.z).setMass(mass).setFriction(1), body);
+  }
+  return body;
+}
+
+/** Builds one wheel's real rigid-body chain (see RealisticWheelRig) and attaches it to the chassis body. */
+function buildRealisticWheelRig(active: RAPIER.World, chassis: RAPIER.RigidBody, agent: AgentSnapshot, localCenter: Vector3Value, wheel: WheelDescriptor, scaled: ScaledVehicleTuning): RealisticWheelRig {
+  const localAnchor: Vector3Value = {
+    x: wheel.position.x * agent.scale - localCenter.x,
+    y: wheel.position.y * agent.scale - localCenter.y,
+    z: wheel.position.z * agent.scale - localCenter.z
+  };
+  const chassisTranslation = chassis.translation();
+  const chassisRotation = chassis.rotation();
+  const anchorWorld = addVectors(chassisTranslation, rotateVector(localAnchor, chassisRotation));
+  const connectorMass = Math.max(scaledMass(CONNECTOR_BODY_MASS_KG, agent.scale), 0.05);
+  const zero: Vector3Value = { x: 0, y: 0, z: 0 };
+
+  let steeringJoint: RAPIER.RevoluteImpulseJoint | null = null;
+  let knuckleBody: RAPIER.RigidBody | null = null;
+  let suspensionParent: RAPIER.RigidBody = chassis;
+  let suspensionParentLocalAnchor = localAnchor;
+
+  if (wheel.steerable) {
+    knuckleBody = active.createRigidBody(RAPIER.RigidBodyDesc.dynamic()
+      .setTranslation(anchorWorld.x, anchorWorld.y, anchorWorld.z)
+      .setRotation(chassisRotation)
+      .setAdditionalMass(connectorMass));
+    steeringJoint = active.createImpulseJoint(RAPIER.JointData.revolute(localAnchor, zero, { x: 0, y: 1, z: 0 }), chassis, knuckleBody, true) as RAPIER.RevoluteImpulseJoint;
+    steeringJoint.setContactsEnabled(false);
+    suspensionParent = knuckleBody;
+    suspensionParentLocalAnchor = zero;
+  }
+
+  const carriageBody = active.createRigidBody(RAPIER.RigidBodyDesc.dynamic()
+    .setTranslation(anchorWorld.x, anchorWorld.y, anchorWorld.z)
+    .setRotation(chassisRotation)
+    .setAdditionalMass(connectorMass));
+  const suspensionJoint = active.createImpulseJoint(RAPIER.JointData.prismatic(suspensionParentLocalAnchor, zero, { x: 0, y: 1, z: 0 }), suspensionParent, carriageBody, true) as RAPIER.PrismaticImpulseJoint;
+  suspensionJoint.setContactsEnabled(false);
+  suspensionJoint.setLimits(0, scaled.suspensionMaxTravel);
+  suspensionJoint.configureMotorModel(RAPIER.MotorModel.ForceBased);
+  suspensionJoint.configureMotorPosition(0, scaled.suspensionStiffness, scaled.suspensionDamping);
+
+  const radiusScaled = wheel.radius * agent.scale;
+  const widthScaled = wheel.width * agent.scale;
+  const wheelBody = active.createRigidBody(RAPIER.RigidBodyDesc.dynamic()
+    .setTranslation(anchorWorld.x, anchorWorld.y, anchorWorld.z)
+    .setRotation(chassisRotation));
+  active.createCollider(RAPIER.ColliderDesc.roundCylinder(widthScaled / 2, radiusScaled, WHEEL_ROUND_BORDER_RADIUS)
+    .setRotation(WHEEL_COLLIDER_ROTATION)
+    .setMass(scaled.mass * WHEEL_MASS_FRACTION)
+    .setFriction(scaled.wheelFrictionSlip), wheelBody);
+  const spinJoint = active.createImpulseJoint(RAPIER.JointData.revolute(zero, zero, { x: -1, y: 0, z: 0 }), carriageBody, wheelBody, true) as RAPIER.RevoluteImpulseJoint;
+  spinJoint.setContactsEnabled(false);
+  spinJoint.configureMotorModel(RAPIER.MotorModel.ForceBased);
+
+  return { steeringJoint, suspensionJoint, spinJoint, knuckleBody, carriageBody, wheelBody, localAnchor, radiusScaled, spinRadians: 0 };
+}
+
 function stepPlayback(dt: number, generation: number): PlaybackSnapshot {
   assertPlaybackGeneration(generation);
   const active = requireWorld();
@@ -326,8 +445,13 @@ function resetPlayback(agents: readonly AgentSnapshot[], generation: number): vo
 }
 
 function teardownPlaybackBodies(active: RAPIER.World): void {
-  for (const { body, controller } of playbackBodies.values()) {
+  for (const { body, controller, rig } of playbackBodies.values()) {
     if (controller) active.removeVehicleController(controller);
+    if (rig) for (const wheel of rig.wheels) {
+      active.removeRigidBody(wheel.wheelBody);
+      active.removeRigidBody(wheel.carriageBody);
+      if (wheel.knuckleBody) active.removeRigidBody(wheel.knuckleBody);
+    }
     active.removeRigidBody(body);
   }
   playbackBodies.clear();
@@ -346,7 +470,7 @@ function clearPlaybackState(): void {
 }
 
 function applyDriveForces(agents: readonly AgentSnapshot[]): void {
-  for (const agent of agents) updateVehicle(agent);
+  for (const agent of agents) { updateVehicle(agent); updateVehicleRealistic(agent); }
 }
 
 function updateVehicle(agent: AgentSnapshot): void {
@@ -375,19 +499,57 @@ function updateVehicle(agent: AgentSnapshot): void {
   controller.updateVehicle(FIXED_STEP);
 }
 
+function updateVehicleRealistic(agent: AgentSnapshot): void {
+  const entry = playbackBodies.get(agent.id);
+  const rig = entry?.rig;
+  const tuning = entry?.tuning;
+  if (!rig || !tuning) return;
+  const command = agent.id === controlledBodyId ? driveCommand : NEUTRAL_DRIVE_COMMAND;
+  const maxSteeringRadians = tuning.maxSteeringAngleDegrees * Math.PI / 180;
+  const targetSteering = command.steering * maxSteeringRadians;
+  const currentSteering = wheelSteeringRadians.get(agent.id) ?? 0;
+  const steeringStep = tuning.steeringSpeedDegreesPerSecond * Math.PI / 180 * FIXED_STEP;
+  const nextSteering = Math.abs(targetSteering - currentSteering) <= steeringStep
+    ? targetSteering
+    : currentSteering + Math.sign(targetSteering - currentSteering) * steeringStep;
+  wheelSteeringRadians.set(agent.id, nextSteering);
+  const scaledSteeringStiffness = STEERING_JOINT_STIFFNESS * agent.scale ** 2;
+  const scaledSteeringDamping = STEERING_JOINT_DAMPING * agent.scale ** 2.5;
+
+  for (const wheel of rig.wheels) {
+    wheel.steeringJoint?.configureMotorPosition(nextSteering, scaledSteeringStiffness, scaledSteeringDamping);
+    if (command.brake > 0) {
+      wheel.spinJoint.configureMotorVelocity(0, 1);
+      wheel.spinJoint.setMotorMaxForce(command.brake * tuning.maxBrakeForceN * wheel.radiusScaled);
+    } else if (command.throttle !== 0) {
+      wheel.spinJoint.configureMotorVelocity(Math.sign(command.throttle) * SPIN_MOTOR_TARGET_RAD_PER_S, 1);
+      wheel.spinJoint.setMotorMaxForce(Math.abs(command.throttle) * tuning.maxEngineForceN * wheel.radiusScaled);
+    } else {
+      wheel.spinJoint.configureMotorVelocity(0, 1);
+      wheel.spinJoint.setMotorMaxForce(0);
+    }
+    const spinAxisWorld = rotateVector({ x: -1, y: 0, z: 0 }, wheel.carriageBody.rotation());
+    wheel.spinRadians += dot3(wheel.wheelBody.angvel(), spinAxisWorld) * FIXED_STEP;
+  }
+}
+
 function collectTransforms(): AgentTransform[] {
   const transforms: AgentTransform[] = [];
   for (const [id, entry] of playbackBodies) {
     const translation = entry.body.translation();
     const rot = entry.body.rotation();
-    const heading = Math.atan2(2 * (rot.x * rot.z + rot.w * rot.y), 1 - 2 * (rot.x * rot.x + rot.y * rot.y));
+    const heading = yawOf(rot);
     const offset = rotateVector(entry.localCenter, rot);
     const controller = entry.controller;
-    const wheels = controller ? Array.from({ length: entry.wheelCount }, (_, index) => ({
-      steeringRadians: controller.wheelSteering(index) ?? 0,
-      rotationRadians: controller.wheelRotation(index) ?? 0,
-      suspensionLength: controller.wheelSuspensionLength(index) ?? 0
-    })) : undefined;
+    const wheels = controller
+      ? Array.from({ length: entry.wheelCount }, (_, index) => ({
+          steeringRadians: controller.wheelSteering(index) ?? 0,
+          rotationRadians: controller.wheelRotation(index) ?? 0,
+          suspensionLength: controller.wheelSuspensionLength(index) ?? 0
+        }))
+      : entry.rig
+        ? entry.rig.wheels.map((wheel) => collectRigWheelTransform(wheel, entry.body))
+        : undefined;
     transforms.push({
       id,
       position: { x: translation.x - offset.x, y: translation.y - offset.y, z: translation.z - offset.z },
@@ -399,6 +561,22 @@ function collectTransforms(): AgentTransform[] {
   return transforms;
 }
 
+function collectRigWheelTransform(wheel: RealisticWheelRig, chassis: RAPIER.RigidBody): { steeringRadians: number; rotationRadians: number; suspensionLength: number } {
+  const chassisRotation = chassis.rotation();
+  const steeringRadians = wheel.knuckleBody ? yawOf(wheel.knuckleBody.rotation()) - yawOf(chassisRotation) : 0;
+  const chassisUp = rotateVector({ x: 0, y: 1, z: 0 }, chassisRotation);
+  const anchorWorld = wheel.knuckleBody
+    ? wheel.knuckleBody.translation()
+    : addVectors(chassis.translation(), rotateVector(wheel.localAnchor, chassisRotation));
+  const carriageTranslation = wheel.carriageBody.translation();
+  const delta: Vector3Value = {
+    x: carriageTranslation.x - anchorWorld.x,
+    y: carriageTranslation.y - anchorWorld.y,
+    z: carriageTranslation.z - anchorWorld.z
+  };
+  return { steeringRadians, rotationRadians: wheel.spinRadians, suspensionLength: dot3(delta, chassisUp) };
+}
+
 function assertPlaybackGeneration(expected: number): void {
   if (expected !== playbackGeneration) throw new Error("The playback run is stale. Try again.");
 }
@@ -408,6 +586,9 @@ function requireWorld(): RAPIER.World { if (!world) throw new Error("Physics env
 function invalid(reason: string, pose: PlacementPreview["pose"] = null): PlacementPreview { return { valid: false, pose, reason, sceneRevision }; }
 function vector(value: { x: number; y: number; z: number }): Vector3Value { return { x: value.x, y: value.y, z: value.z }; }
 function addScaled(a: Vector3Value, b: Vector3Value, scale: number): Vector3Value { return { x: a.x + b.x * scale, y: a.y + b.y * scale, z: a.z + b.z * scale }; }
+function addVectors(a: Vector3Value, b: Vector3Value): Vector3Value { return { x: a.x + b.x, y: a.y + b.y, z: a.z + b.z }; }
+function dot3(a: Vector3Value, b: Vector3Value): number { return a.x * b.x + a.y * b.y + a.z * b.z; }
+function yawOf(q: RAPIER.Rotation): number { return Math.atan2(2 * (q.x * q.z + q.w * q.y), 1 - 2 * (q.x * q.x + q.y * q.y)); }
 function rotate(x: number, z: number, heading: number): { x: number; z: number } { const c = Math.cos(heading), s = Math.sin(heading); return { x: x * c + z * s, z: -x * s + z * c }; }
 function rotateVector(value: Vector3Value, q: RAPIER.Rotation): Vector3Value {
   // q * value * inverse(q), for the normalized body quaternion.

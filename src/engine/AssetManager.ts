@@ -14,6 +14,7 @@ interface AssetModule {
  */
 export class AssetManager {
   private readonly templates = new Map<string, Promise<THREE.Object3D>>();
+  private readonly chassisHullPoints = new Map<string, Promise<Float32Array>>();
   private readonly loader = new GLTFLoader();
   private disposed = false;
 
@@ -39,12 +40,29 @@ export class AssetManager {
     }
   }
 
+  /**
+   * Vertex positions (root-local frame) of every mesh in the asset's template, excluding any mesh under a
+   * node named in `excludeNodeNames` (e.g. wheel nodes, which get their own separate physics treatment).
+   * Callers feed this to a convex-hull collider; it is not a rendered shape. Cached per template, same as
+   * getTemplate, so repeated calls for the same asset are free after the first.
+   */
+  async getChassisHullPoints(asset: AssetCatalogEntry, excludeNodeNames: ReadonlySet<string> = new Set()): Promise<Float32Array> {
+    const key = `${asset.id}:${asset.implementation}:${asset.moduleUrl ?? ""}:${asset.modelUrl ?? ""}:${[...excludeNodeNames].sort().join(",")}`;
+    let hull = this.chassisHullPoints.get(key);
+    if (!hull) {
+      hull = this.getTemplate(asset).then((template) => extractHullPoints(template, excludeNodeNames));
+      this.chassisHullPoints.set(key, hull);
+    }
+    return hull;
+  }
+
   /** The composition root owns cached template resources; clones remain consumer-owned scene nodes. */
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
     for (const template of this.templates.values()) void template.then(disposeObject, () => {});
     this.templates.clear();
+    this.chassisHullPoints.clear();
   }
 
   private async resolve(asset: AssetCatalogEntry): Promise<THREE.Object3D> {
@@ -64,6 +82,26 @@ export class AssetManager {
 
     return createPlaceholder(asset);
   }
+}
+
+/** Collects every mesh's world (root-local) vertex position, skipping any mesh nested under an excluded node name. */
+function extractHullPoints(root: THREE.Object3D, excludeNodeNames: ReadonlySet<string>): Float32Array {
+  root.updateMatrixWorld(true);
+  const points: number[] = [];
+  const point = new THREE.Vector3();
+  root.traverse((child) => {
+    if (!(child instanceof THREE.Mesh)) return;
+    for (let node: THREE.Object3D | null = child; node; node = node.parent) {
+      if (excludeNodeNames.has(node.name)) return;
+    }
+    const position = child.geometry.getAttribute("position");
+    if (!position) return;
+    for (let index = 0; index < position.count; index++) {
+      point.fromBufferAttribute(position, index).applyMatrix4(child.matrixWorld);
+      points.push(point.x, point.y, point.z);
+    }
+  });
+  return new Float32Array(points);
 }
 
 export function createPlaceholder(asset: Pick<AssetCatalogEntry, "label" | "source">) {

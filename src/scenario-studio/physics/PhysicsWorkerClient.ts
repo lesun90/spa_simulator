@@ -1,6 +1,6 @@
 import type { AgentDraft, AgentSnapshot, PlacementHit, PlacementPreview, Ray3 } from "../domain/agent";
 import type { DriveCommand } from "../domain/playback";
-import type { PlaybackSnapshot, SceneGeometryDescription } from "./PhysicsWorld";
+import type { AgentPhysicsInput, PlaybackSnapshot, SceneGeometryDescription } from "./PhysicsWorld";
 
 export type PhysicsWorkerOperation =
   | { type: "replaceScene"; scene: SceneGeometryDescription; materialFriction: Readonly<Record<string, number>> }
@@ -11,7 +11,7 @@ export type PhysicsWorkerOperation =
   | { type: "updateAgent"; agent: AgentSnapshot; expectedSceneRevision: number }
   | { type: "removeAgent"; id: string }
   | { type: "clearAgents" }
-  | { type: "preparePlayback"; agents: readonly AgentSnapshot[]; controlledAgentId: string | null; expectedSceneRevision: number; generation: number }
+  | { type: "preparePlayback"; agents: readonly AgentPhysicsInput[]; controlledAgentId: string | null; expectedSceneRevision: number; generation: number }
   | { type: "stepPlayback"; dt: number; generation: number }
   | { type: "driveControlledAgent"; command: DriveCommand; generation: number }
   | { type: "resetPlayback"; agents: readonly AgentSnapshot[]; generation: number }
@@ -42,7 +42,7 @@ export class PhysicsWorkerClient {
   updateAgent(agent: AgentSnapshot, expectedSceneRevision: number): Promise<void> { return this.request({ type: "updateAgent", agent, expectedSceneRevision }); }
   removeAgent(id: string): Promise<void> { return this.request({ type: "removeAgent", id }); }
   clearAgents(): Promise<void> { return this.request({ type: "clearAgents" }); }
-  preparePlayback(agents: readonly AgentSnapshot[], controlledAgentId: string | null, expectedSceneRevision: number, generation: number): Promise<void> {
+  preparePlayback(agents: readonly AgentPhysicsInput[], controlledAgentId: string | null, expectedSceneRevision: number, generation: number): Promise<void> {
     return this.request({ type: "preparePlayback", agents, controlledAgentId, expectedSceneRevision, generation });
   }
   stepPlayback(dt: number, generation: number): Promise<PlaybackSnapshot> { return this.request({ type: "stepPlayback", dt, generation }); }
@@ -71,6 +71,9 @@ export class PhysicsWorkerClient {
       const transfer: Transferable[] = [];
       if (operation.type === "replaceScene") {
         for (const mesh of [...operation.scene.meshes, ...(operation.scene.nonSupportingMeshes ?? [])]) transfer.push(mesh.vertices.buffer, mesh.indices.buffer);
+      }
+      if (operation.type === "preparePlayback") {
+        for (const agent of operation.agents) if (agent.chassisHullPoints) transfer.push(agent.chassisHullPoints.buffer);
       }
       try {
         this.worker.postMessage({ id, operation } satisfies PhysicsWorkerRequest, transfer);

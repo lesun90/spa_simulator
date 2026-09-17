@@ -11,6 +11,7 @@ interface VehicleWheelMetadata {
   suspensionNode?: unknown;
   position?: unknown;
   radius?: unknown;
+  width?: unknown;
   steerable?: unknown;
 }
 
@@ -127,7 +128,10 @@ function wheelDescriptor(value: VehicleWheelMetadata, index: number, diagnostics
   const position = vector(value.position, `${label} position`, diagnostics, { x: 0, y: 0.3, z: 0 });
   if (typeof value.radius !== "number" || !Number.isFinite(value.radius) || value.radius <= 0) { diagnostics.push(`${label} radius must be a positive number.`); return null; }
   if (typeof value.steerable !== "boolean") { diagnostics.push(`${label} steerable must be a boolean.`); return null; }
-  return { id: value.id, wheelNode: value.wheelNode, steeringNode: value.steeringNode, suspensionNode: value.suspensionNode, position, radius: value.radius, steerable: value.steerable };
+  const widthValid = typeof value.width === "number" && Number.isFinite(value.width) && value.width > 0;
+  if (value.width !== undefined && !widthValid) diagnostics.push(`${label} width must be a positive number; using a fallback derived from radius.`);
+  const width = widthValid ? (value.width as number) : value.radius * 0.7;
+  return { id: value.id, wheelNode: value.wheelNode, steeringNode: value.steeringNode, suspensionNode: value.suspensionNode, position, radius: value.radius, width, steerable: value.steerable };
 }
 
 function unavailable(choice: AgentChoice, diagnostic: string): AgentChoice {

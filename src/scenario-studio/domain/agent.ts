@@ -1,3 +1,5 @@
+import type { AssetCatalogEntry } from "../../editor-core/assets";
+
 export interface Vector3Value {
   readonly x: number;
   readonly y: number;
@@ -23,6 +25,7 @@ export interface WheelDescriptor {
   readonly suspensionNode: string;
   readonly position: Vector3Value;
   readonly radius: number;
+  readonly width: number;
   readonly steerable: boolean;
 }
 
@@ -43,6 +46,10 @@ export interface AgentAssetReference {
   };
   readonly wheels?: readonly WheelDescriptor[];
 }
+
+/** Which physics model simulates a vehicle's wheels during playback. See VehiclePhysicsModel usage in the physics worker. */
+export type VehiclePhysicsModel = "raycast" | "realistic";
+export const DEFAULT_VEHICLE_PHYSICS_MODEL: VehiclePhysicsModel = "raycast";
 
 export interface AgentChoice {
   readonly asset: AgentAssetReference;
@@ -100,6 +107,8 @@ export interface AgentDraft {
     readonly clearance: number;
   };
   readonly inputEligible: boolean;
+  /** Ignored for non-vehicle categories. See VehiclePhysicsModel. */
+  readonly vehiclePhysicsModel: VehiclePhysicsModel;
 }
 
 export interface AgentSnapshot extends AgentDraft {
@@ -122,6 +131,19 @@ export interface AgentPresenter {
   clear(): void;
 }
 
+/** Adapts a placed agent's asset reference into the shape AssetManager's generic loader/cache understands. */
+export function assetEntry(agent: AgentSnapshot): AssetCatalogEntry {
+  return {
+    id: `${agent.asset.id}:${agent.asset.modelSha256}:${agent.asset.metadataSha256}`,
+    label: agent.asset.label,
+    category: agent.asset.category,
+    source: "shared",
+    implementation: "glb",
+    modelUrl: agent.asset.modelUrl,
+    thumbnailUrl: agent.asset.thumbnailUrl ?? undefined
+  };
+}
+
 /**
  * Defaults a new agent to its native real-world size (scale 1), on the assumption that both the asset
  * and the scene it's placed into are authored in realistic meters. Fitting scale to the scene's road
@@ -140,7 +162,8 @@ export function createAgentDraft(asset: AgentAssetReference): AgentDraft {
     vehicle: asset.category === "vehicles" ? DEFAULT_VEHICLE_TUNING : null,
     collision: asset.collision,
     placement: { maxSlopeDegrees: 35, clearance: 0.03 },
-    inputEligible: true
+    inputEligible: true,
+    vehiclePhysicsModel: DEFAULT_VEHICLE_PHYSICS_MODEL
   });
 }
 
@@ -159,6 +182,9 @@ export function validateAgentDraft(draft: AgentDraft): AgentDraft {
     throw new Error("Maximum placement slope must be between 0 and 90 degrees.");
   }
   if (draft.vehicle) validateVehicleTuning(draft.vehicle);
+  if (draft.vehiclePhysicsModel !== "raycast" && draft.vehiclePhysicsModel !== "realistic") {
+    throw new Error("Vehicle physics model must be raycast or realistic.");
+  }
   return freezeDraft({ ...draft, name: draft.name.trim() });
 }
 
@@ -169,6 +195,7 @@ export function freezeDraft(draft: AgentDraft): AgentDraft {
     mass: draft.mass,
     vehicle: draft.vehicle ? Object.freeze({ ...draft.vehicle }) : null,
     inputEligible: draft.inputEligible,
+    vehiclePhysicsModel: draft.vehiclePhysicsModel,
     asset: Object.freeze({ ...draft.asset }),
     pose: Object.freeze({
       ...draft.pose,

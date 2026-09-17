@@ -1,4 +1,4 @@
-import { DEFAULT_VEHICLE_TUNING, validateAgentDraft, type AgentAssetReference, type AgentSnapshot, type Vector3Value, type VehicleTuning, type WheelDescriptor } from "./agent";
+import { DEFAULT_VEHICLE_PHYSICS_MODEL, DEFAULT_VEHICLE_TUNING, validateAgentDraft, type AgentAssetReference, type AgentSnapshot, type Vector3Value, type VehiclePhysicsModel, type VehicleTuning, type WheelDescriptor } from "./agent";
 import type { SceneReference } from "./scene";
 
 export const SCENARIO_RECORD_VERSION = 1 as const;
@@ -121,8 +121,16 @@ function validateAgentSnapshot(value: unknown): AgentSnapshot {
           : validateVehicleTuningRecord(source.vehicle),
     collision: { center: vector(collision.center, "Collision center"), halfExtents: vector(collision.halfExtents, "Collision half-extents") },
     placement: { maxSlopeDegrees: numeric(placement.maxSlopeDegrees, "Maximum placement slope"), clearance: numeric(placement.clearance, "Placement clearance") },
-    inputEligible: source.inputEligible
+    inputEligible: source.inputEligible,
+    vehiclePhysicsModel: source.vehiclePhysicsModel === undefined
+      ? DEFAULT_VEHICLE_PHYSICS_MODEL
+      : validateVehiclePhysicsModel(source.vehiclePhysicsModel)
   } satisfies AgentSnapshot);
+}
+
+function validateVehiclePhysicsModel(value: unknown): VehiclePhysicsModel {
+  if (value !== "raycast" && value !== "realistic") throw new Error('Agent vehicle physics model must be "raycast" or "realistic".');
+  return value;
 }
 
 function validateAgentAsset(value: unknown): AgentAssetReference {
@@ -173,13 +181,15 @@ function validateWheelList(value: unknown): WheelDescriptor[] {
 
 function validateWheel(value: unknown): WheelDescriptor {
   const source = record(value, "Agent asset wheel");
+  const radius = positive(source.radius, "Wheel radius");
   return Object.freeze({
     id: requiredText(source.id, "Wheel ID", 32),
     wheelNode: requiredText(source.wheelNode, "Wheel node name", 128),
     steeringNode: requiredText(source.steeringNode, "Steering node name", 128),
     suspensionNode: requiredText(source.suspensionNode, "Suspension node name", 128),
     position: vector(source.position, "Wheel position"),
-    radius: positive(source.radius, "Wheel radius"),
+    radius,
+    width: source.width === undefined ? radius * 0.7 : positive(source.width, "Wheel width"),
     steerable: typeof source.steerable === "boolean" ? source.steerable : (() => { throw new Error("Wheel steerable flag must be a boolean."); })()
   });
 }

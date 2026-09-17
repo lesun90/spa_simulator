@@ -1,8 +1,9 @@
+import type { AssetManager } from "../../engine/AssetManager";
 import type { SceneCatalog } from "../catalog/SceneCatalog";
 import type { AgentCatalog } from "../catalog/AgentCatalog";
-import type { AgentTransform, PhysicsWorld } from "../physics/PhysicsWorld";
+import type { AgentPhysicsInput, AgentTransform, PhysicsWorld } from "../physics/PhysicsWorld";
 import type { AgentDraft, AgentPresenter, AgentSnapshot, PlacementPreview, Ray3, Vector3Value } from "./agent";
-import { agentFootprintContainsPoint, agentSupportsFootprint, authoredBounds, placementOriginY, scaledAgentCollision, validateAgentDraft } from "./agent";
+import { agentFootprintContainsPoint, agentSupportsFootprint, assetEntry, authoredBounds, placementOriginY, scaledAgentCollision, validateAgentDraft } from "./agent";
 import { AgentPopulation } from "./AgentPopulation";
 import type { DriveCommand, PlaybackState } from "./playback";
 import { validateDriveCommand } from "./playback";
@@ -32,6 +33,7 @@ export class ScenarioSession {
     physics: Promise<PhysicsWorld>,
     private readonly engineKey: string,
     private readonly agentPresenter: AgentPresenter,
+    private readonly assetManager: AssetManager,
     private readonly onPopulationChanged: (agents: readonly AgentSnapshot[]) => void = () => {},
     private readonly onPlaybackChanged: (state: PlaybackState, message?: string) => void = () => {}
   ) {
@@ -216,7 +218,9 @@ export class ScenarioSession {
       const world = await this.physics;
       await this.ready;
       if (this.disposed || generation !== this.playbackGeneration) return;
-      await world.preparePlayback(agents, controlledAgentId, this.sceneRevision, generation);
+      const physicsAgents = await this.resolvePhysicsInputs(agents);
+      if (this.disposed || generation !== this.playbackGeneration) return;
+      await world.preparePlayback(physicsAgents, controlledAgentId, this.sceneRevision, generation);
       if (this.disposed || generation !== this.playbackGeneration) {
         await world.resetPlayback(agents, generation).catch(() => {});
         return;
@@ -280,6 +284,16 @@ export class ScenarioSession {
       this.onPlaybackChanged(this.playbackState, error instanceof Error ? error.message : "Playback step failed.");
       return null;
     }
+  }
+
+  /** Resolves each realistic-model vehicle's chassis hull from its real mesh; other agents pass through unchanged. */
+  private async resolvePhysicsInputs(agents: readonly AgentSnapshot[]): Promise<readonly AgentPhysicsInput[]> {
+    return Promise.all(agents.map(async (agent) => {
+      if (agent.vehiclePhysicsModel !== "realistic" || !agent.asset.wheels?.length) return agent;
+      const excludeNodeNames = new Set(agent.asset.wheels.map((wheel) => wheel.wheelNode));
+      const chassisHullPoints = await this.assetManager.getChassisHullPoints(assetEntry(agent), excludeNodeNames).catch(() => undefined);
+      return chassisHullPoints ? { ...agent, chassisHullPoints } : agent;
+    }));
   }
 
   private assertAuthoringAllowed(): void {

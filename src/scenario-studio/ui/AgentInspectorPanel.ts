@@ -6,8 +6,9 @@ import { Button } from "../../features/hud/kit/Button";
 import type { Rect } from "../../features/hud/kit/layout";
 import { Panel } from "../../features/hud/kit/Panel";
 import { ScrollRegion } from "../../features/hud/kit/ScrollRegion";
+import { segmentButtonRect } from "../../features/hud/kit/segmentedControl";
 import { TextField } from "../../features/hud/kit/TextField";
-import { createAgentDraft, freezeDraft, scaledAgentCollision, validateAgentDraft, type AgentChoice, type AgentDraft, type AgentSnapshot } from "../domain/agent";
+import { createAgentDraft, DEFAULT_VEHICLE_PHYSICS_MODEL, freezeDraft, scaledAgentCollision, validateAgentDraft, type AgentChoice, type AgentDraft, type AgentSnapshot, type VehiclePhysicsModel } from "../domain/agent";
 import { HudText } from "./HudText";
 
 type Context = { kind: "new"; key: string } | { kind: "existing"; key: string } | null;
@@ -55,6 +56,9 @@ export class AgentInspectorPanel extends BasePanel {
   private readonly vehicleHelpButtons: Button[];
   private readonly vehicleFields: Record<VehicleFieldKey, TextField>;
   private readonly vehicleToggle: Button;
+  private readonly physicsModelLabel: HudText;
+  private readonly physicsModelRaycastButton: Button;
+  private readonly physicsModelRealisticButton: Button;
   private readonly primary: Button;
   private readonly duplicate: Button;
   private readonly remove: Button;
@@ -98,10 +102,18 @@ export class AgentInspectorPanel extends BasePanel {
     this.vehicleToggle = new Button({ x: 0, y: 0, width: 1, height: 30 }, interaction, {
       label: "Show vehicle tuning", fontSize: 11.5, onClick: () => { this.vehicleTuningExpanded = !this.vehicleTuningExpanded; this.updateState(); }
     });
+    this.physicsModelLabel = text("Physics model", 10.5, "700", theme.textMutedStrong.css);
+    this.physicsModelRaycastButton = new Button({ x: 0, y: 0, width: 1, height: 30 }, interaction, {
+      label: "Raycast", fontSize: 11.5, onClick: () => this.setVehiclePhysicsModel("raycast")
+    });
+    this.physicsModelRealisticButton = new Button({ x: 0, y: 0, width: 1, height: 30 }, interaction, {
+      label: "Realistic", fontSize: 11.5, onClick: () => this.setVehiclePhysicsModel("realistic")
+    });
     this.primary = new Button({ x: 0, y: 0, width: 1, height: 34 }, interaction, { label: "Add", onClick: () => this.primaryAction() });
     this.duplicate = new Button({ x: 0, y: 0, width: 1, height: 32 }, interaction, { label: "Duplicate", onClick: () => void this.execute(() => this.context?.kind === "existing" ? this.onDuplicate(this.context.key) : Promise.resolve()) });
     this.remove = new Button({ x: 0, y: 0, width: 1, height: 32 }, interaction, { label: "Delete", onClick: () => void this.execute(() => this.context?.kind === "existing" ? this.onDelete(this.context.key) : Promise.resolve()) });
     this.scroll.content.add(
+      this.physicsModelLabel.root, this.physicsModelRaycastButton.root, this.physicsModelRealisticButton.root,
       ...this.sectionLabels.map((item) => item.root),
       ...this.fieldLabels.map((item) => item.root), ...this.helpButtons.map((item) => item.root), ...Object.values(this.fields).map((item) => item.root),
       ...this.vehicleFieldLabels.map((item) => item.root), ...this.vehicleHelpButtons.map((item) => item.root), ...Object.values(this.vehicleFields).map((item) => item.root),
@@ -197,7 +209,14 @@ export class AgentInspectorPanel extends BasePanel {
     const buttonY = this.rect.y + this.rect.height - 42;
     const statusY = buttonY - 96;
     this.scroll?.setRect({ x: this.rect.x + 8, y: scrollTop, width: Math.max(this.rect.width - 10, 1), height: Math.max(statusY - scrollTop - 8, 1) });
-    const start = scrollTop + 24;
+    const physicsModelVisible = Boolean(this.currentDraft()?.vehicle);
+    if (physicsModelVisible) {
+      this.physicsModelLabel?.setFrame({ x, y: scrollTop, width });
+      const physicsModelRow: Rect = { x, y: scrollTop + 20, width, height: 30 };
+      this.physicsModelRaycastButton?.setRect(segmentButtonRect(physicsModelRow, 0));
+      this.physicsModelRealisticButton?.setRect(segmentButtonRect(physicsModelRow, 1));
+    }
+    const start = scrollTop + 24 + (physicsModelVisible ? 58 : 0);
     const row = 38;
     const labelWidth = 90;
     const helpX = x + labelWidth + 4;
@@ -286,6 +305,13 @@ export class AgentInspectorPanel extends BasePanel {
     return this.context.kind === "new" ? this.newDrafts.get(this.context.key) ?? null : this.existingDrafts.get(this.context.key) ?? this.existing.get(this.context.key) ?? null;
   }
 
+  private setVehiclePhysicsModel(model: VehiclePhysicsModel): void {
+    const draft = this.currentDraft();
+    if (!draft?.vehicle) return;
+    this.saveDraft(freezeDraft({ ...draft, vehiclePhysicsModel: model }));
+    this.updateState();
+  }
+
   private saveCurrentDraft(): void { const draft = this.readFields(); if (draft) this.saveDraft(draft); }
   private saveDraft(draft: AgentDraft): void {
     if (!this.context) return;
@@ -319,6 +345,13 @@ export class AgentInspectorPanel extends BasePanel {
     for (const button of this.helpButtons) button.root.visible = Boolean(draft);
     for (const label of this.sectionLabels.slice(0, 3)) label.root.visible = Boolean(draft);
     this.vehicleToggle.root.visible = Boolean(draft?.vehicle);
+    const physicsModelVisible = Boolean(draft?.vehicle);
+    const physicsModel = draft?.vehiclePhysicsModel ?? DEFAULT_VEHICLE_PHYSICS_MODEL;
+    this.physicsModelLabel.root.visible = physicsModelVisible;
+    this.physicsModelRaycastButton.root.visible = physicsModelVisible;
+    this.physicsModelRealisticButton.root.visible = physicsModelVisible;
+    this.physicsModelRaycastButton.setActive(physicsModel === "raycast");
+    this.physicsModelRealisticButton.setActive(physicsModel === "realistic");
     const vehicleVisible = this.visibleVehicleSpecs().length > 0;
     for (const field of Object.values(this.vehicleFields)) field.root.visible = vehicleVisible;
     for (const label of this.vehicleFieldLabels) label.root.visible = vehicleVisible;
@@ -334,7 +367,8 @@ export class AgentInspectorPanel extends BasePanel {
     for (const label of this.sectionLabels) label.dispose();
     for (const label of this.fieldLabels) label.dispose(); for (const button of this.helpButtons) button.dispose(); for (const field of Object.values(this.fields)) field.dispose();
     for (const label of this.vehicleFieldLabels) label.dispose(); for (const button of this.vehicleHelpButtons) button.dispose(); for (const field of Object.values(this.vehicleFields)) field.dispose();
-    this.vehicleToggle.dispose(); this.primary.dispose(); this.duplicate.dispose(); this.remove.dispose(); super.dispose();
+    this.vehicleToggle.dispose(); this.physicsModelLabel.dispose(); this.physicsModelRaycastButton.dispose(); this.physicsModelRealisticButton.dispose();
+    this.primary.dispose(); this.duplicate.dispose(); this.remove.dispose(); super.dispose();
   }
 }
 

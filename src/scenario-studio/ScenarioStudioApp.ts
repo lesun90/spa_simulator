@@ -1,3 +1,4 @@
+import { AssetManager } from "../engine/AssetManager";
 import { InputManager } from "../engine/InputManager";
 import { InteractionSystem } from "../engine/InteractionSystem";
 import { PerformanceMonitor } from "../engine/PerformanceMonitor";
@@ -36,6 +37,7 @@ export class ScenarioStudioApp {
   private readonly hudCache: ScenarioHudCache;
   private readonly sceneThumbnails: ScenarioSceneThumbnails;
   private readonly session: ScenarioSession;
+  private readonly assetManager: AssetManager;
   private readonly agentVisuals: AgentVisuals;
   private readonly unsubscribe: () => void;
   private disposed = false;
@@ -68,7 +70,8 @@ export class ScenarioStudioApp {
     const catalog = new HttpSceneCatalog();
     const agentCatalog = new HttpAgentCatalog();
     const scenarios = new HttpScenarioRepository();
-    this.agentVisuals = new AgentVisuals(this.world.scene, this.interaction, {
+    this.assetManager = new AssetManager();
+    this.agentVisuals = new AgentVisuals(this.world.scene, this.assetManager, this.interaction, {
       getGroundPoint: (x, y) => this.world.groundPointFromCanvasPoint(x, y, this.viewport.size.width, this.viewport.size.height),
       onSelect: (id) => this.selectAgent(id),
       onTransformCommit: async (id, draft, mode, x, y) => {
@@ -84,7 +87,7 @@ export class ScenarioStudioApp {
     });
     const physicsEngines = new PhysicsEngineRegistry();
     physicsEngines.register(new RapierPhysicsEngineFactory());
-    this.session = new ScenarioSession(new ScenarioDocument(), catalog, agentCatalog, this.world, physicsEngines.create("rapier"), "rapier", this.agentVisuals,
+    this.session = new ScenarioSession(new ScenarioDocument(), catalog, agentCatalog, this.world, physicsEngines.create("rapier"), "rapier", this.agentVisuals, this.assetManager,
       (agents) => {
         if (!this.disposed) {
           this.hud?.setPopulation(agents);
@@ -263,6 +266,7 @@ export class ScenarioStudioApp {
     this.hudCache.dispose();
     this.sceneThumbnails.dispose();
     this.agentVisuals.dispose();
+    this.assetManager.dispose();
     this.input.dispose();
     this.world.dispose();
     this.unsubscribe();

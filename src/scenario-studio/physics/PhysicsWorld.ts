@@ -36,6 +36,14 @@ export interface PlaybackSnapshot {
   readonly transforms: readonly AgentTransform[];
 }
 
+/**
+ * Transport-only shape at the physics boundary: an agent snapshot plus its optional chassis hull, resolved
+ * from the real mesh right before entering playback. Never persisted and never part of AgentSnapshot/ScenarioRecord.
+ */
+export interface AgentPhysicsInput extends AgentSnapshot {
+  readonly chassisHullPoints?: Float32Array;
+}
+
 export interface PhysicsWorld extends PlacementSurface {
   replaceScene(scene: SceneGeometryDescription, materialFriction: Readonly<Record<string, number>>): Promise<number>;
   /** Re-applies friction to the current ground colliders in place, without rebuilding geometry or disturbing agent colliders. */
@@ -46,7 +54,7 @@ export interface PhysicsWorld extends PlacementSurface {
   removeAgent(id: string): Promise<void>;
   clearAgents(): Promise<void>;
   /** Builds live bodies for every authored agent from their baseline snapshot. `controlledAgentId` names the one agent, if any, that accepts drive commands. */
-  preparePlayback(agents: readonly AgentSnapshot[], controlledAgentId: string | null, expectedSceneRevision: number, generation: number): Promise<void>;
+  preparePlayback(agents: readonly AgentPhysicsInput[], controlledAgentId: string | null, expectedSceneRevision: number, generation: number): Promise<void>;
   /** Advances fixed 1/60 s substeps to cover wall-clock `dt` and returns transforms stamped with `generation`; rejects once `generation` is no longer the active run. */
   stepPlayback(dt: number, generation: number): Promise<PlaybackSnapshot>;
   /** Applies a validated throttle/steering/brake command to the controlled agent; rejects once `generation` is no longer the active run. */
