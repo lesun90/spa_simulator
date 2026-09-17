@@ -1,127 +1,342 @@
-# Scenario Studio design
+# Scenario Studio
 
-Updated 2026-09-15. **Steps 1–4 complete** (`98cf824`, `b5a5000`, `0eca7da`, and Step 4 reviewed in the working tree); Steps 5–11 unimplemented.
-[Plan](scenario-studio-implementation-plan.md) · [Review and evidence](scenario-studio-review.md)
+Updated 2026-09-17. Source-checked at commit `530ef75` on `main`.
 
-This document owns product requirements; the plan owns delivery tasks, and the review guide owns verification commands/results. Sections below describe the release target unless marked current.
+**Progress: 4 of 11 milestones complete. Next: Milestone 5, typed runtime bus and multi-agent control.**
 
-## Scope
+This is the single design, delivery, and review document for `/scenario_studio`. Sections marked **Finished** describe code present in the current checkout. Sections marked **Planned** define future requirements and do not claim implementation.
 
-`/scenario_studio` assembles published environments and agents for physical/scripted simulation. `/scene_studio` remains the environment authoring app; Scenario Studio must not depend on its `EditorState`.
+## Product scope
 
-First release: 100 active agents, JavaScript/Python agent and creator scripts, production Rapier and MuJoCo backends. Rapier is default; each scenario saves one registered engine for its interacting world. Additional engines require only an adapter/registration, without changes to domain, scripts or UI consumers. Python uses browser Pyodide and its supported standard library.
+Scenario Studio assembles published environments, agents, controllers, sensors, and visualizations for physical simulation. Scene Studio remains the environment-authoring application; Scenario Studio must not depend on Scene Studio's `EditorState`.
 
-Excluded: local Python service, native Python packages/ML integration, source asset editing/general importer, buoyancy/fluid simulation, live engine hot-swapping, two engines solving one world, and continuous distant traffic in suspension mode. Users manage assets/settings/scripts/playback; IDs, workers, lifecycle and cleanup are automatic.
+The target product supports:
 
-## Current implementation
+- Published scenes and agents with durable scenario persistence.
+- Rapier simulation with replaceable physics boundaries.
+- Concurrent per-agent control through a typed pub/sub bus.
+- JavaScript controllers managed by the local backend and independently managed Python/C++ services.
+- First-class IMU, camera, and LiDAR objects attached to agents or the world.
+- Foxglove-style world and panel visualization driven by messages.
+- Creator scripts, runtime populations, optional distance suspension, a MuJoCo adapter, and measured 100-agent operation as later milestones.
 
-- Separate route/composition root, authored scene/agent document and transactional session, injected catalog/presentation/physics boundaries, owned presentations and generation-guarded replacement.
-- Green default ground/grid and collider; imported GLBs scale by `1 / unitsPerMeter`, fit the camera, and contribute transformed triangle support. Water geometry is retained as a non-supporting placement blocker, and imports never receive the default fallback. Rapier owns placement queries, agent colliders and live playback bodies in a dedicated worker through an open engine registry. Scenario name/New/Open/Save persist authored scenes and agents; Play/Pause/Reset run fixed-step Rapier playback with one controlled vehicle driven by throttle/steering/brake. No surface dynamics, scripted behavior or suspended-agent scaling yet; reload starts on default ground.
-- Left scene/agent inspector, independent bottom Scenes/Agents browsers, search/Refresh/previews, Add/drag ghost, viewport selection, validated transform/duplicate/delete, named replacement warnings and orbit/zoom/reset. Per-asset and per-instance drafts survive context switches; successful scene replacement clears agents and scene drafts.
-- `assets/scenes/sample` and `scene2` contain version-1 packages at one unit/meter. No root pair currently; discovery supports it as `.`. Vehicle assets include models, thumbnails, metadata, chassis bounds and wheels, not complete driving configurations.
-- Shared dev/preview middleware serves scene and agent catalogs, scene package APIs and contained `/scenario-assets/{scenes,agents}/*` sources. Agent discovery is confined to `assets/agents` and reports malformed/duplicate metadata. Existing stack adds pinned Rapier to TypeScript, Vite/Node, Three.js, HUD primitives, canvas and stats.js; the FPS overlay is not simulation performance evidence.
-- Cards borrow thumbnail textures; renderer owns/prunes targets and cancels stale work. Model templates remain cached until app teardown. Shared text fields preserve parent scroll clipping; scaled/rotated bounds normalize raised previews. Search retains the existing field's end-of-text editing limitation.
+The first gateway is local to the simulator host. Durable broker storage, distributed federation, arbitrary unsandboxed browser code, general source-asset editing, buoyancy, two engines solving one interacting world, and live engine switching during playback are outside the current target.
 
-## Workspace and authoring
+## Finished summary
 
-Central viewport; shared Scenes/Agents browser below; Agent Inspector left; compact toolbar above with name, New/Open/Save, Play/Pause/Reset and Scenario Script. Show playback/agent count; expand errors/performance on demand. Preserve existing HUD styling. Both browser tabs have independent search/selection, previews or labeled fallback, Refresh, and loading/error states. Expose controls only when functional.
+### Milestone 1: scene browsing
 
-### Environment and replacement
+- `/scenario_studio` has its own composition root, viewport, HUD, published-scene catalog, search, refresh, previews, candidate selection, named replacement confirmation, and default ground.
+- Imported GLBs use manifest units and transformed mesh geometry. Invalid or empty packages fail without replacing the active scene.
+- Scene presentation and cached rendering resources have explicit, idempotent ownership and stale-load protection.
 
-- Null published reference selects validated default-ground settings: green `0x558550`, 100 × 100 m, centered at Y=0, grass preset and matching static collider. New scenarios start here with zero agents. It counts as an active environment for confirmation.
-- Imports use actual supported geometry/transforms/units, including raised surfaces. A manifest ground record does not prove a ground mesh exists. Never add default surface/collider beneath an import; invalid/empty geometry produces diagnostics.
-- Card click selects a candidate only. Use Scene opens **Cancel / Switch Scene**, names the candidate, and warns even for zero agents. Count the union of authored/live identities, including authored agents despawned during playback; use singular/plural grammar.
-- Pause an interrupted run before replacement. Stage/validate new resources; failure or cancellation preserves the old setup, paused for explicit resumption. An unchanged active reference is a no-op; changed content requires replacement.
-- Successful commit stops the run, clears authored/live agents, selection, scene-specific drafts/overrides, releases old resources and resets time. Keep creator source but disable it, explaining that in the warning. Mark the working document dirty; never overwrite its saved copy automatically.
+### Milestone 2: agents and placement
 
-### Agents and inspector
+- The agent catalog discovers contained assets and reports unavailable malformed or duplicate entries.
+- Users can configure, place, select, transform, duplicate, and delete agents through the product UI.
+- Placement checks actual scene geometry, bridges, slope, overlap, water/non-supporting geometry, stale picks, and agent support relationships.
+- Rapier runs in a dedicated worker behind the engine-neutral `PhysicsWorld` boundary.
 
-Catalog selection opens **New agent** settings as per-asset placement defaults; viewport selection opens **Existing agent** settings for that instance. Preserve both drafts when switching contexts; never edit source assets. Show preview/asset name, instance name, position/heading, validated mass/collision/physics settings, input eligibility and Suspend when distant (off).
+### Milestone 3: scenario persistence
 
-Add enters click placement; drag/drop shows a valid/invalid ghost. Raycast against actual support colliders, including bridges, excluding water sensors and agents. Seat collision bounds with small contact clearance; reject unsupported, overlapping or excessively steep positions. Outside drop/Escape cancels; loading assets cannot be placed. Reject stale picks. Transform edits and duplication repeat placement validation; copies have independent configuration/script state and internal IDs.
+- Versioned scenario records persist the scenario identity, name, scene reference, Rapier key, authored agents, vehicle configuration, and material-friction overrides.
+- New, Open, and Save use a contained server store with validation, atomic replacement, dirty-state confirmation, and failed-open/save preservation.
+- Opening stages and validates scene, agent, physics, and presentation resources before committing the new document.
 
-Selection differs from **Control this agent**, which assigns the single controlled instance. Authoring placement/deletion/transforms/settings/scripts is allowed only in ready state. Running/paused instances remain inspectable; Reset restores editing.
+### Milestone 4: playback and vehicle physics
 
-### Script editor and creator
+- Ready, Preparing, Running, Paused, and Error states coordinate Play, Pause, Resume, and Reset.
+- The worker advances fixed `1/60 s` substeps, stamps snapshots by run generation, rejects stale work, and restores authored state on Reset.
+- One `inputEligible` agent accepts validated throttle, steering, and brake input from W/A/S/D, arrow keys, and Space.
+- Vehicles support raycast wheels and an optional physical wheel rig with chassis hulls, steering joints, suspension joints, and wheel bodies.
+- Vehicle tuning scales with authored size; wheel steering, spin, and suspension animate from playback snapshots.
+- Scene material names drive persisted friction overrides and vehicle traction. Saving during playback still writes authored state only.
 
-Use one native multiline editor/import component for agent and Scenario Script contexts: selection, copy/paste, undo, scrolling and accessible focus. Provide enablement, language, filename, validation locations and agent/source-specific runtime errors. Import `.js`/`.py` detects language and displays full source immediately; limit source to **256 KiB UTF-8**. Cancel, unsupported extension, oversize or read failure preserves text. Confirm replacing modified nonempty source; language changes retain draft text and require validation. Save source in the scenario, independent of its original file.
+Current limitations: control remains single-agent and vehicle-shaped. The repository has no runtime message bus, controller process gateway, authored scripts, sensors, object hierarchy, custom visualization plugins, creator scripts, distance suspension, MuJoCo adapter, or 100-agent performance proof.
 
-Creator scripts create/configure/despawn agents and assign behaviors from a named program collection, with declared asset dependencies and simulation-time scheduling. Startup runs once per new run, never on resume. Spawns are runtime-only; opaque generation-bound references support later commands and reject stale/invalid targets. Queue creation until render/physics/script resources can activate together; failures release all partial resources and identify asset/reason. Reset removes runtime mutations and recreates creator state on next Play.
+## Architecture rules
 
-## Domain, ownership and playback
+- Domain objects own state and invariants. Immutable transport records may remain plain values.
+- Inject replaceable physics, rendering, persistence, input, messaging, script, sensor, and visualization boundaries.
+- Keep Three.js, Rapier, DOM, Worker, WebSocket, protobuf, filesystem, and process types inside adapters.
+- Use composition for spatial relationships. A sensor is not an agent and does not inherit agent behavior.
+- Add a factory or registry only when multiple implementations form a real family.
+- Every owner exposes idempotent cleanup. Reset, replacement, disconnect, and disposal invalidate late asynchronous work before releasing resources.
 
-Objects own private state/invariants; immutable transport records may be plain data. Inject replaceable physics, rendering, input, script and persistence boundaries; construct implementations at composition roots. Keep Three.js, engine handles, Workers, DOM/filesystem types in adapters. Reuse existing components; avoid speculative abstractions.
+## Scenario hierarchy and persistence
 
-| Owner | Responsibility |
-| --- | --- |
-| ScenarioDocument | Authored scene, initial agents, programs/settings; validated edits and persistence records. |
-| ScenarioSession | Playback, run generation, transactional replacement and subsystem coordination. |
-| AgentPopulation / AgentInstance | Internal identity, configuration, live state, spawn/despawn and resource release. |
-| ScriptScheduler | Bounded queues, stable ordering, worker affinity and budgets. |
-| Activation policy | Suspend/resume intentions from bounds, focus and validated radii. |
+**Planned.** The authored hierarchy is:
 
-Explicit ownership and idempotent disposal apply everywhere. Despawn removes bodies, visuals, script contexts, event/selection/input references. Shared geometry/materials outlive borrowers and release with their owner. Cleanup must finish even if `on_stop` fails; worker termination is only a stuck-script fallback. Reset/replacement/disposal invalidate asynchronous results before releasing resources.
+```text
+Scenario
+├── Environment
+├── Agents
+│   └── Agent
+│       ├── Components
+│       └── Sensors
+├── Standalone sensors
+└── Visualizations
+```
 
-| State/action | Contract |
-| --- | --- |
-| ready → Play | Snapshot authored setup; enter preparing until environment, assets and enabled scripts validate; create runtime instances/contexts, then run. Prevent duplicate starts. |
-| Pause / Play from paused | Stop time/hooks at an acknowledged boundary; camera/UI stay responsive. Resume the same run/state without repeating startup. |
-| Reset | Invalidate pending work; discard runtime agents/mutations; restore authored transforms/settings, zero velocities/input/controls; return ready. |
-| error / timeout | Stop advancement; identify script/instance and retain diagnostics until acknowledged/reset. Reset before running changed code. |
+Agents, sensors, scripts, and visualizations remain separate persisted collections. References build the hierarchy; parent objects do not duplicate child ID lists.
 
-Save always serializes authored state, never runtime positions/engine handles. Viewport-focused input goes only to the controlled agent through the API; no script DOM listeners. Pause, blur, text focus, replacement and Reset clear keys. Editor shortcuts never reach camera/agent input.
+The current record is version 1 and contains `sceneReference`, `engineKey`, `agents`, and `materialFriction`. The next schema revision must migrate older records without data loss and add component attachments, script assets/assignments, sensors, and visualization configuration. A missing sensors collection migrates to `[]`.
 
-## Script execution and scheduling
+Persist authored state only. Runtime poses, physics handles, transient messages, subscriptions, live sensor buffers, and rendered primitives never enter the scenario record. Store script and visualization assets by portable ID and content hash rather than machine-specific absolute paths.
 
-- Both languages expose synchronous `on_start(ctx)`, `on_step(ctx, dt)`, optional `on_stop(ctx)`; JavaScript exports them, Python defines them in its namespace. Allow helpers/standard facilities, but no detached timers/background scheduling. JavaScript rejects external imports/re-exports and async hooks using syntax-aware parsing, not regex export rewriting.
-- Each instance has private persistent state and its own closure/namespace. Shared runtimes are not security isolation for untrusted scripts. Context supplies state, simulation time, assigned input, bounded local/nearby queries and validated queued commands. Agents control themselves; creators additionally spawn/despawn/configure.
-- Drive commands: throttle/steering `[-1,1]`, brake `[0,1]`; generic force/impulse commands are engine-neutral. Enabled behavior replaces the built-in controller to avoid competing inputs.
-- Physics advances **60 Hz** (1/60 s), with backend substeps allowed. Behavior defaults to **20 Hz**, optionally **60 Hz**, using simulation-time `dt`; retain continuous controls between hooks. Rendering independently interpolates snapshots.
-- Stamp outputs with run generation and step; reject stale work. At each script boundary, collect required outputs, validate/apply commands in stable order, then advance dependent physics. Bound backlog/catch-up; slow scripts slow simulation, not UI, with visible lag. A **250 ms unresponsive-batch watchdog** stops the run, terminates the worker, invalidates contexts and requires Reset.
-- Bounded pools per language, initially one worker each; cap using measured hardware while reserving rendering/physics capacity. Persistent instance affinity; change membership only between runs. Load Pyodide once per Python worker, on demand; show preparation/recovery errors and dispose proxies/namespaces. JavaScript-only runs do not download Python.
-- Batch transferable observations/commands, reuse buffers/models, limit queries and thumbnails, batch compatible visuals, update wheels incrementally. Never copy the entire world per agent or rebuild bodies/world every frame.
-- Preload authored and declared creator dependencies. Undeclared cold assets enter preparing until ready while the camera remains usable; queued references are not active bodies. Scheduling uses simulation time, so resume causes no wall-time spawn burst.
+Record validation covers identity, version, finite numeric values, unique IDs, asset hashes, parent references, component and sensor configuration, rates, engine availability, and cyclic dependencies. Failed validation or staging preserves the active scenario and its saved file.
 
-## Physics, surfaces and activation
+## Agent components and multi-agent control
 
-One dedicated worker owns the selected engine's interacting world. The neutral contract covers preparation, scene/body construction, surface queries, commands, fixed stepping, observations, activation, reset and disposal. Registry keys are open strings with labels/capabilities. Missing capabilities/init/conversion failures produce diagnostics, never silent engine fallback.
+**Planned.** Agent behavior is organized by computation ownership:
 
-Ready-state engine selection stages physics from authored data and commits the key only on success, preserving scene/agents/scripts. Running or paused changes require Reset. Both engines support every release flow; require consistent units/control semantics, not identical trajectories.
+```ts
+interface AgentComponent<TCommand extends Message> {
+  readonly key: string;
+  readonly capabilities: readonly AgentCapability[];
+  readonly commandChannel: Channel<TCommand>;
+  applyCommand(message: TCommand, context: CommandContext): CommandStatus;
+}
+```
 
-Build colliders from GLB mesh groups/instances with world transforms and meter conversion. Physical presets are separate from colors/material rendering: explicit package mapping → recognized normalized names → Generic Solid with diagnostics. Centralize Asphalt, Grass, Stone, Generic Solid and Water. Solid friction/restitution/rolling-resistance values are finite, nonnegative simulation defaults, not measured real-world coefficients; affect contacts and vehicle traction. Scene Physics lists mappings/overrides, editable in ready state and persisted per scene.
+Throttle, steering, and braking remain one `VehicleComponent` because the physics worker computes them together. Lighting or generic kinematics use separate components because another subsystem owns their behavior.
 
-Water is non-supporting sensor geometry with a footprint-preserving region, default **2 m below the surface**, positive depth and drag on submerged portions. Preserve solid support underneath and bridge/shore clearances; broad bounding boxes must not classify adjacent roads as water. Malformed footprints disable the affected mapping with diagnostics. Release sensors on reset/replacement.
+Automatic components derive from agent data and cannot be removed. Explicit components, including script attachments and accessories, use Add/Remove controls and persisted configuration. `AgentComponentFactory` and `AgentComponentRegistry` assemble the component set without branching on agent type.
 
-Vehicle controllers consume chassis bounds and `vehicle.json` wheel metadata; animate steering, suspension and spin from snapshots. Non-vehicles use validated generic bounds/bodies. Configuration errors block spawning. Use native stationary sleeping where supported and wake on commands/contact; otherwise preserve stationary behavior and measure its cost.
+The component rejects malformed, out-of-range, stale, and unauthorized commands with a correlated `CommandStatus`. It does not silently clamp or discard them. Each component retains its last accepted continuous command until replacement, timeout, Pause, Reset, or disposal returns it to neutral.
 
-**Suspend when distant:** off by default and persisted per instance/default. Pause dynamics/hooks, exclude active collisions, preserve visible pose/state, clear stale controls. Focus is the controlled agent or saved fixed point, never the camera. Enter radius **40 m**, exit **50 m**; require positive exit > enter. Controlled agents stay active. Resume only at safe step boundaries after separation checks; blocked agents remain suspended with a reason and bounded retries. Reject control until safe activation; resume normal hook `dt` without catch-up. Paused playback never changes activation. Reset/replacement/disposal clears activation state.
+The current `DriveCommand`, `controlledAgentId`, and single global worker command are compatibility paths to remove after the multi-agent component path works end to end.
 
-### MuJoCo adapter
+## Sensors and coordinate frames
 
-Use official `@mujoco/mujoco` browser WASM bindings, independent of Pyodide. Start single-threaded within the physics worker; enable internal multithreading only after measured benefit and verified host cross-origin-isolation headers/assets.
+**Planned.** Sensors are first-class scenario objects:
 
-Compile neutral descriptions into appropriate primitives, heightfields or convex decomposition, preserving concavity, bridges and water boundaries; never use a scene-wide convex hull. Reject unsupported conversion. Cache artifacts by source hash and compiler/backend version.
+```ts
+interface SensorSnapshot {
+  readonly id: string;
+  readonly name: string;
+  readonly typeKey: string;
+  readonly frame: {
+    readonly parent: { kind: "world" } | { kind: "agent"; id: string };
+    readonly localPose: Pose3;
+  };
+  readonly body:
+    | { kind: "none" }
+    | { kind: "fixed"; collision: CollisionShape }
+    | { kind: "dynamic"; mass: number; collision: CollisionShape };
+  readonly updateRateHz: number;
+  readonly config: Readonly<Record<string, unknown>>;
+}
+```
 
-Compiled topology is internal: reserve reusable inactive template slots, batch structural changes, prepare model replacement/reconstruction when capacity/shapes change. Verify pinned browser model-edit APIs; use reconstruction/state transfer if absent. Pause advancement while preparing, keep the old world until successful commit, preserve live pose/velocity/control/script references by stable domain ID. On failure preserve the world and report the failed spawn. Refresh indices/views after swaps; never retain borrowed WASM memory through destruction/reallocation. Release model/data/native handles exactly once. Measure compilation, rebuild stalls, native memory and reserved capacity separately.
+`SensorSnapshot.frame.parent` is the only attachment source of truth. `TransformResolver` computes world poses without exposing rendering or physics types. Attaching or detaching a sensor preserves its world pose. Deleting an agent with attached sensors requires an explicit cascade or detach choice.
 
-## Assets and persistence
+A bodyless sensor follows its resolved parent frame. A fixed sensor creates a body/collider joined to its agent or fixed to the world. A dynamic sensor creates an independently simulated body. Body policy remains independent of sensor type, so LiDAR and camera can be bodyless or body-backed.
 
-Scenes: `assets/scenes`, optional root pair and nested `environment.json`/`environment.glb`; identity is canonical relative key plus model/manifest hashes and version. Validate containment, references, versions, hashes, finite positive units and supported geometry. Current material names include Asphalt/Grass/Stone/Water and unmapped White/FrontColor. Agents: only `assets/agents`; reuse parsing with explicit URL base, optional vehicle/default-script metadata, duplicate-ID/malformed diagnostics.
+`SensorTypeRegistry` contains real IMU, camera, and LiDAR factories. `SensorRuntime` schedules them from simulation time and owns all queries, render targets, buffers, publications, and cleanup.
 
-API namespace `/api/scenario-studio`: existing `/scenes` and `/scene-package/{manifest,model}`; planned `/agents` and `/scenarios`. Package requests use key and both hashes; server resolves version from catalog. Keep Scene Studio document APIs separate and file access within asset roots.
+- IMU publishes stamped pose, linear/angular velocity, and acceleration derived from physics kinematics.
+- Camera renders from its resolved frame into an owned target and publishes bounded raw or compressed images.
+- LiDAR submits bounded batched physics rays and publishes point clouds in a declared coordinate frame.
 
-Scenario store: `~/.steerlab/scenarios`, override `STEERLAB_SCENARIOS_DIR`; atomic temp-file/rename writes. Validate IDs, schema version, references, numbers and unique identities. Failed writes preserve prior files. New/Open/navigation confirm unsaved loss; Open stages complete resources before replacement. Missing/changed assets or unknown engines retain recoverable source/document data but block running. Reconstruct validated domain objects; normalize older records (missing engine → Rapier, suspension → false).
+Sensor configuration defines rate, frame, range/resolution, noise, and type-specific limits. Reset, replacement, or disposal releases all sensor resources and invalidates pending samples.
 
-Persist name/identity/version, scene/null-default settings, initial agents, committed placement defaults, named script sources/filename/language/frequency/assignments, creator enablement/dependencies, engine/settings, surface presets/overrides, input eligibility, focus/radii and scheduling. Session drafts remain separate from committed instance data.
+## Runtime bus and backend gateway
 
-## Acceptance
+**Planned.** Browser-resident components use a typed in-process bus. A WebSocket client bridges advertised channels to a local backend gateway. WebSocket supplies duplex transport; protobuf supplies schemas and cross-language bindings.
 
-Every feature ships usable UI, domain/adapters, persistence changes, failures and resource cleanup together. Verify all above interactions through normal product controls, both studio routes, and built client; no inert controls, scaffolding-only milestones or console-injected setups. Repeat every applicable functional flow on both engines. Commands/evidence live in the review guide. No new unit tests unless requested; Docker installs/builds and relevant existing regressions only. Preserve user assets/work; no deployment is implied.
+```ts
+interface Middleware {
+  advertise<T extends Message>(channel: Channel<T>): Advertisement;
+  publish<T extends Message>(channel: Channel<T>, message: T, time: SimulationTime): PublishResult;
+  subscribe<T extends Message>(channel: Channel<T>, handler: (event: MessageEvent<T>) => void): Subscription;
+}
+```
 
-Performance: **100 simultaneously active vehicles**, suspension off, representative correctly scaled scene/assets and movement/contact workload; include camera movement and controlled input. After preload/warmup, measure **60 seconds** in a foreground hardware-accelerated browser on the user's development machine. Run six cases: 100 JavaScript, 100 Python, 50/50 mix on each engine. Target ~60 FPS; require **average ≥58 FPS**, **p95 frame interval ≤25 ms**, **simulation/wall-time ≥0.95**. Smooth rendering cannot conceal slow simulation; optimize measured bottlenecks before completion.
+`Advertisement` and `Subscription` expose idempotent `dispose()`. Each channel fixes one topic, schema name, serialized schema, and encoding for its lifetime. Events carry simulation time, sequence, session ID, and run generation.
 
-Record browser, viewport/DPR, CPU/GPU, scene/model complexity, backend/binding version, substeps, workers, frame/physics/script costs, backlog, active/total/reserved counts, memory/resources and simulated-time ratio. Report loading/compilation/topology stalls separately; inspect spawn/despawn bursts and repeated Play/Pause/Reset/replacement/engine switches/disposal. Resource counts return to baseline, with intentional caches identified. Expose bounded aggregate metrics without per-agent UI loops. Software-rendered/headless checks prove functionality only.
+The gateway follows the Foxglove WebSocket model for server information, channel advertisement, subscriptions, client publishing, status, timestamps, and session identity. Implement only the required subset first while preserving compatible framing for later tools.
+
+The gateway owns:
+
+- External connection and topic routing.
+- Schema advertisement and discovery.
+- Per-client queue and frame-size limits.
+- Latest-value pressure policy for controls and live sensor frames.
+- Reliable ordered lifecycle and status delivery.
+- Localhost binding, origin checks, and configured authentication policy.
+- Reconnection, disconnect cleanup, and stale-generation rejection.
+
+Core commands and sensor samples use concrete protobuf messages. Dynamic `google.protobuf.Struct` is not the core command format. Each command includes correlation, source, session, generation, and target-step metadata.
+
+Initial topics:
+
+| Topic | Payload | Publisher |
+| --- | --- | --- |
+| `simulation/lifecycle` | lifecycle/session state | Scenario runtime |
+| `simulation/tick` | generation, step, time, `dt` | Scenario runtime |
+| `agents/<id>/<component>/control` | component command | controller |
+| `agents/<id>/state` | agent pose and kinematics | Scenario runtime |
+| `agents/<id>/capabilities` | component capabilities | Scenario runtime |
+| `input/keyboard` | key state change | input publisher |
+| `sensors/<id>/metadata` | sensor/frame description | Sensor runtime |
+| `sensors/<id>/imu` | IMU sample | IMU runtime |
+| `sensors/<id>/image` | image | camera runtime |
+| `sensors/<id>/points` | point cloud | LiDAR runtime |
+| `visualization/<id>/scene` | declarative scene update | controller/visualizer |
+| `status/commands` | correlated command status | command router |
+
+## Controller model
+
+**Planned.** `ScenarioSession` remains browser-resident and never spawns host processes. The backend gateway owns one `ScriptSupervisor` that starts and stops trusted workspace-local JavaScript controllers from validated asset references.
+
+- Managed JavaScript starts during Play preparation, pauses command production on Pause, and stops on Reset, replacement, or disposal.
+- External Python, C++, and persistent JavaScript services own their processes and connect through the same gateway.
+- Clients discover the active session, agents, components, sensors, and schemas rather than relying on a hardcoded agent ID alone.
+- A thin language SDK supplies `onStart`, `onTick`, and `onStop` lifecycle hooks, input state, typed component handles, subscriptions, diagnostics, and raw typed pub/sub as an escape hatch.
+
+Controller scheduling uses simulation time. The runtime publishes tick `N`; commands targeting it apply at the defined step `N + 1` boundary. Pause publishes no ticks and accumulates no command burst. Reset changes the run generation, clears commands, and rejects earlier output.
+
+Managed scripts have source/import limits, execution and queue budgets, useful syntax/runtime diagnostics, and guaranteed teardown. The gateway restricts script assets to configured workspace roots. Production packages the gateway as an explicit service; Vite middleware is only a development/review host.
+
+Creator scripts use the same SDK and gateway but own runtime-only population changes. They declare asset dependencies, create/configure/despawn agents, and assign controllers through generation-bound references. Reset removes runtime mutations and recreates creator state on the next Play.
+
+## Custom visualization
+
+**Planned.** Visualization consumes advertised message channels and produces two kinds of output:
+
+- World layers for poses, lines, paths, boxes, point clouds, camera frustums, markers, and labels.
+- Panels for images, plots, tables, state, and diagnostics.
+
+```ts
+interface VisualizationPlugin {
+  start(context: VisualizationContext): void;
+  stop(): void;
+  dispose(): void;
+}
+```
+
+External scripts publish declarative `SceneUpdate`, `PointCloud`, `Image`, or other advertised messages. The browser owns the Three.js objects, DOM roots, and GPU resources created from those messages. Scripts never receive the raw Three.js scene.
+
+Repository-owned plugins may implement the interface directly. User-authored transforms run in Web Workers; custom panel code runs in sandboxed iframes. Both receive capability-limited APIs, bounded history, size and primitive limits, and no unrestricted filesystem, DOM, renderer, or network access.
+
+`VisualizationRegistry` maps schemas to built-in or custom visualizers. `VisualizationHost` owns one root per plugin and clears run-scoped output on Pause, Reset, replacement, disconnect, stale generation, or disposal.
+
+## Playback, physics, and environments
+
+The current Rapier worker remains the owner of the interacting world. The neutral physics boundary expands only when a concrete feature needs a query or command. Sensor ray batches, body kinematics, multi-agent component commands, activation, reset, and disposal stay engine-neutral at the boundary.
+
+Scene colliders preserve authored transforms, meter conversion, concavity, raised surfaces, bridges, material names, and non-supporting water geometry. The simulator never inserts default ground below an imported environment. Material presets and per-scenario overrides remain separate from rendering colors.
+
+Ready to Play snapshots authored state and enters Preparing until assets, physics, controllers, sensors, and visualizations are valid. Pause stops simulation time at an acknowledged boundary while leaving UI and camera responsive. Resume continues the same run. Reset invalidates work, removes runtime mutations, restores authored state, clears controls and sensor output, and returns to Ready.
+
+Future distance suspension is off by default. It pauses dynamics and controller/sensor work for eligible distant agents, preserves visible state, uses hysteresis, and resumes only at a safe step boundary. The camera does not define simulation focus.
+
+The planned MuJoCo adapter implements the same neutral boundary through official browser WASM bindings. It may rebuild internal models when topology changes, but it must preserve stable domain IDs and either commit the prepared replacement or leave the prior world intact. Rapier remains the default and no scenario silently falls back between engines.
+
+## UI requirements
+
+The current viewport, toolbar, browsers, and inspector remain the shell. Planned additions are:
+
+- A hierarchy showing environment, agents, components, attached sensors, standalone sensors, and visualizations.
+- Component and sensor Add/Remove/configuration controls.
+- Script asset import/editing, assignment, validation diagnostics, and controller status. Failed import or validation preserves the current source.
+- Gateway connection/session status.
+- Sensor previews and bounded visualization panels.
+- Errors that identify the owning agent, component, sensor, controller, or visualizer.
+
+Authoring is allowed only in Ready unless a feature defines a safe staged edit. Running and Paused objects remain inspectable. Controls appear only when functional; the UI contains no scaffolding-only buttons.
+
+## Remaining work
+
+### Milestone 5: typed runtime bus and multi-agent control
+
+- [ ] Add typed channels, advertisement, subscription disposal, simulation timestamps, session/run metadata, and bounded in-process routing.
+- [ ] Introduce automatic and explicit agent components plus registry-driven construction.
+- [ ] Move vehicle commands from the one controlled-agent global into per-agent `VehicleComponent` instances.
+- [ ] Publish lifecycle, ticks, agent state, and capabilities.
+- [ ] Remove the single-agent compatibility path after keyboard control works through the bus.
+
+Acceptance: two vehicles accept independent typed commands in one run; invalid and stale commands return diagnostics; Pause and Reset clear controls without leaks or bursts.
+
+### Milestone 6: backend gateway and controller SDKs
+
+- [ ] Ship the local WebSocket/protobuf gateway with channel discovery, queue limits, reconnection, origin policy, and cleanup.
+- [ ] Add `ScriptSupervisor` for validated managed JavaScript assets.
+- [ ] Add JavaScript and Python client SDKs; keep C++ compatible through generated protobuf bindings.
+- [ ] Persist script assets and assignments in a migrated scenario record.
+- [ ] Replace the old in-browser worker/Pyodide plan in all implementation decisions.
+
+Acceptance: two managed JavaScript controllers and one external Python controller can discover agents, consume ticks/state, publish commands, survive Pause/Resume, and stop cleanly on Reset.
+
+### Milestone 7: sensor objects and hierarchy
+
+- [ ] Add `SensorSnapshot`, `SensorPopulation`, frame references, validation, migration, and persistence.
+- [ ] Add `TransformResolver`, sensor factory registry, lifecycle owner, hierarchy UI, inspector, attach/detach, and deletion policy.
+- [ ] Add bodyless, fixed, and dynamic body policies behind physics adapters.
+
+Acceptance: standalone and agent-attached sensors save/reopen with stable local/world poses; moving an agent moves its attached bodyless sensor; invalid or dangling parents cannot commit.
+
+### Milestone 8: IMU, camera, and LiDAR
+
+- [ ] Extend neutral physics snapshots/queries with kinematics and bounded ray batches.
+- [ ] Implement IMU sampling, camera render targets, and LiDAR point clouds at simulation-time rates.
+- [ ] Add schemas, frame metadata, noise/config validation, previews, backpressure, and complete cleanup.
+
+Acceptance: each sensor publishes typed, timestamped data from the correct frame; configured rates remain tied to simulation time; repeated Play/Reset returns resources to baseline.
+
+### Milestone 9: custom visualization
+
+- [ ] Implement declarative world layers and contained panels.
+- [ ] Add schema-driven built-in visualizers and a custom plugin registry.
+- [ ] Add Worker/iframe isolation, quotas, lifecycle diagnostics, and persisted configuration.
+
+Acceptance: an external script visualizes a path and point cloud, a custom panel displays camera messages, and removing or resetting a plugin releases all subscriptions, DOM, and GPU resources.
+
+### Milestone 10: creator scripts and runtime populations
+
+- [ ] Add declared dependencies, generation-bound runtime identities, spawn/configure/despawn commands, and stable ordering.
+- [ ] Stage render, physics, controller, sensor, and visualization resources transactionally.
+- [ ] Remove all runtime mutations on Reset and recover cleanly from partial failures.
+
+Acceptance: a creator spawns and removes agents with controllers and sensors; failed creation leaves no partial resources; Reset restores the authored population.
+
+### Milestone 11: engine and scale hardening
+
+- [ ] Add measured distance suspension only if active-world cost requires it.
+- [ ] Implement and verify the MuJoCo adapter when a scenario requires behavior Rapier cannot provide.
+- [ ] Profile representative scenes and optimize measured bottlenecks for 100 simultaneously active vehicles.
+- [ ] Harden recording, diagnostics, reconnect behavior, lifecycle cleanup, and cross-language compatibility.
+
+Performance acceptance: after preload and warmup, run a representative 100-agent workload for 60 seconds in a foreground hardware-accelerated browser. Record browser, viewport/DPR, CPU/GPU, scene complexity, engine versions, substeps, controller/sensor costs, backlog, active counts, memory, FPS, and simulation/wall-time ratio. Target average FPS at least 58, p95 frame interval at most 25 ms, and simulation/wall-time ratio at least 0.95. Headless software rendering proves behavior, not hardware performance.
+
+## Verification
+
+Use Docker Compose from the repository root. Do not install review dependencies on the host.
+
+```bash
+docker compose exec -T app npm run review:build
+docker compose exec -T app npx --no-install vite-node scripts/verifyScenarioStudio.ts
+docker compose exec -T app npx --no-install vite-node scripts/verifyApplicationWorkflows.ts
+docker compose exec -T app npx --no-install vite-node scripts/verifyResourceLifecycle.ts
+docker compose exec -T app npm run build:check
+docker compose exec -T app npm test -- --run --maxWorkers=1 --minWorkers=1 tests/interactionSystem.test.ts tests/assetBrowserLayout.test.ts tests/disposeObject.test.ts
+git diff --check
+```
+
+For a built-client review on port 4173:
+
+```bash
+docker compose run --rm --no-deps -p 127.0.0.1:4173:4173 app sh -c 'npm run review:build && npm run review:serve'
+```
+
+Verify behavior through product controls rather than console-injected state. Every milestone covers success, failure preservation, stale-work rejection, Reset/replacement/disposal, and affected application regressions. Do not add unit tests unless requested. A passing headless walkthrough does not establish hardware FPS.
+
+The completed-work summary above is source-verified at `530ef75`. Historical browser and test counts from earlier reviews are intentionally omitted; run the commands above for current evidence before making a release claim.
 
 ## Runtime references
 
-Verify/pin dependency versions when first implemented: [Pyodide workers](https://pyodide.org/en/stable/usage/webworker.html), [Python compatibility](https://pyodide.org/en/stable/usage/wasm-constraints.html), [Rapier sleeping](https://rapier.rs/docs/user_guides/javascript/rigid_body_sleeping/), [MuJoCo browser bindings](https://github.com/google-deepmind/mujoco/blob/main/wasm/README.md), [collision](https://mujoco.readthedocs.io/en/latest/computation/), [model editing](https://mujoco.readthedocs.io/en/latest/programming/modeledit.html).
+- [Foxglove WebSocket protocol](https://github.com/foxglove/ws-protocol/blob/main/docs/spec.md)
+- [Foxglove extensions](https://docs.foxglove.dev/docs/extensions)
+- [Rapier JavaScript documentation](https://rapier.rs/docs/user_guides/javascript/getting_started_js)
+- [MuJoCo browser bindings](https://github.com/google-deepmind/mujoco/tree/main/wasm)

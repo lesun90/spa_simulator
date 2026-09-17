@@ -55,9 +55,9 @@ docker compose exec -T app npm run review:build
 docker compose exec -T app npm run review:serve
 ```
 
-The review server listens on port 4173 inside the container. Map that port to an available host port if you need to open it from a host browser; see [Scenario Studio review](docs/scenario-studio-review.md). The preview server uses the same Scenario Studio scene catalog and read-only source routes as development.
+The review server listens on port 4173 inside the container. Map that port to an available host port if you need to open it from a host browser. The preview server uses the same Scenario Studio scene catalog and read-only source routes as development.
 
-Later functionality is documented in the [Scenario Studio design](docs/scenario-studio-design.md) and [implementation plan](docs/scenario-studio-implementation-plan.md). Each implementation step delivers a feature that can be reviewed in the running application.
+Finished behavior, future architecture, remaining milestones, and review commands are maintained in the single [Scenario Studio document](docs/scenario-studio-design.md).
 
 ## Run Checks
 
