@@ -85,7 +85,6 @@ describe("normalizeScene", () => {
       name: "Downtown",
       description: "",
       grid: { cellSize: 1, width: 100, depth: 100 },
-      roadWidth: 0,
       background: { type: "color", color: "#eef2f7", textureUrl: null },
       ground: { type: "color", color: "#eef2f7", textureUrl: null },
       objects: [
@@ -103,7 +102,6 @@ describe("normalizeScene", () => {
       name: "Downtown",
       description: "A city block",
       grid: { cellSize: 1, width: 100, depth: 100 },
-      roadWidth: 0,
       background: { type: "texture", color: "#000000", textureUrl: "data:image/png;base64,abc" },
       ground: { type: "color", color: "#8a7a63", textureUrl: null },
       objects: [],

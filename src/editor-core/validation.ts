@@ -22,9 +22,6 @@ export function validateSceneJson(value: unknown): ValidationResult {
   if (!scene.grid || !isPositiveNumber(scene.grid.cellSize) || !isPositiveNumber(scene.grid.width) || !isPositiveNumber(scene.grid.depth)) {
     diagnostics.push("Scene grid must define positive cellSize, width, and depth.");
   }
-  if (scene.roadWidth !== undefined && !isNonNegativeNumber(scene.roadWidth)) {
-    diagnostics.push("Scene road width must be a nonnegative number.");
-  }
   if (scene.background !== undefined && !isSurfaceAppearance(scene.background)) {
     diagnostics.push("Scene background must define a valid type and color.");
   }
@@ -77,8 +74,4 @@ function isNumber(value: unknown): value is number {
 
 function isPositiveNumber(value: unknown): value is number {
   return isNumber(value) && value > 0;
-}
-
-function isNonNegativeNumber(value: unknown): value is number {
-  return isNumber(value) && value >= 0;
 }

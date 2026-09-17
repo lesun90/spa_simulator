@@ -122,14 +122,19 @@ export interface AgentPresenter {
   clear(): void;
 }
 
-/** Defaults a new agent to its native size, unless the target scene has a known road width — then a vehicle is scaled to fit within half of it. */
-export function createAgentDraft(asset: AgentAssetReference, roadWidthMeters = 0): AgentDraft {
-  const nativeWidth = asset.collision.halfExtents.x * 2;
-  const scale = roadWidthMeters > 0 && nativeWidth > 0 ? (roadWidthMeters / 2) / nativeWidth : 1;
+/**
+ * Defaults a new agent to its native real-world size (scale 1), on the assumption that both the asset
+ * and the scene it's placed into are authored in realistic meters. Fitting scale to the scene's road
+ * width was tried and dropped: it forced ordinary vehicles into extreme mass/force regimes on narrow
+ * roads, which is what made them feel physically wrong (jittery, low-traction) once simulated. Resizing
+ * an instance — e.g. scaling up a toy-scale model — is still supported, but only as an explicit choice
+ * via `scale`, not an automatic one.
+ */
+export function createAgentDraft(asset: AgentAssetReference): AgentDraft {
   return freezeDraft({
     asset,
     name: asset.label,
-    scale,
+    scale: 1,
     pose: { position: { x: 0, y: 0, z: 0 }, headingRadians: 0, support: null },
     mass: 1200,
     vehicle: asset.category === "vehicles" ? DEFAULT_VEHICLE_TUNING : null,

@@ -92,7 +92,6 @@ export interface EnvironmentManifestMetadata {
   sceneSize?: number;
   cellSize?: number;
   seed?: number;
-  roadWidthMeters?: number;
   materials?: readonly string[];
 }
 

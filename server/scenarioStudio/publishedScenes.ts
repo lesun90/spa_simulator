@@ -103,7 +103,7 @@ export class PublishedScenes {
 
 function metadataFrom(value: unknown, diagnostics: string[]): {
   name?: string;
-  optional: { description?: string; sceneSize?: number; cellSize?: number; seed?: number; roadWidthMeters?: number; materials?: readonly string[] };
+  optional: { description?: string; sceneSize?: number; cellSize?: number; seed?: number; materials?: readonly string[] };
 } {
   if (value === undefined) return { optional: {} };
   if (!value || typeof value !== "object" || Array.isArray(value)) {
@@ -116,7 +116,6 @@ function metadataFrom(value: unknown, diagnostics: string[]): {
   const sceneSize = optionalPositiveNumber(record.sceneSize, "sceneSize", diagnostics);
   const cellSize = optionalPositiveNumber(record.cellSize, "cellSize", diagnostics);
   const seed = optionalSeed(record.seed, diagnostics);
-  const roadWidthMeters = optionalPositiveNumber(record.roadWidthMeters, "roadWidthMeters", diagnostics);
   const materials = optionalStringArray(record.materials, "materials", diagnostics);
   return {
     ...(name ? { name } : {}),
@@ -125,7 +124,6 @@ function metadataFrom(value: unknown, diagnostics: string[]): {
       ...(sceneSize !== undefined ? { sceneSize } : {}),
       ...(cellSize !== undefined ? { cellSize } : {}),
       ...(seed !== undefined ? { seed } : {}),
-      ...(roadWidthMeters !== undefined ? { roadWidthMeters } : {}),
       ...(materials !== undefined ? { materials } : {})
     }
   };

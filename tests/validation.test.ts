@@ -11,7 +11,6 @@ describe("scene validation", () => {
         name: "Temporary Asset",
         description: "",
         grid: { cellSize: 1, width: 10, depth: 10 },
-        roadWidth: 0,
         background: { type: "color", color: "#eef2f7", textureUrl: null },
         ground: { type: "color", color: "#eef2f7", textureUrl: null },
         objects: [
@@ -40,7 +39,6 @@ test("server save validation rejects mismatched route ids and temporary assets",
     name: "Bad Save",
     description: "",
     grid: { cellSize: 1, width: 10, depth: 10 },
-    roadWidth: 0,
     background: { type: "color", color: "#eef2f7", textureUrl: null },
     ground: { type: "color", color: "#eef2f7", textureUrl: null },
     objects: [

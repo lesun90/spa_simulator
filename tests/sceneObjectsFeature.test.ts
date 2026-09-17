@@ -91,7 +91,6 @@ function testScene(objectPatch: Partial<Scene["objects"][number]> = {}): Scene {
     name: "Scene",
     description: "",
     grid: { cellSize: 2, width: 20, depth: 20 },
-    roadWidth: 0,
     background: { type: "color", color: "#000000", textureUrl: null },
     ground: { type: "color", color: "#000000", textureUrl: null },
     objects: [

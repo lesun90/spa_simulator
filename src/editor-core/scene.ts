@@ -61,8 +61,6 @@ export interface Scene {
   name: string;
   description: string;
   grid: GridDefinition;
-  /** Drivable road width in meters, for agent-scale export metadata. 0 means unset (no road-based sizing). */
-  roadWidth: number;
   background: SurfaceAppearance;
   ground: SurfaceAppearance;
   objects: SceneObject[];
@@ -93,7 +91,6 @@ export function createScene(name: string): Scene {
     name,
     description: "",
     grid: { cellSize: 1, width: 10, depth: 10 },
-    roadWidth: 0,
     background: defaultSurfaceAppearance(DEFAULT_BACKGROUND_COLOR),
     ground: defaultSurfaceAppearance(DEFAULT_GROUND_COLOR),
     objects: [],
@@ -130,7 +127,6 @@ export function normalizeScene(scene: Scene): Scene {
   return {
     ...scene,
     description: typeof scene.description === "string" ? scene.description : "",
-    roadWidth: Number.isFinite(scene.roadWidth) && scene.roadWidth >= 0 ? scene.roadWidth : 0,
     background: isSurfaceAppearance(scene.background) ? scene.background : defaultSurfaceAppearance(DEFAULT_BACKGROUND_COLOR),
     ground: isSurfaceAppearance(scene.ground) ? scene.ground : defaultSurfaceAppearance(DEFAULT_GROUND_COLOR),
     environment,

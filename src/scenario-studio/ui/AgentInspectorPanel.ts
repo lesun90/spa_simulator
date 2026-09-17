@@ -112,10 +112,10 @@ export class AgentInspectorPanel extends BasePanel {
     this.updateState();
   }
 
-  selectNew(choice: AgentChoice, roadWidthMeters = 0): void {
+  selectNew(choice: AgentChoice): void {
     this.saveCurrentDraft();
     let draft = this.newDrafts.get(choice.asset.id);
-    if (!draft) { draft = createAgentDraft(choice.asset, roadWidthMeters); this.newDrafts.set(choice.asset.id, draft); }
+    if (!draft) { draft = createAgentDraft(choice.asset); this.newDrafts.set(choice.asset.id, draft); }
     this.newAvailability.set(choice.asset.id, choice.available);
     this.context = { kind: "new", key: choice.asset.id };
     this.loadFields(draft);
