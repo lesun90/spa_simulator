@@ -48,7 +48,7 @@ export interface AgentAssetReference {
 }
 
 /** Which physics model simulates a vehicle's wheels during playback. See VehiclePhysicsModel usage in the physics worker. */
-export type VehiclePhysicsModel = "raycast" | "realistic";
+export type VehiclePhysicsModel = "raycast" | "physical";
 export const DEFAULT_VEHICLE_PHYSICS_MODEL: VehiclePhysicsModel = "raycast";
 
 export interface AgentChoice {
@@ -75,9 +75,15 @@ export interface VehicleTuning {
   readonly wheelFrictionSlip: number;
 }
 
+// Forces are applied identically to all 4 wheels (no drive-wheel split), so the effective total is
+// roughly 4x these per-wheel values. Chosen so an unscaled 1200kg car pulls ~3 m/s^2 under full throttle
+// (an ordinary sedan's 0-100kph in ~10s) and ~7 m/s^2 under full brake — both comfortably under the tire
+// friction ceiling (wheelFrictionSlip * per-wheel normal load), so accelerating/braking is force-limited
+// and predictable rather than traction-limited and skiddy. The previous defaults (4000N/6000N) produced
+// supercar-tier acceleration that left a 40m test scene within about a second of throttle input.
 export const DEFAULT_VEHICLE_TUNING: VehicleTuning = Object.freeze({
-  maxEngineForceN: 4000,
-  maxBrakeForceN: 6000,
+  maxEngineForceN: 900,
+  maxBrakeForceN: 2200,
   maxSteeringAngleDegrees: 35,
   steeringSpeedDegreesPerSecond: 120,
   suspensionStiffness: 60000,
@@ -182,8 +188,8 @@ export function validateAgentDraft(draft: AgentDraft): AgentDraft {
     throw new Error("Maximum placement slope must be between 0 and 90 degrees.");
   }
   if (draft.vehicle) validateVehicleTuning(draft.vehicle);
-  if (draft.vehiclePhysicsModel !== "raycast" && draft.vehiclePhysicsModel !== "realistic") {
-    throw new Error("Vehicle physics model must be raycast or realistic.");
+  if (draft.vehiclePhysicsModel !== "raycast" && draft.vehiclePhysicsModel !== "physical") {
+    throw new Error("Vehicle physics model must be raycast or physical.");
   }
   return freezeDraft({ ...draft, name: draft.name.trim() });
 }

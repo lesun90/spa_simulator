@@ -58,7 +58,7 @@ export class AgentInspectorPanel extends BasePanel {
   private readonly vehicleToggle: Button;
   private readonly physicsModelLabel: HudText;
   private readonly physicsModelRaycastButton: Button;
-  private readonly physicsModelRealisticButton: Button;
+  private readonly physicsModelPhysicalButton: Button;
   private readonly primary: Button;
   private readonly duplicate: Button;
   private readonly remove: Button;
@@ -106,14 +106,14 @@ export class AgentInspectorPanel extends BasePanel {
     this.physicsModelRaycastButton = new Button({ x: 0, y: 0, width: 1, height: 30 }, interaction, {
       label: "Raycast", fontSize: 11.5, onClick: () => this.setVehiclePhysicsModel("raycast")
     });
-    this.physicsModelRealisticButton = new Button({ x: 0, y: 0, width: 1, height: 30 }, interaction, {
-      label: "Realistic", fontSize: 11.5, onClick: () => this.setVehiclePhysicsModel("realistic")
+    this.physicsModelPhysicalButton = new Button({ x: 0, y: 0, width: 1, height: 30 }, interaction, {
+      label: "Physical", fontSize: 11.5, onClick: () => this.setVehiclePhysicsModel("physical")
     });
     this.primary = new Button({ x: 0, y: 0, width: 1, height: 34 }, interaction, { label: "Add", onClick: () => this.primaryAction() });
     this.duplicate = new Button({ x: 0, y: 0, width: 1, height: 32 }, interaction, { label: "Duplicate", onClick: () => void this.execute(() => this.context?.kind === "existing" ? this.onDuplicate(this.context.key) : Promise.resolve()) });
     this.remove = new Button({ x: 0, y: 0, width: 1, height: 32 }, interaction, { label: "Delete", onClick: () => void this.execute(() => this.context?.kind === "existing" ? this.onDelete(this.context.key) : Promise.resolve()) });
     this.scroll.content.add(
-      this.physicsModelLabel.root, this.physicsModelRaycastButton.root, this.physicsModelRealisticButton.root,
+      this.physicsModelLabel.root, this.physicsModelRaycastButton.root, this.physicsModelPhysicalButton.root,
       ...this.sectionLabels.map((item) => item.root),
       ...this.fieldLabels.map((item) => item.root), ...this.helpButtons.map((item) => item.root), ...Object.values(this.fields).map((item) => item.root),
       ...this.vehicleFieldLabels.map((item) => item.root), ...this.vehicleHelpButtons.map((item) => item.root), ...Object.values(this.vehicleFields).map((item) => item.root),
@@ -214,7 +214,7 @@ export class AgentInspectorPanel extends BasePanel {
       this.physicsModelLabel?.setFrame({ x, y: scrollTop, width });
       const physicsModelRow: Rect = { x, y: scrollTop + 20, width, height: 30 };
       this.physicsModelRaycastButton?.setRect(segmentButtonRect(physicsModelRow, 0));
-      this.physicsModelRealisticButton?.setRect(segmentButtonRect(physicsModelRow, 1));
+      this.physicsModelPhysicalButton?.setRect(segmentButtonRect(physicsModelRow, 1));
     }
     const start = scrollTop + 24 + (physicsModelVisible ? 58 : 0);
     const row = 38;
@@ -349,9 +349,9 @@ export class AgentInspectorPanel extends BasePanel {
     const physicsModel = draft?.vehiclePhysicsModel ?? DEFAULT_VEHICLE_PHYSICS_MODEL;
     this.physicsModelLabel.root.visible = physicsModelVisible;
     this.physicsModelRaycastButton.root.visible = physicsModelVisible;
-    this.physicsModelRealisticButton.root.visible = physicsModelVisible;
+    this.physicsModelPhysicalButton.root.visible = physicsModelVisible;
     this.physicsModelRaycastButton.setActive(physicsModel === "raycast");
-    this.physicsModelRealisticButton.setActive(physicsModel === "realistic");
+    this.physicsModelPhysicalButton.setActive(physicsModel === "physical");
     const vehicleVisible = this.visibleVehicleSpecs().length > 0;
     for (const field of Object.values(this.vehicleFields)) field.root.visible = vehicleVisible;
     for (const label of this.vehicleFieldLabels) label.root.visible = vehicleVisible;
@@ -367,7 +367,7 @@ export class AgentInspectorPanel extends BasePanel {
     for (const label of this.sectionLabels) label.dispose();
     for (const label of this.fieldLabels) label.dispose(); for (const button of this.helpButtons) button.dispose(); for (const field of Object.values(this.fields)) field.dispose();
     for (const label of this.vehicleFieldLabels) label.dispose(); for (const button of this.vehicleHelpButtons) button.dispose(); for (const field of Object.values(this.vehicleFields)) field.dispose();
-    this.vehicleToggle.dispose(); this.physicsModelLabel.dispose(); this.physicsModelRaycastButton.dispose(); this.physicsModelRealisticButton.dispose();
+    this.vehicleToggle.dispose(); this.physicsModelLabel.dispose(); this.physicsModelRaycastButton.dispose(); this.physicsModelPhysicalButton.dispose();
     this.primary.dispose(); this.duplicate.dispose(); this.remove.dispose(); super.dispose();
   }
 }

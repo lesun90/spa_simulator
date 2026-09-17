@@ -286,10 +286,10 @@ export class ScenarioSession {
     }
   }
 
-  /** Resolves each realistic-model vehicle's chassis hull from its real mesh; other agents pass through unchanged. */
+  /** Resolves each physical-model vehicle's chassis hull from its real mesh; other agents pass through unchanged. */
   private async resolvePhysicsInputs(agents: readonly AgentSnapshot[]): Promise<readonly AgentPhysicsInput[]> {
     return Promise.all(agents.map(async (agent) => {
-      if (agent.vehiclePhysicsModel !== "realistic" || !agent.asset.wheels?.length) return agent;
+      if (agent.vehiclePhysicsModel !== "physical" || !agent.asset.wheels?.length) return agent;
       const excludeNodeNames = new Set(agent.asset.wheels.map((wheel) => wheel.wheelNode));
       const chassisHullPoints = await this.assetManager.getChassisHullPoints(assetEntry(agent), excludeNodeNames).catch(() => undefined);
       return chassisHullPoints ? { ...agent, chassisHullPoints } : agent;

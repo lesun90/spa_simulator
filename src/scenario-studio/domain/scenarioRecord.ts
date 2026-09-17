@@ -129,7 +129,7 @@ function validateAgentSnapshot(value: unknown): AgentSnapshot {
 }
 
 function validateVehiclePhysicsModel(value: unknown): VehiclePhysicsModel {
-  if (value !== "raycast" && value !== "realistic") throw new Error('Agent vehicle physics model must be "raycast" or "realistic".');
+  if (value !== "raycast" && value !== "physical") throw new Error('Agent vehicle physics model must be "raycast" or "physical".');
   return value;
 }
 

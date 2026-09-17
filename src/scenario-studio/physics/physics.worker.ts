@@ -10,7 +10,7 @@ const FIXED_STEP = 1 / 60;
 // Comfortably above RenderLoop's 0.1s per-frame dt clamp so a normal slow frame never loses simulated time.
 const MAX_SUBSTEPS_PER_CALL = 8;
 
-// Realistic-model tuning with no raycast-controller equivalent to derive from; expect empirical iteration.
+// Physical-model tuning with no raycast-controller equivalent to derive from; expect empirical iteration.
 const WHEEL_MASS_FRACTION = 0.015;
 const CONNECTOR_BODY_MASS_KG = 5;
 const STEERING_JOINT_STIFFNESS = 5e4;
@@ -25,14 +25,14 @@ interface PlaybackBody {
   readonly kind: "generic" | "vehicle";
   readonly localCenter: Vector3Value;
   readonly controller?: RAPIER.DynamicRayCastVehicleController;
-  readonly rig?: RealisticVehicleRig;
+  readonly rig?: PhysicalVehicleRig;
   readonly wheelCount: number;
   /** Computed once from the agent's placed scale in preparePlayback; drive-force application reuses this instead of rescaling every substep. */
   readonly tuning?: ScaledVehicleTuning;
 }
 
 /** One wheel's real rigid-body chain: chassis -[steer?]- knuckle? -[suspension]- carriage -[spin]- wheel. */
-interface RealisticWheelRig {
+interface PhysicalWheelRig {
   readonly steeringJoint: RAPIER.RevoluteImpulseJoint | null;
   readonly suspensionJoint: RAPIER.PrismaticImpulseJoint;
   readonly spinJoint: RAPIER.RevoluteImpulseJoint;
@@ -46,8 +46,8 @@ interface RealisticWheelRig {
   spinRadians: number;
 }
 
-interface RealisticVehicleRig {
-  readonly wheels: readonly RealisticWheelRig[];
+interface PhysicalVehicleRig {
+  readonly wheels: readonly PhysicalWheelRig[];
 }
 
 let world: RAPIER.World | null = null;
@@ -271,12 +271,12 @@ function preparePlayback(agents: readonly AgentPhysicsInput[], controlledAgentId
       ? { tuning: agent.vehicle, wheels: agent.asset.wheels }
       : null;
 
-    if (drive && agent.vehiclePhysicsModel === "realistic") {
+    if (drive && agent.vehiclePhysicsModel === "physical") {
       const scaled = scaledVehicleTuning(drive.tuning, agent.mass, agent.scale);
-      const body = buildRealisticChassisBody(active, agent, center, agent.pose.headingRadians, agent.chassisHullPoints, scaled.mass);
+      const body = buildPhysicalChassisBody(active, agent, center, agent.pose.headingRadians, agent.chassisHullPoints, scaled.mass);
       body.setLinearDamping(agent.id === controlledAgentId ? 0.02 : 0.15);
       body.setAngularDamping(agent.id === controlledAgentId ? 0.3 : 0.6);
-      const wheels = drive.wheels.map((wheel) => buildRealisticWheelRig(active, body, agent, localCenter, wheel, scaled));
+      const wheels = drive.wheels.map((wheel) => buildPhysicalWheelRig(active, body, agent, localCenter, wheel, scaled));
       playbackBodies.set(agent.id, { body, kind, localCenter, rig: { wheels }, wheelCount: wheels.length, tuning: scaled });
       if (agent.id === controlledAgentId) controlledKind = kind;
       continue;
@@ -339,8 +339,8 @@ function scalePoints(points: Float32Array, scale: number): Float32Array {
   return scaled;
 }
 
-/** Builds the realistic-model chassis body: a convex hull of the real mesh when available, else the authored box. */
-function buildRealisticChassisBody(active: RAPIER.World, agent: AgentSnapshot, center: Vector3Value, heading: number, hullPoints: Float32Array | undefined, mass: number): RAPIER.RigidBody {
+/** Builds the physical-model chassis body: a convex hull of the real mesh when available, else the authored box. */
+function buildPhysicalChassisBody(active: RAPIER.World, agent: AgentSnapshot, center: Vector3Value, heading: number, hullPoints: Float32Array | undefined, mass: number): RAPIER.RigidBody {
   const body = active.createRigidBody(RAPIER.RigidBodyDesc.dynamic()
     .setTranslation(center.x, center.y, center.z)
     .setRotation(rotation(heading)));
@@ -354,8 +354,8 @@ function buildRealisticChassisBody(active: RAPIER.World, agent: AgentSnapshot, c
   return body;
 }
 
-/** Builds one wheel's real rigid-body chain (see RealisticWheelRig) and attaches it to the chassis body. */
-function buildRealisticWheelRig(active: RAPIER.World, chassis: RAPIER.RigidBody, agent: AgentSnapshot, localCenter: Vector3Value, wheel: WheelDescriptor, scaled: ScaledVehicleTuning): RealisticWheelRig {
+/** Builds one wheel's real rigid-body chain (see PhysicalWheelRig) and attaches it to the chassis body. */
+function buildPhysicalWheelRig(active: RAPIER.World, chassis: RAPIER.RigidBody, agent: AgentSnapshot, localCenter: Vector3Value, wheel: WheelDescriptor, scaled: ScaledVehicleTuning): PhysicalWheelRig {
   const localAnchor: Vector3Value = {
     x: wheel.position.x * agent.scale - localCenter.x,
     y: wheel.position.y * agent.scale - localCenter.y,
@@ -470,7 +470,7 @@ function clearPlaybackState(): void {
 }
 
 function applyDriveForces(agents: readonly AgentSnapshot[]): void {
-  for (const agent of agents) { updateVehicle(agent); updateVehicleRealistic(agent); }
+  for (const agent of agents) { updateVehicle(agent); updateVehiclePhysical(agent); }
 }
 
 function updateVehicle(agent: AgentSnapshot): void {
@@ -499,7 +499,7 @@ function updateVehicle(agent: AgentSnapshot): void {
   controller.updateVehicle(FIXED_STEP);
 }
 
-function updateVehicleRealistic(agent: AgentSnapshot): void {
+function updateVehiclePhysical(agent: AgentSnapshot): void {
   const entry = playbackBodies.get(agent.id);
   const rig = entry?.rig;
   const tuning = entry?.tuning;
@@ -561,7 +561,7 @@ function collectTransforms(): AgentTransform[] {
   return transforms;
 }
 
-function collectRigWheelTransform(wheel: RealisticWheelRig, chassis: RAPIER.RigidBody): { steeringRadians: number; rotationRadians: number; suspensionLength: number } {
+function collectRigWheelTransform(wheel: PhysicalWheelRig, chassis: RAPIER.RigidBody): { steeringRadians: number; rotationRadians: number; suspensionLength: number } {
   const chassisRotation = chassis.rotation();
   const steeringRadians = wheel.knuckleBody ? yawOf(wheel.knuckleBody.rotation()) - yawOf(chassisRotation) : 0;
   const chassisUp = rotateVector({ x: 0, y: 1, z: 0 }, chassisRotation);
