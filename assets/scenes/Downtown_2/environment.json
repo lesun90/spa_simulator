@@ -1,0 +1,5152 @@
+{
+  "assets": [
+    {
+      "category": "3d-road-tiles",
+      "contentHash": "5890364c680121c7c71d90f1ca828a612ffc97302372cce8eaadf5e387a83556",
+      "id": "3d-road-tiles.road-tile-001",
+      "label": "Road Tile 001",
+      "semanticRoles": [
+        "terrain.ground",
+        "terrain.water"
+      ]
+    },
+    {
+      "category": "3d-road-tiles",
+      "contentHash": "2a63dd23a6eea6e50ac8ed09a881eb95a1e0612b127dbff2ee16654cee4b4f74",
+      "id": "3d-road-tiles.road-tile-025",
+      "label": "Road Tile 025",
+      "semanticRoles": []
+    },
+    {
+      "category": "3d-road-tiles",
+      "contentHash": "5feccf25e1260cd383bdd585c679a3dec6866b412e0ff86b22ceaf5298d24d94",
+      "id": "3d-road-tiles.road-tile-039",
+      "label": "Road Tile 039",
+      "semanticRoles": [
+        "terrain.ground",
+        "road.roundabout-island"
+      ]
+    },
+    {
+      "category": "3d-road-tiles",
+      "contentHash": "dffd9fed0525bb16ec31e67acf71a0b3ae014ddf622766ad6d0d6de5517fbcb9",
+      "id": "3d-road-tiles.road-tile-041",
+      "label": "Road Tile 041",
+      "semanticRoles": []
+    },
+    {
+      "category": "3d-road-tiles",
+      "contentHash": "d8fcd75a76afd39b3ec9db47b8e637ec218dfdc95db696bbde75c65eeddcbea4",
+      "id": "3d-road-tiles.road-tile-043",
+      "label": "Road Tile 043",
+      "semanticRoles": []
+    },
+    {
+      "category": "3d-road-tiles",
+      "contentHash": "dfc05747143c67ca580c5f56d4ae3380e8fafbc504e4f0f83cdff69b54c250cc",
+      "id": "3d-road-tiles.road-tile-048",
+      "label": "Road Tile 048",
+      "semanticRoles": []
+    },
+    {
+      "category": "3d-road-tiles",
+      "contentHash": "03d82722ca5997297a58c5da2e1b5af963852cf097e6fea755203e064ba1a09b",
+      "id": "3d-road-tiles.road-tile-049",
+      "label": "Road Tile 049",
+      "semanticRoles": []
+    },
+    {
+      "category": "3d-road-tiles",
+      "contentHash": "48908358bc3f1301fd93aa48c9343aa019edb1ebe44afae59dba96c0ce646a06",
+      "id": "3d-road-tiles.road-tile-144",
+      "label": "Road Tile 144",
+      "semanticRoles": []
+    },
+    {
+      "category": "3d-road-tiles",
+      "contentHash": "3fa91eafd94eb250dc243e95e0006723729ea66c7d51cc718025570abe0c24a4",
+      "id": "3d-road-tiles.road-tile-147",
+      "label": "Road Tile 147",
+      "semanticRoles": []
+    },
+    {
+      "category": "3d-road-tiles",
+      "contentHash": "eea55cb988ec4868f2e7f096af44cefee61cee2578c1a84b86a29913e045decc",
+      "id": "3d-road-tiles.road-tile-150",
+      "label": "Road Tile 150",
+      "semanticRoles": []
+    },
+    {
+      "category": "3d-road-tiles",
+      "contentHash": "c5ea4463ea80b12dbdd7ea00096257aaea740a09e95db39a395dfc83d057ac97",
+      "id": "3d-road-tiles.road-tile-153",
+      "label": "Road Tile 153",
+      "semanticRoles": []
+    },
+    {
+      "category": "3d-road-tiles",
+      "contentHash": "c90a437046bd2b6b8f98215958ab1365d09fb5a04e0b3438422621ba07b78cfa",
+      "id": "3d-road-tiles.road-tile-156",
+      "label": "Road Tile 156",
+      "semanticRoles": []
+    },
+    {
+      "category": "3d-road-tiles",
+      "contentHash": "59522f1c7061876b502c745e98df075b0228dc3b81268715feaad34f81bbc16c",
+      "id": "3d-road-tiles.road-tile-158",
+      "label": "Road Tile 158",
+      "semanticRoles": [
+        "terrain.ground",
+        "terrain.water",
+        "terrain.shore"
+      ]
+    },
+    {
+      "category": "3d-road-tiles",
+      "contentHash": "c2e78c3065bad16ea5bfb4ff26c9d42e1d623f7cede1203a07141d17f5aa2b78",
+      "id": "3d-road-tiles.road-tile-159",
+      "label": "Road Tile 159",
+      "semanticRoles": [
+        "terrain.ground",
+        "terrain.water",
+        "terrain.shore"
+      ]
+    },
+    {
+      "category": "3d-road-tiles",
+      "contentHash": "71acfee905b753494b32d9fe1fa97eb49c8195cdbf951efa98b927b199120c0f",
+      "id": "3d-road-tiles.road-tile-162",
+      "label": "Road Tile 162",
+      "semanticRoles": []
+    },
+    {
+      "category": "3d-road-tiles",
+      "contentHash": "31e6e9a5f1403e3f9329c4a151800383aa6764f99f2f8729d76d98c1c6c4f1f4",
+      "id": "3d-road-tiles.road-tile-163",
+      "label": "Road Tile 163",
+      "semanticRoles": [
+        "terrain.ground"
+      ]
+    },
+    {
+      "category": "3d-road-tiles",
+      "contentHash": "ff25cd2dfce837f32106505e3b12ca7067bbc29b1405436057e0d3fc7d3d9942",
+      "id": "3d-road-tiles.road-tile-167",
+      "label": "Road Tile 167",
+      "semanticRoles": [
+        "terrain.ground",
+        "terrain.water",
+        "terrain.shore"
+      ]
+    },
+    {
+      "category": "3d-road-tiles",
+      "contentHash": "85a54b8422cceb145a2e986c72eafac36e2a043e5d11f8c9e4ed2e3edf113c39",
+      "id": "3d-road-tiles.road-tile-174",
+      "label": "Road Tile 174",
+      "semanticRoles": [
+        "terrain.ground",
+        "terrain.water",
+        "terrain.shore"
+      ]
+    },
+    {
+      "category": "3d-road-tiles",
+      "contentHash": "f8b4c387b23b777f3fcb57bbca52a8fbb2950c0d8b215459ea9b0c515ed2dfa0",
+      "id": "3d-road-tiles.road-tile-177",
+      "label": "Road Tile 177",
+      "semanticRoles": [
+        "terrain.ground",
+        "terrain.water",
+        "terrain.shore"
+      ]
+    },
+    {
+      "category": "3d-road-tiles",
+      "contentHash": "8ba00f2093cb157dd415c637826e65028baffaf5f07bbbb5476bb4144717dc90",
+      "id": "3d-road-tiles.road-tile-188",
+      "label": "Road Tile 188",
+      "semanticRoles": [
+        "road.surface",
+        "road.bridge"
+      ]
+    }
+  ],
+  "build": {
+    "chunkSize": 10,
+    "removeInternalSeamFaces": false
+  },
+  "cells": [
+    {
+      "assetContentHash": "31e6e9a5f1403e3f9329c4a151800383aa6764f99f2f8729d76d98c1c6c4f1f4",
+      "bounds": {
+        "max": {
+          "x": -15.333333333333334,
+          "y": 5.333333333333333,
+          "z": -15.333333333333334
+        },
+        "min": {
+          "x": -20.666666666666668,
+          "y": 0,
+          "z": -20.666666666666668
+        }
+      },
+      "chunkId": "chunk_0_0",
+      "column": 0,
+      "id": "wfc-preview-0-0",
+      "row": 0,
+      "semanticRoles": [
+        "terrain.ground"
+      ],
+      "sourceAssetId": "3d-road-tiles.road-tile-163",
+      "sourceLayer": "scene",
+      "transform": {
+        "position": {
+          "x": -18,
+          "y": 0,
+          "z": -18
+        },
+        "rotationY": 0,
+        "scale": 1.3333333333333333
+      },
+      "variantId": "3d-road-tiles.road-tile-163@r0"
+    },
+    {
+      "assetContentHash": "31e6e9a5f1403e3f9329c4a151800383aa6764f99f2f8729d76d98c1c6c4f1f4",
+      "bounds": {
+        "max": {
+          "x": -15.333333333333334,
+          "y": 5.333333333333333,
+          "z": -11.333333333333334
+        },
+        "min": {
+          "x": -20.666666666666668,
+          "y": 0,
+          "z": -16.666666666666668
+        }
+      },
+      "chunkId": "chunk_0_0",
+      "column": 0,
+      "id": "wfc-preview-0-1",
+      "row": 1,
+      "semanticRoles": [
+        "terrain.ground"
+      ],
+      "sourceAssetId": "3d-road-tiles.road-tile-163",
+      "sourceLayer": "scene",
+      "transform": {
+        "position": {
+          "x": -18,
+          "y": 0,
+          "z": -14
+        },
+        "rotationY": 0,
+        "scale": 1.3333333333333333
+      },
+      "variantId": "3d-road-tiles.road-tile-163@r0"
+    },
+    {
+      "assetContentHash": "31e6e9a5f1403e3f9329c4a151800383aa6764f99f2f8729d76d98c1c6c4f1f4",
+      "bounds": {
+        "max": {
+          "x": -15.333333333333334,
+          "y": 5.333333333333333,
+          "z": -7.333333333333334
+        },
+        "min": {
+          "x": -20.666666666666668,
+          "y": 0,
+          "z": -12.666666666666666
+        }
+      },
+      "chunkId": "chunk_0_0",
+      "column": 0,
+      "id": "wfc-preview-0-2",
+      "row": 2,
+      "semanticRoles": [
+        "terrain.ground"
+      ],
+      "sourceAssetId": "3d-road-tiles.road-tile-163",
+      "sourceLayer": "scene",
+      "transform": {
+        "position": {
+          "x": -18,
+          "y": 0,
+          "z": -10
+        },
+        "rotationY": 0,
+        "scale": 1.3333333333333333
+      },
+      "variantId": "3d-road-tiles.road-tile-163@r0"
+    },
+    {
+      "assetContentHash": "31e6e9a5f1403e3f9329c4a151800383aa6764f99f2f8729d76d98c1c6c4f1f4",
+      "bounds": {
+        "max": {
+          "x": -15.333333333333334,
+          "y": 5.333333333333333,
+          "z": -3.3333333333333335
+        },
+        "min": {
+          "x": -20.666666666666668,
+          "y": 0,
+          "z": -8.666666666666666
+        }
+      },
+      "chunkId": "chunk_0_0",
+      "column": 0,
+      "id": "wfc-preview-0-3",
+      "row": 3,
+      "semanticRoles": [
+        "terrain.ground"
+      ],
+      "sourceAssetId": "3d-road-tiles.road-tile-163",
+      "sourceLayer": "scene",
+      "transform": {
+        "position": {
+          "x": -18,
+          "y": 0,
+          "z": -6
+        },
+        "rotationY": 0,
+        "scale": 1.3333333333333333
+      },
+      "variantId": "3d-road-tiles.road-tile-163@r0"
+    },
+    {
+      "assetContentHash": "31e6e9a5f1403e3f9329c4a151800383aa6764f99f2f8729d76d98c1c6c4f1f4",
+      "bounds": {
+        "max": {
+          "x": -15.333333333333334,
+          "y": 5.333333333333333,
+          "z": 0.6666666666666665
+        },
+        "min": {
+          "x": -20.666666666666668,
+          "y": 0,
+          "z": -4.666666666666666
+        }
+      },
+      "chunkId": "chunk_0_0",
+      "column": 0,
+      "id": "wfc-preview-0-4",
+      "row": 4,
+      "semanticRoles": [
+        "terrain.ground"
+      ],
+      "sourceAssetId": "3d-road-tiles.road-tile-163",
+      "sourceLayer": "scene",
+      "transform": {
+        "position": {
+          "x": -18,
+          "y": 0,
+          "z": -2
+        },
+        "rotationY": 0,
+        "scale": 1.3333333333333333
+      },
+      "variantId": "3d-road-tiles.road-tile-163@r0"
+    },
+    {
+      "assetContentHash": "31e6e9a5f1403e3f9329c4a151800383aa6764f99f2f8729d76d98c1c6c4f1f4",
+      "bounds": {
+        "max": {
+          "x": -15.333333333333334,
+          "y": 5.333333333333333,
+          "z": 4.666666666666666
+        },
+        "min": {
+          "x": -20.666666666666668,
+          "y": 0,
+          "z": -0.6666666666666665
+        }
+      },
+      "chunkId": "chunk_0_0",
+      "column": 0,
+      "id": "wfc-preview-0-5",
+      "row": 5,
+      "semanticRoles": [
+        "terrain.ground"
+      ],
+      "sourceAssetId": "3d-road-tiles.road-tile-163",
+      "sourceLayer": "scene",
+      "transform": {
+        "position": {
+          "x": -18,
+          "y": 0,
+          "z": 2
+        },
+        "rotationY": 0,
+        "scale": 1.3333333333333333
+      },
+      "variantId": "3d-road-tiles.road-tile-163@r0"
+    },
+    {
+      "assetContentHash": "31e6e9a5f1403e3f9329c4a151800383aa6764f99f2f8729d76d98c1c6c4f1f4",
+      "bounds": {
+        "max": {
+          "x": -15.333333333333334,
+          "y": 5.333333333333333,
+          "z": 8.666666666666666
+        },
+        "min": {
+          "x": -20.666666666666668,
+          "y": 0,
+          "z": 3.3333333333333335
+        }
+      },
+      "chunkId": "chunk_0_0",
+      "column": 0,
+      "id": "wfc-preview-0-6",
+      "row": 6,
+      "semanticRoles": [
+        "terrain.ground"
+      ],
+      "sourceAssetId": "3d-road-tiles.road-tile-163",
+      "sourceLayer": "scene",
+      "transform": {
+        "position": {
+          "x": -18,
+          "y": 0,
+          "z": 6
+        },
+        "rotationY": 0,
+        "scale": 1.3333333333333333
+      },
+      "variantId": "3d-road-tiles.road-tile-163@r0"
+    },
+    {
+      "assetContentHash": "31e6e9a5f1403e3f9329c4a151800383aa6764f99f2f8729d76d98c1c6c4f1f4",
+      "bounds": {
+        "max": {
+          "x": -15.333333333333334,
+          "y": 5.333333333333333,
+          "z": 12.666666666666666
+        },
+        "min": {
+          "x": -20.666666666666668,
+          "y": 0,
+          "z": 7.333333333333334
+        }
+      },
+      "chunkId": "chunk_0_0",
+      "column": 0,
+      "id": "wfc-preview-0-7",
+      "row": 7,
+      "semanticRoles": [
+        "terrain.ground"
+      ],
+      "sourceAssetId": "3d-road-tiles.road-tile-163",
+      "sourceLayer": "scene",
+      "transform": {
+        "position": {
+          "x": -18,
+          "y": 0,
+          "z": 10
+        },
+        "rotationY": 0,
+        "scale": 1.3333333333333333
+      },
+      "variantId": "3d-road-tiles.road-tile-163@r0"
+    },
+    {
+      "assetContentHash": "31e6e9a5f1403e3f9329c4a151800383aa6764f99f2f8729d76d98c1c6c4f1f4",
+      "bounds": {
+        "max": {
+          "x": -15.333333333333334,
+          "y": 5.333333333333333,
+          "z": 16.666666666666668
+        },
+        "min": {
+          "x": -20.666666666666668,
+          "y": 0,
+          "z": 11.333333333333334
+        }
+      },
+      "chunkId": "chunk_0_0",
+      "column": 0,
+      "id": "wfc-preview-0-8",
+      "row": 8,
+      "semanticRoles": [
+        "terrain.ground"
+      ],
+      "sourceAssetId": "3d-road-tiles.road-tile-163",
+      "sourceLayer": "scene",
+      "transform": {
+        "position": {
+          "x": -18,
+          "y": 0,
+          "z": 14
+        },
+        "rotationY": 0,
+        "scale": 1.3333333333333333
+      },
+      "variantId": "3d-road-tiles.road-tile-163@r0"
+    },
+    {
+      "assetContentHash": "31e6e9a5f1403e3f9329c4a151800383aa6764f99f2f8729d76d98c1c6c4f1f4",
+      "bounds": {
+        "max": {
+          "x": -15.333333333333334,
+          "y": 5.333333333333333,
+          "z": 20.666666666666668
+        },
+        "min": {
+          "x": -20.666666666666668,
+          "y": 0,
+          "z": 15.333333333333334
+        }
+      },
+      "chunkId": "chunk_0_0",
+      "column": 0,
+      "id": "wfc-preview-0-9",
+      "row": 9,
+      "semanticRoles": [
+        "terrain.ground"
+      ],
+      "sourceAssetId": "3d-road-tiles.road-tile-163",
+      "sourceLayer": "scene",
+      "transform": {
+        "position": {
+          "x": -18,
+          "y": 0,
+          "z": 18
+        },
+        "rotationY": 0,
+        "scale": 1.3333333333333333
+      },
+      "variantId": "3d-road-tiles.road-tile-163@r0"
+    },
+    {
+      "assetContentHash": "31e6e9a5f1403e3f9329c4a151800383aa6764f99f2f8729d76d98c1c6c4f1f4",
+      "bounds": {
+        "max": {
+          "x": -11.333333333333334,
+          "y": 5.333333333333333,
+          "z": -15.333333333333334
+        },
+        "min": {
+          "x": -16.666666666666668,
+          "y": 0,
+          "z": -20.666666666666668
+        }
+      },
+      "chunkId": "chunk_0_0",
+      "column": 1,
+      "id": "wfc-preview-1-0",
+      "row": 0,
+      "semanticRoles": [
+        "terrain.ground"
+      ],
+      "sourceAssetId": "3d-road-tiles.road-tile-163",
+      "sourceLayer": "scene",
+      "transform": {
+        "position": {
+          "x": -14,
+          "y": 0,
+          "z": -18
+        },
+        "rotationY": 0,
+        "scale": 1.3333333333333333
+      },
+      "variantId": "3d-road-tiles.road-tile-163@r0"
+    },
+    {
+      "assetContentHash": "c5ea4463ea80b12dbdd7ea00096257aaea740a09e95db39a395dfc83d057ac97",
+      "bounds": {
+        "max": {
+          "x": -11.333333333333334,
+          "y": 5.333333333333333,
+          "z": -11.333333333333334
+        },
+        "min": {
+          "x": -16.666666666666668,
+          "y": 0,
+          "z": -16.666666666666668
+        }
+      },
+      "chunkId": "chunk_0_0",
+      "column": 1,
+      "id": "wfc-preview-1-1",
+      "row": 1,
+      "semanticRoles": [],
+      "sourceAssetId": "3d-road-tiles.road-tile-153",
+      "sourceLayer": "scene",
+      "transform": {
+        "position": {
+          "x": -14,
+          "y": 0,
+          "z": -14
+        },
+        "rotationY": 4.71238898038469,
+        "scale": 1.3333333333333333
+      },
+      "variantId": "3d-road-tiles.road-tile-153@r270"
+    },
+    {
+      "assetContentHash": "2a63dd23a6eea6e50ac8ed09a881eb95a1e0612b127dbff2ee16654cee4b4f74",
+      "bounds": {
+        "max": {
+          "x": -11.333333333333334,
+          "y": 5.333333333333333,
+          "z": -7.333333333333334
+        },
+        "min": {
+          "x": -16.666666666666668,
+          "y": 0,
+          "z": -12.666666666666666
+        }
+      },
+      "chunkId": "chunk_0_0",
+      "column": 1,
+      "id": "wfc-preview-1-2",
+      "row": 2,
+      "semanticRoles": [],
+      "sourceAssetId": "3d-road-tiles.road-tile-025",
+      "sourceLayer": "scene",
+      "transform": {
+        "position": {
+          "x": -14,
+          "y": 0,
+          "z": -10
+        },
+        "rotationY": 1.5707963267948966,
+        "scale": 1.3333333333333333
+      },
+      "variantId": "3d-road-tiles.road-tile-025@r90"
+    },
+    {
+      "assetContentHash": "eea55cb988ec4868f2e7f096af44cefee61cee2578c1a84b86a29913e045decc",
+      "bounds": {
+        "max": {
+          "x": -11.333333333333334,
+          "y": 5.333333333333333,
+          "z": -3.3333333333333335
+        },
+        "min": {
+          "x": -16.666666666666668,
+          "y": 0,
+          "z": -8.666666666666666
+        }
+      },
+      "chunkId": "chunk_0_0",
+      "column": 1,
+      "id": "wfc-preview-1-3",
+      "row": 3,
+      "semanticRoles": [],
+      "sourceAssetId": "3d-road-tiles.road-tile-150",
+      "sourceLayer": "scene",
+      "transform": {
+        "position": {
+          "x": -14,
+          "y": 0,
+          "z": -6
+        },
+        "rotationY": 0,
+        "scale": 1.3333333333333333
+      },
+      "variantId": "3d-road-tiles.road-tile-150@r0"
+    },
+    {
+      "assetContentHash": "2a63dd23a6eea6e50ac8ed09a881eb95a1e0612b127dbff2ee16654cee4b4f74",
+      "bounds": {
+        "max": {
+          "x": -11.333333333333334,
+          "y": 5.333333333333333,
+          "z": 0.6666666666666665
+        },
+        "min": {
+          "x": -16.666666666666668,
+          "y": 0,
+          "z": -4.666666666666666
+        }
+      },
+      "chunkId": "chunk_0_0",
+      "column": 1,
+      "id": "wfc-preview-1-4",
+      "row": 4,
+      "semanticRoles": [],
+      "sourceAssetId": "3d-road-tiles.road-tile-025",
+      "sourceLayer": "scene",
+      "transform": {
+        "position": {
+          "x": -14,
+          "y": 0,
+          "z": -2
+        },
+        "rotationY": 1.5707963267948966,
+        "scale": 1.3333333333333333
+      },
+      "variantId": "3d-road-tiles.road-tile-025@r90"
+    },
+    {
+      "assetContentHash": "71acfee905b753494b32d9fe1fa97eb49c8195cdbf951efa98b927b199120c0f",
+      "bounds": {
+        "max": {
+          "x": -11.333333333333334,
+          "y": 5.333333333333333,
+          "z": 4.666666666666666
+        },
+        "min": {
+          "x": -16.666666666666668,
+          "y": 0,
+          "z": -0.6666666666666665
+        }
+      },
+      "chunkId": "chunk_0_0",
+      "column": 1,
+      "id": "wfc-preview-1-5",
+      "row": 5,
+      "semanticRoles": [],
+      "sourceAssetId": "3d-road-tiles.road-tile-162",
+      "sourceLayer": "scene",
+      "transform": {
+        "position": {
+          "x": -14,
+          "y": 0,
+          "z": 2
+        },
+        "rotationY": 1.5707963267948966,
+        "scale": 1.3333333333333333
+      },
+      "variantId": "3d-road-tiles.road-tile-162@r90"
+    },
+    {
+      "assetContentHash": "71acfee905b753494b32d9fe1fa97eb49c8195cdbf951efa98b927b199120c0f",
+      "bounds": {
+        "max": {
+          "x": -11.333333333333334,
+          "y": 5.333333333333333,
+          "z": 8.666666666666666
+        },
+        "min": {
+          "x": -16.666666666666668,
+          "y": 0,
+          "z": 3.3333333333333335
+        }
+      },
+      "chunkId": "chunk_0_0",
+      "column": 1,
+      "id": "wfc-preview-1-6",
+      "row": 6,
+      "semanticRoles": [],
+      "sourceAssetId": "3d-road-tiles.road-tile-162",
+      "sourceLayer": "scene",
+      "transform": {
+        "position": {
+          "x": -14,
+          "y": 0,
+          "z": 6
+        },
+        "rotationY": 1.5707963267948966,
+        "scale": 1.3333333333333333
+      },
+      "variantId": "3d-road-tiles.road-tile-162@r90"
+    },
+    {
+      "assetContentHash": "dffd9fed0525bb16ec31e67acf71a0b3ae014ddf622766ad6d0d6de5517fbcb9",
+      "bounds": {
+        "max": {
+          "x": -11.333333333333334,
+          "y": 5.333333333333333,
+          "z": 12.666666666666666
+        },
+        "min": {
+          "x": -16.666666666666668,
+          "y": 0,
+          "z": 7.333333333333334
+        }
+      },
+      "chunkId": "chunk_0_0",
+      "column": 1,
+      "id": "wfc-preview-1-7",
+      "row": 7,
+      "semanticRoles": [],
+      "sourceAssetId": "3d-road-tiles.road-tile-041",
+      "sourceLayer": "scene",
+      "transform": {
+        "position": {
+          "x": -14,
+          "y": 0,
+          "z": 10
+        },
+        "rotationY": 0,
+        "scale": 1.3333333333333333
+      },
+      "variantId": "3d-road-tiles.road-tile-041@r0"
+    },
+    {
+      "assetContentHash": "48908358bc3f1301fd93aa48c9343aa019edb1ebe44afae59dba96c0ce646a06",
+      "bounds": {
+        "max": {
+          "x": -11.333333333333334,
+          "y": 5.333333333333333,
+          "z": 16.666666666666668
+        },
+        "min": {
+          "x": -16.666666666666668,
+          "y": 0,
+          "z": 11.333333333333334
+        }
+      },
+      "chunkId": "chunk_0_0",
+      "column": 1,
+      "id": "wfc-preview-1-8",
+      "row": 8,
+      "semanticRoles": [],
+      "sourceAssetId": "3d-road-tiles.road-tile-144",
+      "sourceLayer": "scene",
+      "transform": {
+        "position": {
+          "x": -14,
+          "y": 0,
+          "z": 14
+        },
+        "rotationY": 0,
+        "scale": 1.3333333333333333
+      },
+      "variantId": "3d-road-tiles.road-tile-144@r0"
+    },
+    {
+      "assetContentHash": "31e6e9a5f1403e3f9329c4a151800383aa6764f99f2f8729d76d98c1c6c4f1f4",
+      "bounds": {
+        "max": {
+          "x": -11.333333333333334,
+          "y": 5.333333333333333,
+          "z": 20.666666666666668
+        },
+        "min": {
+          "x": -16.666666666666668,
+          "y": 0,
+          "z": 15.333333333333334
+        }
+      },
+      "chunkId": "chunk_0_0",
+      "column": 1,
+      "id": "wfc-preview-1-9",
+      "row": 9,
+      "semanticRoles": [
+        "terrain.ground"
+      ],
+      "sourceAssetId": "3d-road-tiles.road-tile-163",
+      "sourceLayer": "scene",
+      "transform": {
+        "position": {
+          "x": -14,
+          "y": 0,
+          "z": 18
+        },
+        "rotationY": 0,
+        "scale": 1.3333333333333333
+      },
+      "variantId": "3d-road-tiles.road-tile-163@r0"
+    },
+    {
+      "assetContentHash": "31e6e9a5f1403e3f9329c4a151800383aa6764f99f2f8729d76d98c1c6c4f1f4",
+      "bounds": {
+        "max": {
+          "x": -7.333333333333334,
+          "y": 5.333333333333333,
+          "z": -15.333333333333334
+        },
+        "min": {
+          "x": -12.666666666666666,
+          "y": 0,
+          "z": -20.666666666666668
+        }
+      },
+      "chunkId": "chunk_0_0",
+      "column": 2,
+      "id": "wfc-preview-2-0",
+      "row": 0,
+      "semanticRoles": [
+        "terrain.ground"
+      ],
+      "sourceAssetId": "3d-road-tiles.road-tile-163",
+      "sourceLayer": "scene",
+      "transform": {
+        "position": {
+          "x": -10,
+          "y": 0,
+          "z": -18
+        },
+        "rotationY": 0,
+        "scale": 1.3333333333333333
+      },
+      "variantId": "3d-road-tiles.road-tile-163@r0"
+    },
+    {
+      "assetContentHash": "71acfee905b753494b32d9fe1fa97eb49c8195cdbf951efa98b927b199120c0f",
+      "bounds": {
+        "max": {
+          "x": -7.333333333333334,
+          "y": 5.333333333333333,
+          "z": -11.333333333333334
+        },
+        "min": {
+          "x": -12.666666666666666,
+          "y": 0,
+          "z": -16.666666666666668
+        }
+      },
+      "chunkId": "chunk_0_0",
+      "column": 2,
+      "id": "wfc-preview-2-1",
+      "row": 1,
+      "semanticRoles": [],
+      "sourceAssetId": "3d-road-tiles.road-tile-162",
+      "sourceLayer": "scene",
+      "transform": {
+        "position": {
+          "x": -10,
+          "y": 0,
+          "z": -14
+        },
+        "rotationY": 0,
+        "scale": 1.3333333333333333
+      },
+      "variantId": "3d-road-tiles.road-tile-162@r0"
+    },
+    {
+      "assetContentHash": "31e6e9a5f1403e3f9329c4a151800383aa6764f99f2f8729d76d98c1c6c4f1f4",
+      "bounds": {
+        "max": {
+          "x": -7.333333333333334,
+          "y": 5.333333333333333,
+          "z": -7.333333333333334
+        },
+        "min": {
+          "x": -12.666666666666666,
+          "y": 0,
+          "z": -12.666666666666666
+        }
+      },
+      "chunkId": "chunk_0_0",
+      "column": 2,
+      "id": "wfc-preview-2-2",
+      "row": 2,
+      "semanticRoles": [
+        "terrain.ground"
+      ],
+      "sourceAssetId": "3d-road-tiles.road-tile-163",
+      "sourceLayer": "scene",
+      "transform": {
+        "position": {
+          "x": -10,
+          "y": 0,
+          "z": -10
+        },
+        "rotationY": 0,
+        "scale": 1.3333333333333333
+      },
+      "variantId": "3d-road-tiles.road-tile-163@r0"
+    },
+    {
+      "assetContentHash": "2a63dd23a6eea6e50ac8ed09a881eb95a1e0612b127dbff2ee16654cee4b4f74",
+      "bounds": {
+        "max": {
+          "x": -7.333333333333334,
+          "y": 5.333333333333333,
+          "z": -3.3333333333333335
+        },
+        "min": {
+          "x": -12.666666666666666,
+          "y": 0,
+          "z": -8.666666666666666
+        }
+      },
+      "chunkId": "chunk_0_0",
+      "column": 2,
+      "id": "wfc-preview-2-3",
+      "row": 3,
+      "semanticRoles": [],
+      "sourceAssetId": "3d-road-tiles.road-tile-025",
+      "sourceLayer": "scene",
+      "transform": {
+        "position": {
+          "x": -10,
+          "y": 0,
+          "z": -6
+        },
+        "rotationY": 0,
+        "scale": 1.3333333333333333
+      },
+      "variantId": "3d-road-tiles.road-tile-025@r0"
+    },
+    {
+      "assetContentHash": "f8b4c387b23b777f3fcb57bbca52a8fbb2950c0d8b215459ea9b0c515ed2dfa0",
+      "bounds": {
+        "max": {
+          "x": -7.333333333333334,
+          "y": 5.333333333333333,
+          "z": 0.6666666666666665
+        },
+        "min": {
+          "x": -12.666666666666666,
+          "y": 0,
+          "z": -4.666666666666666
+        }
+      },
+      "chunkId": "chunk_0_0",
+      "column": 2,
+      "id": "wfc-preview-2-4",
+      "row": 4,
+      "semanticRoles": [
+        "terrain.ground",
+        "terrain.water",
+        "terrain.shore"
+      ],
+      "sourceAssetId": "3d-road-tiles.road-tile-177",
+      "sourceLayer": "scene",
+      "transform": {
+        "position": {
+          "x": -10,
+          "y": 0,
+          "z": -2
+        },
+        "rotationY": 4.71238898038469,
+        "scale": 1.3333333333333333
+      },
+      "variantId": "3d-road-tiles.road-tile-177@r270"
+    },
+    {
+      "assetContentHash": "f8b4c387b23b777f3fcb57bbca52a8fbb2950c0d8b215459ea9b0c515ed2dfa0",
+      "bounds": {
+        "max": {
+          "x": -7.333333333333334,
+          "y": 5.333333333333333,
+          "z": 4.666666666666666
+        },
+        "min": {
+          "x": -12.666666666666666,
+          "y": 0,
+          "z": -0.6666666666666665
+        }
+      },
+      "chunkId": "chunk_0_0",
+      "column": 2,
+      "id": "wfc-preview-2-5",
+      "row": 5,
+      "semanticRoles": [
+        "terrain.ground",
+        "terrain.water",
+        "terrain.shore"
+      ],
+      "sourceAssetId": "3d-road-tiles.road-tile-177",
+      "sourceLayer": "scene",
+      "transform": {
+        "position": {
+          "x": -10,
+          "y": 0,
+          "z": 2
+        },
+        "rotationY": 0,
+        "scale": 1.3333333333333333
+      },
+      "variantId": "3d-road-tiles.road-tile-177@r0"
+    },
+    {
+      "assetContentHash": "31e6e9a5f1403e3f9329c4a151800383aa6764f99f2f8729d76d98c1c6c4f1f4",
+      "bounds": {
+        "max": {
+          "x": -7.333333333333334,
+          "y": 5.333333333333333,
+          "z": 8.666666666666666
+        },
+        "min": {
+          "x": -12.666666666666666,
+          "y": 0,
+          "z": 3.3333333333333335
+        }
+      },
+      "chunkId": "chunk_0_0",
+      "column": 2,
+      "id": "wfc-preview-2-6",
+      "row": 6,
+      "semanticRoles": [
+        "terrain.ground"
+      ],
+      "sourceAssetId": "3d-road-tiles.road-tile-163",
+      "sourceLayer": "scene",
+      "transform": {
+        "position": {
+          "x": -10,
+          "y": 0,
+          "z": 6
+        },
+        "rotationY": 0,
+        "scale": 1.3333333333333333
+      },
+      "variantId": "3d-road-tiles.road-tile-163@r0"
+    },
+    {
+      "assetContentHash": "3fa91eafd94eb250dc243e95e0006723729ea66c7d51cc718025570abe0c24a4",
+      "bounds": {
+        "max": {
+          "x": -7.333333333333334,
+          "y": 5.333333333333333,
+          "z": 12.666666666666666
+        },
+        "min": {
+          "x": -12.666666666666666,
+          "y": 0,
+          "z": 7.333333333333334
+        }
+      },
+      "chunkId": "chunk_0_0",
+      "column": 2,
+      "id": "wfc-preview-2-7",
+      "row": 7,
+      "semanticRoles": [],
+      "sourceAssetId": "3d-road-tiles.road-tile-147",
+      "sourceLayer": "scene",
+      "transform": {
+        "position": {
+          "x": -10,
+          "y": 0,
+          "z": 10
+        },
+        "rotationY": 0,
+        "scale": 1.3333333333333333
+      },
+      "variantId": "3d-road-tiles.road-tile-147@r0"
+    },
+    {
+      "assetContentHash": "c90a437046bd2b6b8f98215958ab1365d09fb5a04e0b3438422621ba07b78cfa",
+      "bounds": {
+        "max": {
+          "x": -7.333333333333334,
+          "y": 5.333333333333333,
+          "z": 16.666666666666668
+        },
+        "min": {
+          "x": -12.666666666666666,
+          "y": 0,
+          "z": 11.333333333333334
+        }
+      },
+      "chunkId": "chunk_0_0",
+      "column": 2,
+      "id": "wfc-preview-2-8",
+      "row": 8,
+      "semanticRoles": [],
+      "sourceAssetId": "3d-road-tiles.road-tile-156",
+      "sourceLayer": "scene",
+      "transform": {
+        "position": {
+          "x": -10,
+          "y": 0,
+          "z": 14
+        },
+        "rotationY": 0,
+        "scale": 1.3333333333333333
+      },
+      "variantId": "3d-road-tiles.road-tile-156@r0"
+    },
+    {
+      "assetContentHash": "31e6e9a5f1403e3f9329c4a151800383aa6764f99f2f8729d76d98c1c6c4f1f4",
+      "bounds": {
+        "max": {
+          "x": -7.333333333333334,
+          "y": 5.333333333333333,
+          "z": 20.666666666666668
+        },
+        "min": {
+          "x": -12.666666666666666,
+          "y": 0,
+          "z": 15.333333333333334
+        }
+      },
+      "chunkId": "chunk_0_0",
+      "column": 2,
+      "id": "wfc-preview-2-9",
+      "row": 9,
+      "semanticRoles": [
+        "terrain.ground"
+      ],
+      "sourceAssetId": "3d-road-tiles.road-tile-163",
+      "sourceLayer": "scene",
+      "transform": {
+        "position": {
+          "x": -10,
+          "y": 0,
+          "z": 18
+        },
+        "rotationY": 0,
+        "scale": 1.3333333333333333
+      },
+      "variantId": "3d-road-tiles.road-tile-163@r0"
+    },
+    {
+      "assetContentHash": "31e6e9a5f1403e3f9329c4a151800383aa6764f99f2f8729d76d98c1c6c4f1f4",
+      "bounds": {
+        "max": {
+          "x": -3.3333333333333335,
+          "y": 5.333333333333333,
+          "z": -15.333333333333334
+        },
+        "min": {
+          "x": -8.666666666666666,
+          "y": 0,
+          "z": -20.666666666666668
+        }
+      },
+      "chunkId": "chunk_0_0",
+      "column": 3,
+      "id": "wfc-preview-3-0",
+      "row": 0,
+      "semanticRoles": [
+        "terrain.ground"
+      ],
+      "sourceAssetId": "3d-road-tiles.road-tile-163",
+      "sourceLayer": "scene",
+      "transform": {
+        "position": {
+          "x": -6,
+          "y": 0,
+          "z": -18
+        },
+        "rotationY": 0,
+        "scale": 1.3333333333333333
+      },
+      "variantId": "3d-road-tiles.road-tile-163@r0"
+    },
+    {
+      "assetContentHash": "71acfee905b753494b32d9fe1fa97eb49c8195cdbf951efa98b927b199120c0f",
+      "bounds": {
+        "max": {
+          "x": -3.3333333333333335,
+          "y": 5.333333333333333,
+          "z": -11.333333333333334
+        },
+        "min": {
+          "x": -8.666666666666666,
+          "y": 0,
+          "z": -16.666666666666668
+        }
+      },
+      "chunkId": "chunk_0_0",
+      "column": 3,
+      "id": "wfc-preview-3-1",
+      "row": 1,
+      "semanticRoles": [],
+      "sourceAssetId": "3d-road-tiles.road-tile-162",
+      "sourceLayer": "scene",
+      "transform": {
+        "position": {
+          "x": -6,
+          "y": 0,
+          "z": -14
+        },
+        "rotationY": 0,
+        "scale": 1.3333333333333333
+      },
+      "variantId": "3d-road-tiles.road-tile-162@r0"
+    },
+    {
+      "assetContentHash": "31e6e9a5f1403e3f9329c4a151800383aa6764f99f2f8729d76d98c1c6c4f1f4",
+      "bounds": {
+        "max": {
+          "x": -3.3333333333333335,
+          "y": 5.333333333333333,
+          "z": -7.333333333333334
+        },
+        "min": {
+          "x": -8.666666666666666,
+          "y": 0,
+          "z": -12.666666666666666
+        }
+      },
+      "chunkId": "chunk_0_0",
+      "column": 3,
+      "id": "wfc-preview-3-2",
+      "row": 2,
+      "semanticRoles": [
+        "terrain.ground"
+      ],
+      "sourceAssetId": "3d-road-tiles.road-tile-163",
+      "sourceLayer": "scene",
+      "transform": {
+        "position": {
+          "x": -6,
+          "y": 0,
+          "z": -10
+        },
+        "rotationY": 0,
+        "scale": 1.3333333333333333
+      },
+      "variantId": "3d-road-tiles.road-tile-163@r0"
+    },
+    {
+      "assetContentHash": "71acfee905b753494b32d9fe1fa97eb49c8195cdbf951efa98b927b199120c0f",
+      "bounds": {
+        "max": {
+          "x": -3.3333333333333335,
+          "y": 5.333333333333333,
+          "z": -3.3333333333333335
+        },
+        "min": {
+          "x": -8.666666666666666,
+          "y": 0,
+          "z": -8.666666666666666
+        }
+      },
+      "chunkId": "chunk_0_0",
+      "column": 3,
+      "id": "wfc-preview-3-3",
+      "row": 3,
+      "semanticRoles": [],
+      "sourceAssetId": "3d-road-tiles.road-tile-162",
+      "sourceLayer": "scene",
+      "transform": {
+        "position": {
+          "x": -6,
+          "y": 0,
+          "z": -6
+        },
+        "rotationY": 0,
+        "scale": 1.3333333333333333
+      },
+      "variantId": "3d-road-tiles.road-tile-162@r0"
+    },
+    {
+      "assetContentHash": "85a54b8422cceb145a2e986c72eafac36e2a043e5d11f8c9e4ed2e3edf113c39",
+      "bounds": {
+        "max": {
+          "x": -3.3333333333333335,
+          "y": 5.333333333333333,
+          "z": 0.6666666666666665
+        },
+        "min": {
+          "x": -8.666666666666666,
+          "y": 0,
+          "z": -4.666666666666666
+        }
+      },
+      "chunkId": "chunk_0_0",
+      "column": 3,
+      "id": "wfc-preview-3-4",
+      "row": 4,
+      "semanticRoles": [
+        "terrain.ground",
+        "terrain.water",
+        "terrain.shore"
+      ],
+      "sourceAssetId": "3d-road-tiles.road-tile-174",
+      "sourceLayer": "scene",
+      "transform": {
+        "position": {
+          "x": -6,
+          "y": 0,
+          "z": -2
+        },
+        "rotationY": 4.71238898038469,
+        "scale": 1.3333333333333333
+      },
+      "variantId": "3d-road-tiles.road-tile-174@r270"
+    },
+    {
+      "assetContentHash": "c2e78c3065bad16ea5bfb4ff26c9d42e1d623f7cede1203a07141d17f5aa2b78",
+      "bounds": {
+        "max": {
+          "x": -3.3333333333333335,
+          "y": 5.333333333333333,
+          "z": 4.666666666666666
+        },
+        "min": {
+          "x": -8.666666666666666,
+          "y": 0,
+          "z": -0.6666666666666665
+        }
+      },
+      "chunkId": "chunk_0_0",
+      "column": 3,
+      "id": "wfc-preview-3-5",
+      "row": 5,
+      "semanticRoles": [
+        "terrain.ground",
+        "terrain.water",
+        "terrain.shore"
+      ],
+      "sourceAssetId": "3d-road-tiles.road-tile-159",
+      "sourceLayer": "scene",
+      "transform": {
+        "position": {
+          "x": -6,
+          "y": 0,
+          "z": 2
+        },
+        "rotationY": 0,
+        "scale": 1.3333333333333333
+      },
+      "variantId": "3d-road-tiles.road-tile-159@r0"
+    },
+    {
+      "assetContentHash": "f8b4c387b23b777f3fcb57bbca52a8fbb2950c0d8b215459ea9b0c515ed2dfa0",
+      "bounds": {
+        "max": {
+          "x": -3.3333333333333335,
+          "y": 5.333333333333333,
+          "z": 8.666666666666666
+        },
+        "min": {
+          "x": -8.666666666666666,
+          "y": 0,
+          "z": 3.3333333333333335
+        }
+      },
+      "chunkId": "chunk_0_0",
+      "column": 3,
+      "id": "wfc-preview-3-6",
+      "row": 6,
+      "semanticRoles": [
+        "terrain.ground",
+        "terrain.water",
+        "terrain.shore"
+      ],
+      "sourceAssetId": "3d-road-tiles.road-tile-177",
+      "sourceLayer": "scene",
+      "transform": {
+        "position": {
+          "x": -6,
+          "y": 0,
+          "z": 6
+        },
+        "rotationY": 0,
+        "scale": 1.3333333333333333
+      },
+      "variantId": "3d-road-tiles.road-tile-177@r0"
+    },
+    {
+      "assetContentHash": "31e6e9a5f1403e3f9329c4a151800383aa6764f99f2f8729d76d98c1c6c4f1f4",
+      "bounds": {
+        "max": {
+          "x": -3.3333333333333335,
+          "y": 5.333333333333333,
+          "z": 12.666666666666666
+        },
+        "min": {
+          "x": -8.666666666666666,
+          "y": 0,
+          "z": 7.333333333333334
+        }
+      },
+      "chunkId": "chunk_0_0",
+      "column": 3,
+      "id": "wfc-preview-3-7",
+      "row": 7,
+      "semanticRoles": [
+        "terrain.ground"
+      ],
+      "sourceAssetId": "3d-road-tiles.road-tile-163",
+      "sourceLayer": "scene",
+      "transform": {
+        "position": {
+          "x": -6,
+          "y": 0,
+          "z": 10
+        },
+        "rotationY": 0,
+        "scale": 1.3333333333333333
+      },
+      "variantId": "3d-road-tiles.road-tile-163@r0"
+    },
+    {
+      "assetContentHash": "71acfee905b753494b32d9fe1fa97eb49c8195cdbf951efa98b927b199120c0f",
+      "bounds": {
+        "max": {
+          "x": -3.3333333333333335,
+          "y": 5.333333333333333,
+          "z": 16.666666666666668
+        },
+        "min": {
+          "x": -8.666666666666666,
+          "y": 0,
+          "z": 11.333333333333334
+        }
+      },
+      "chunkId": "chunk_0_0",
+      "column": 3,
+      "id": "wfc-preview-3-8",
+      "row": 8,
+      "semanticRoles": [],
+      "sourceAssetId": "3d-road-tiles.road-tile-162",
+      "sourceLayer": "scene",
+      "transform": {
+        "position": {
+          "x": -6,
+          "y": 0,
+          "z": 14
+        },
+        "rotationY": 0,
+        "scale": 1.3333333333333333
+      },
+      "variantId": "3d-road-tiles.road-tile-162@r0"
+    },
+    {
+      "assetContentHash": "31e6e9a5f1403e3f9329c4a151800383aa6764f99f2f8729d76d98c1c6c4f1f4",
+      "bounds": {
+        "max": {
+          "x": -3.3333333333333335,
+          "y": 5.333333333333333,
+          "z": 20.666666666666668
+        },
+        "min": {
+          "x": -8.666666666666666,
+          "y": 0,
+          "z": 15.333333333333334
+        }
+      },
+      "chunkId": "chunk_0_0",
+      "column": 3,
+      "id": "wfc-preview-3-9",
+      "row": 9,
+      "semanticRoles": [
+        "terrain.ground"
+      ],
+      "sourceAssetId": "3d-road-tiles.road-tile-163",
+      "sourceLayer": "scene",
+      "transform": {
+        "position": {
+          "x": -6,
+          "y": 0,
+          "z": 18
+        },
+        "rotationY": 0,
+        "scale": 1.3333333333333333
+      },
+      "variantId": "3d-road-tiles.road-tile-163@r0"
+    },
+    {
+      "assetContentHash": "31e6e9a5f1403e3f9329c4a151800383aa6764f99f2f8729d76d98c1c6c4f1f4",
+      "bounds": {
+        "max": {
+          "x": 0.6666666666666665,
+          "y": 5.333333333333333,
+          "z": -15.333333333333334
+        },
+        "min": {
+          "x": -4.666666666666666,
+          "y": 0,
+          "z": -20.666666666666668
+        }
+      },
+      "chunkId": "chunk_0_0",
+      "column": 4,
+      "id": "wfc-preview-4-0",
+      "row": 0,
+      "semanticRoles": [
+        "terrain.ground"
+      ],
+      "sourceAssetId": "3d-road-tiles.road-tile-163",
+      "sourceLayer": "scene",
+      "transform": {
+        "position": {
+          "x": -2,
+          "y": 0,
+          "z": -18
+        },
+        "rotationY": 0,
+        "scale": 1.3333333333333333
+      },
+      "variantId": "3d-road-tiles.road-tile-163@r0"
+    },
+    {
+      "assetContentHash": "71acfee905b753494b32d9fe1fa97eb49c8195cdbf951efa98b927b199120c0f",
+      "bounds": {
+        "max": {
+          "x": 0.6666666666666665,
+          "y": 5.333333333333333,
+          "z": -11.333333333333334
+        },
+        "min": {
+          "x": -4.666666666666666,
+          "y": 0,
+          "z": -16.666666666666668
+        }
+      },
+      "chunkId": "chunk_0_0",
+      "column": 4,
+      "id": "wfc-preview-4-1",
+      "row": 1,
+      "semanticRoles": [],
+      "sourceAssetId": "3d-road-tiles.road-tile-162",
+      "sourceLayer": "scene",
+      "transform": {
+        "position": {
+          "x": -2,
+          "y": 0,
+          "z": -14
+        },
+        "rotationY": 0,
+        "scale": 1.3333333333333333
+      },
+      "variantId": "3d-road-tiles.road-tile-162@r0"
+    },
+    {
+      "assetContentHash": "59522f1c7061876b502c745e98df075b0228dc3b81268715feaad34f81bbc16c",
+      "bounds": {
+        "max": {
+          "x": 0.6666666666666665,
+          "y": 5.333333333333333,
+          "z": -7.333333333333334
+        },
+        "min": {
+          "x": -4.666666666666666,
+          "y": 0,
+          "z": -12.666666666666666
+        }
+      },
+      "chunkId": "chunk_0_0",
+      "column": 4,
+      "id": "wfc-preview-4-2",
+      "row": 2,
+      "semanticRoles": [
+        "terrain.ground",
+        "terrain.water",
+        "terrain.shore"
+      ],
+      "sourceAssetId": "3d-road-tiles.road-tile-158",
+      "sourceLayer": "scene",
+      "transform": {
+        "position": {
+          "x": -2,
+          "y": 0,
+          "z": -10
+        },
+        "rotationY": 4.71238898038469,
+        "scale": 1.3333333333333333
+      },
+      "variantId": "3d-road-tiles.road-tile-158@r270"
+    },
+    {
+      "assetContentHash": "8ba00f2093cb157dd415c637826e65028baffaf5f07bbbb5476bb4144717dc90",
+      "bounds": {
+        "max": {
+          "x": 0.6666666666666665,
+          "y": 5.333333333333333,
+          "z": -3.3333333333333335
+        },
+        "min": {
+          "x": -4.666666666666666,
+          "y": 0,
+          "z": -8.666666666666666
+        }
+      },
+      "chunkId": "chunk_0_0",
+      "column": 4,
+      "id": "wfc-preview-4-3",
+      "row": 3,
+      "semanticRoles": [
+        "road.surface",
+        "road.bridge"
+      ],
+      "sourceAssetId": "3d-road-tiles.road-tile-188",
+      "sourceLayer": "scene",
+      "transform": {
+        "position": {
+          "x": -2,
+          "y": 0,
+          "z": -6
+        },
+        "rotationY": 1.5707963267948966,
+        "scale": 1.3333333333333333
+      },
+      "variantId": "3d-road-tiles.road-tile-188@r90"
+    },
+    {
+      "assetContentHash": "ff25cd2dfce837f32106505e3b12ca7067bbc29b1405436057e0d3fc7d3d9942",
+      "bounds": {
+        "max": {
+          "x": 0.6666666666666665,
+          "y": 5.333333333333333,
+          "z": 0.6666666666666665
+        },
+        "min": {
+          "x": -4.666666666666666,
+          "y": 0,
+          "z": -4.666666666666666
+        }
+      },
+      "chunkId": "chunk_0_0",
+      "column": 4,
+      "id": "wfc-preview-4-4",
+      "row": 4,
+      "semanticRoles": [
+        "terrain.ground",
+        "terrain.water",
+        "terrain.shore"
+      ],
+      "sourceAssetId": "3d-road-tiles.road-tile-167",
+      "sourceLayer": "scene",
+      "transform": {
+        "position": {
+          "x": -2,
+          "y": 0,
+          "z": -2
+        },
+        "rotationY": 4.71238898038469,
+        "scale": 1.3333333333333333
+      },
+      "variantId": "3d-road-tiles.road-tile-167@r270"
+    },
+    {
+      "assetContentHash": "5890364c680121c7c71d90f1ca828a612ffc97302372cce8eaadf5e387a83556",
+      "bounds": {
+        "max": {
+          "x": 0.6666666666666665,
+          "y": 5.333333333333333,
+          "z": 4.666666666666666
+        },
+        "min": {
+          "x": -4.666666666666666,
+          "y": 0,
+          "z": -0.6666666666666665
+        }
+      },
+      "chunkId": "chunk_0_0",
+      "column": 4,
+      "id": "wfc-preview-4-5",
+      "row": 5,
+      "semanticRoles": [
+        "terrain.ground",
+        "terrain.water"
+      ],
+      "sourceAssetId": "3d-road-tiles.road-tile-001",
+      "sourceLayer": "scene",
+      "transform": {
+        "position": {
+          "x": -2,
+          "y": 0,
+          "z": 2
+        },
+        "rotationY": 0,
+        "scale": 1.3333333333333333
+      },
+      "variantId": "3d-road-tiles.road-tile-001@r0"
+    },
+    {
+      "assetContentHash": "85a54b8422cceb145a2e986c72eafac36e2a043e5d11f8c9e4ed2e3edf113c39",
+      "bounds": {
+        "max": {
+          "x": 0.6666666666666665,
+          "y": 5.333333333333333,
+          "z": 8.666666666666666
+        },
+        "min": {
+          "x": -4.666666666666666,
+          "y": 0,
+          "z": 3.3333333333333335
+        }
+      },
+      "chunkId": "chunk_0_0",
+      "column": 4,
+      "id": "wfc-preview-4-6",
+      "row": 6,
+      "semanticRoles": [
+        "terrain.ground",
+        "terrain.water",
+        "terrain.shore"
+      ],
+      "sourceAssetId": "3d-road-tiles.road-tile-174",
+      "sourceLayer": "scene",
+      "transform": {
+        "position": {
+          "x": -2,
+          "y": 0,
+          "z": 6
+        },
+        "rotationY": 1.5707963267948966,
+        "scale": 1.3333333333333333
+      },
+      "variantId": "3d-road-tiles.road-tile-174@r90"
+    },
+    {
+      "assetContentHash": "31e6e9a5f1403e3f9329c4a151800383aa6764f99f2f8729d76d98c1c6c4f1f4",
+      "bounds": {
+        "max": {
+          "x": 0.6666666666666665,
+          "y": 5.333333333333333,
+          "z": 12.666666666666666
+        },
+        "min": {
+          "x": -4.666666666666666,
+          "y": 0,
+          "z": 7.333333333333334
+        }
+      },
+      "chunkId": "chunk_0_0",
+      "column": 4,
+      "id": "wfc-preview-4-7",
+      "row": 7,
+      "semanticRoles": [
+        "terrain.ground"
+      ],
+      "sourceAssetId": "3d-road-tiles.road-tile-163",
+      "sourceLayer": "scene",
+      "transform": {
+        "position": {
+          "x": -2,
+          "y": 0,
+          "z": 10
+        },
+        "rotationY": 0,
+        "scale": 1.3333333333333333
+      },
+      "variantId": "3d-road-tiles.road-tile-163@r0"
+    },
+    {
+      "assetContentHash": "71acfee905b753494b32d9fe1fa97eb49c8195cdbf951efa98b927b199120c0f",
+      "bounds": {
+        "max": {
+          "x": 0.6666666666666665,
+          "y": 5.333333333333333,
+          "z": 16.666666666666668
+        },
+        "min": {
+          "x": -4.666666666666666,
+          "y": 0,
+          "z": 11.333333333333334
+        }
+      },
+      "chunkId": "chunk_0_0",
+      "column": 4,
+      "id": "wfc-preview-4-8",
+      "row": 8,
+      "semanticRoles": [],
+      "sourceAssetId": "3d-road-tiles.road-tile-162",
+      "sourceLayer": "scene",
+      "transform": {
+        "position": {
+          "x": -2,
+          "y": 0,
+          "z": 14
+        },
+        "rotationY": 0,
+        "scale": 1.3333333333333333
+      },
+      "variantId": "3d-road-tiles.road-tile-162@r0"
+    },
+    {
+      "assetContentHash": "31e6e9a5f1403e3f9329c4a151800383aa6764f99f2f8729d76d98c1c6c4f1f4",
+      "bounds": {
+        "max": {
+          "x": 0.6666666666666665,
+          "y": 5.333333333333333,
+          "z": 20.666666666666668
+        },
+        "min": {
+          "x": -4.666666666666666,
+          "y": 0,
+          "z": 15.333333333333334
+        }
+      },
+      "chunkId": "chunk_0_0",
+      "column": 4,
+      "id": "wfc-preview-4-9",
+      "row": 9,
+      "semanticRoles": [
+        "terrain.ground"
+      ],
+      "sourceAssetId": "3d-road-tiles.road-tile-163",
+      "sourceLayer": "scene",
+      "transform": {
+        "position": {
+          "x": -2,
+          "y": 0,
+          "z": 18
+        },
+        "rotationY": 0,
+        "scale": 1.3333333333333333
+      },
+      "variantId": "3d-road-tiles.road-tile-163@r0"
+    },
+    {
+      "assetContentHash": "31e6e9a5f1403e3f9329c4a151800383aa6764f99f2f8729d76d98c1c6c4f1f4",
+      "bounds": {
+        "max": {
+          "x": 4.666666666666666,
+          "y": 5.333333333333333,
+          "z": -15.333333333333334
+        },
+        "min": {
+          "x": -0.6666666666666665,
+          "y": 0,
+          "z": -20.666666666666668
+        }
+      },
+      "chunkId": "chunk_0_0",
+      "column": 5,
+      "id": "wfc-preview-5-0",
+      "row": 0,
+      "semanticRoles": [
+        "terrain.ground"
+      ],
+      "sourceAssetId": "3d-road-tiles.road-tile-163",
+      "sourceLayer": "scene",
+      "transform": {
+        "position": {
+          "x": 2,
+          "y": 0,
+          "z": -18
+        },
+        "rotationY": 0,
+        "scale": 1.3333333333333333
+      },
+      "variantId": "3d-road-tiles.road-tile-163@r0"
+    },
+    {
+      "assetContentHash": "71acfee905b753494b32d9fe1fa97eb49c8195cdbf951efa98b927b199120c0f",
+      "bounds": {
+        "max": {
+          "x": 4.666666666666666,
+          "y": 5.333333333333333,
+          "z": -11.333333333333334
+        },
+        "min": {
+          "x": -0.6666666666666665,
+          "y": 0,
+          "z": -16.666666666666668
+        }
+      },
+      "chunkId": "chunk_0_0",
+      "column": 5,
+      "id": "wfc-preview-5-1",
+      "row": 1,
+      "semanticRoles": [],
+      "sourceAssetId": "3d-road-tiles.road-tile-162",
+      "sourceLayer": "scene",
+      "transform": {
+        "position": {
+          "x": 2,
+          "y": 0,
+          "z": -14
+        },
+        "rotationY": 0,
+        "scale": 1.3333333333333333
+      },
+      "variantId": "3d-road-tiles.road-tile-162@r0"
+    },
+    {
+      "assetContentHash": "31e6e9a5f1403e3f9329c4a151800383aa6764f99f2f8729d76d98c1c6c4f1f4",
+      "bounds": {
+        "max": {
+          "x": 4.666666666666666,
+          "y": 5.333333333333333,
+          "z": -7.333333333333334
+        },
+        "min": {
+          "x": -0.6666666666666665,
+          "y": 0,
+          "z": -12.666666666666666
+        }
+      },
+      "chunkId": "chunk_0_0",
+      "column": 5,
+      "id": "wfc-preview-5-2",
+      "row": 2,
+      "semanticRoles": [
+        "terrain.ground"
+      ],
+      "sourceAssetId": "3d-road-tiles.road-tile-163",
+      "sourceLayer": "scene",
+      "transform": {
+        "position": {
+          "x": 2,
+          "y": 0,
+          "z": -10
+        },
+        "rotationY": 0,
+        "scale": 1.3333333333333333
+      },
+      "variantId": "3d-road-tiles.road-tile-163@r0"
+    },
+    {
+      "assetContentHash": "71acfee905b753494b32d9fe1fa97eb49c8195cdbf951efa98b927b199120c0f",
+      "bounds": {
+        "max": {
+          "x": 4.666666666666666,
+          "y": 5.333333333333333,
+          "z": -3.3333333333333335
+        },
+        "min": {
+          "x": -0.6666666666666665,
+          "y": 0,
+          "z": -8.666666666666666
+        }
+      },
+      "chunkId": "chunk_0_0",
+      "column": 5,
+      "id": "wfc-preview-5-3",
+      "row": 3,
+      "semanticRoles": [],
+      "sourceAssetId": "3d-road-tiles.road-tile-162",
+      "sourceLayer": "scene",
+      "transform": {
+        "position": {
+          "x": 2,
+          "y": 0,
+          "z": -6
+        },
+        "rotationY": 0,
+        "scale": 1.3333333333333333
+      },
+      "variantId": "3d-road-tiles.road-tile-162@r0"
+    },
+    {
+      "assetContentHash": "f8b4c387b23b777f3fcb57bbca52a8fbb2950c0d8b215459ea9b0c515ed2dfa0",
+      "bounds": {
+        "max": {
+          "x": 4.666666666666666,
+          "y": 5.333333333333333,
+          "z": 0.6666666666666665
+        },
+        "min": {
+          "x": -0.6666666666666665,
+          "y": 0,
+          "z": -4.666666666666666
+        }
+      },
+      "chunkId": "chunk_0_0",
+      "column": 5,
+      "id": "wfc-preview-5-4",
+      "row": 4,
+      "semanticRoles": [
+        "terrain.ground",
+        "terrain.water",
+        "terrain.shore"
+      ],
+      "sourceAssetId": "3d-road-tiles.road-tile-177",
+      "sourceLayer": "scene",
+      "transform": {
+        "position": {
+          "x": 2,
+          "y": 0,
+          "z": -2
+        },
+        "rotationY": 3.141592653589793,
+        "scale": 1.3333333333333333
+      },
+      "variantId": "3d-road-tiles.road-tile-177@r180"
+    },
+    {
+      "assetContentHash": "c2e78c3065bad16ea5bfb4ff26c9d42e1d623f7cede1203a07141d17f5aa2b78",
+      "bounds": {
+        "max": {
+          "x": 4.666666666666666,
+          "y": 5.333333333333333,
+          "z": 4.666666666666666
+        },
+        "min": {
+          "x": -0.6666666666666665,
+          "y": 0,
+          "z": -0.6666666666666665
+        }
+      },
+      "chunkId": "chunk_0_0",
+      "column": 5,
+      "id": "wfc-preview-5-5",
+      "row": 5,
+      "semanticRoles": [
+        "terrain.ground",
+        "terrain.water",
+        "terrain.shore"
+      ],
+      "sourceAssetId": "3d-road-tiles.road-tile-159",
+      "sourceLayer": "scene",
+      "transform": {
+        "position": {
+          "x": 2,
+          "y": 0,
+          "z": 2
+        },
+        "rotationY": 3.141592653589793,
+        "scale": 1.3333333333333333
+      },
+      "variantId": "3d-road-tiles.road-tile-159@r180"
+    },
+    {
+      "assetContentHash": "85a54b8422cceb145a2e986c72eafac36e2a043e5d11f8c9e4ed2e3edf113c39",
+      "bounds": {
+        "max": {
+          "x": 4.666666666666666,
+          "y": 5.333333333333333,
+          "z": 8.666666666666666
+        },
+        "min": {
+          "x": -0.6666666666666665,
+          "y": 0,
+          "z": 3.3333333333333335
+        }
+      },
+      "chunkId": "chunk_0_0",
+      "column": 5,
+      "id": "wfc-preview-5-6",
+      "row": 6,
+      "semanticRoles": [
+        "terrain.ground",
+        "terrain.water",
+        "terrain.shore"
+      ],
+      "sourceAssetId": "3d-road-tiles.road-tile-174",
+      "sourceLayer": "scene",
+      "transform": {
+        "position": {
+          "x": 2,
+          "y": 0,
+          "z": 6
+        },
+        "rotationY": 1.5707963267948966,
+        "scale": 1.3333333333333333
+      },
+      "variantId": "3d-road-tiles.road-tile-174@r90"
+    },
+    {
+      "assetContentHash": "31e6e9a5f1403e3f9329c4a151800383aa6764f99f2f8729d76d98c1c6c4f1f4",
+      "bounds": {
+        "max": {
+          "x": 4.666666666666666,
+          "y": 5.333333333333333,
+          "z": 12.666666666666666
+        },
+        "min": {
+          "x": -0.6666666666666665,
+          "y": 0,
+          "z": 7.333333333333334
+        }
+      },
+      "chunkId": "chunk_0_0",
+      "column": 5,
+      "id": "wfc-preview-5-7",
+      "row": 7,
+      "semanticRoles": [
+        "terrain.ground"
+      ],
+      "sourceAssetId": "3d-road-tiles.road-tile-163",
+      "sourceLayer": "scene",
+      "transform": {
+        "position": {
+          "x": 2,
+          "y": 0,
+          "z": 10
+        },
+        "rotationY": 0,
+        "scale": 1.3333333333333333
+      },
+      "variantId": "3d-road-tiles.road-tile-163@r0"
+    },
+    {
+      "assetContentHash": "71acfee905b753494b32d9fe1fa97eb49c8195cdbf951efa98b927b199120c0f",
+      "bounds": {
+        "max": {
+          "x": 4.666666666666666,
+          "y": 5.333333333333333,
+          "z": 16.666666666666668
+        },
+        "min": {
+          "x": -0.6666666666666665,
+          "y": 0,
+          "z": 11.333333333333334
+        }
+      },
+      "chunkId": "chunk_0_0",
+      "column": 5,
+      "id": "wfc-preview-5-8",
+      "row": 8,
+      "semanticRoles": [],
+      "sourceAssetId": "3d-road-tiles.road-tile-162",
+      "sourceLayer": "scene",
+      "transform": {
+        "position": {
+          "x": 2,
+          "y": 0,
+          "z": 14
+        },
+        "rotationY": 0,
+        "scale": 1.3333333333333333
+      },
+      "variantId": "3d-road-tiles.road-tile-162@r0"
+    },
+    {
+      "assetContentHash": "31e6e9a5f1403e3f9329c4a151800383aa6764f99f2f8729d76d98c1c6c4f1f4",
+      "bounds": {
+        "max": {
+          "x": 4.666666666666666,
+          "y": 5.333333333333333,
+          "z": 20.666666666666668
+        },
+        "min": {
+          "x": -0.6666666666666665,
+          "y": 0,
+          "z": 15.333333333333334
+        }
+      },
+      "chunkId": "chunk_0_0",
+      "column": 5,
+      "id": "wfc-preview-5-9",
+      "row": 9,
+      "semanticRoles": [
+        "terrain.ground"
+      ],
+      "sourceAssetId": "3d-road-tiles.road-tile-163",
+      "sourceLayer": "scene",
+      "transform": {
+        "position": {
+          "x": 2,
+          "y": 0,
+          "z": 18
+        },
+        "rotationY": 0,
+        "scale": 1.3333333333333333
+      },
+      "variantId": "3d-road-tiles.road-tile-163@r0"
+    },
+    {
+      "assetContentHash": "31e6e9a5f1403e3f9329c4a151800383aa6764f99f2f8729d76d98c1c6c4f1f4",
+      "bounds": {
+        "max": {
+          "x": 8.666666666666666,
+          "y": 5.333333333333333,
+          "z": -15.333333333333334
+        },
+        "min": {
+          "x": 3.3333333333333335,
+          "y": 0,
+          "z": -20.666666666666668
+        }
+      },
+      "chunkId": "chunk_0_0",
+      "column": 6,
+      "id": "wfc-preview-6-0",
+      "row": 0,
+      "semanticRoles": [
+        "terrain.ground"
+      ],
+      "sourceAssetId": "3d-road-tiles.road-tile-163",
+      "sourceLayer": "scene",
+      "transform": {
+        "position": {
+          "x": 6,
+          "y": 0,
+          "z": -18
+        },
+        "rotationY": 0,
+        "scale": 1.3333333333333333
+      },
+      "variantId": "3d-road-tiles.road-tile-163@r0"
+    },
+    {
+      "assetContentHash": "71acfee905b753494b32d9fe1fa97eb49c8195cdbf951efa98b927b199120c0f",
+      "bounds": {
+        "max": {
+          "x": 8.666666666666666,
+          "y": 5.333333333333333,
+          "z": -11.333333333333334
+        },
+        "min": {
+          "x": 3.3333333333333335,
+          "y": 0,
+          "z": -16.666666666666668
+        }
+      },
+      "chunkId": "chunk_0_0",
+      "column": 6,
+      "id": "wfc-preview-6-1",
+      "row": 1,
+      "semanticRoles": [],
+      "sourceAssetId": "3d-road-tiles.road-tile-162",
+      "sourceLayer": "scene",
+      "transform": {
+        "position": {
+          "x": 6,
+          "y": 0,
+          "z": -14
+        },
+        "rotationY": 0,
+        "scale": 1.3333333333333333
+      },
+      "variantId": "3d-road-tiles.road-tile-162@r0"
+    },
+    {
+      "assetContentHash": "31e6e9a5f1403e3f9329c4a151800383aa6764f99f2f8729d76d98c1c6c4f1f4",
+      "bounds": {
+        "max": {
+          "x": 8.666666666666666,
+          "y": 5.333333333333333,
+          "z": -7.333333333333334
+        },
+        "min": {
+          "x": 3.3333333333333335,
+          "y": 0,
+          "z": -12.666666666666666
+        }
+      },
+      "chunkId": "chunk_0_0",
+      "column": 6,
+      "id": "wfc-preview-6-2",
+      "row": 2,
+      "semanticRoles": [
+        "terrain.ground"
+      ],
+      "sourceAssetId": "3d-road-tiles.road-tile-163",
+      "sourceLayer": "scene",
+      "transform": {
+        "position": {
+          "x": 6,
+          "y": 0,
+          "z": -10
+        },
+        "rotationY": 0,
+        "scale": 1.3333333333333333
+      },
+      "variantId": "3d-road-tiles.road-tile-163@r0"
+    },
+    {
+      "assetContentHash": "71acfee905b753494b32d9fe1fa97eb49c8195cdbf951efa98b927b199120c0f",
+      "bounds": {
+        "max": {
+          "x": 8.666666666666666,
+          "y": 5.333333333333333,
+          "z": -3.3333333333333335
+        },
+        "min": {
+          "x": 3.3333333333333335,
+          "y": 0,
+          "z": -8.666666666666666
+        }
+      },
+      "chunkId": "chunk_0_0",
+      "column": 6,
+      "id": "wfc-preview-6-3",
+      "row": 3,
+      "semanticRoles": [],
+      "sourceAssetId": "3d-road-tiles.road-tile-162",
+      "sourceLayer": "scene",
+      "transform": {
+        "position": {
+          "x": 6,
+          "y": 0,
+          "z": -6
+        },
+        "rotationY": 0,
+        "scale": 1.3333333333333333
+      },
+      "variantId": "3d-road-tiles.road-tile-162@r0"
+    },
+    {
+      "assetContentHash": "31e6e9a5f1403e3f9329c4a151800383aa6764f99f2f8729d76d98c1c6c4f1f4",
+      "bounds": {
+        "max": {
+          "x": 8.666666666666666,
+          "y": 5.333333333333333,
+          "z": 0.6666666666666665
+        },
+        "min": {
+          "x": 3.3333333333333335,
+          "y": 0,
+          "z": -4.666666666666666
+        }
+      },
+      "chunkId": "chunk_0_0",
+      "column": 6,
+      "id": "wfc-preview-6-4",
+      "row": 4,
+      "semanticRoles": [
+        "terrain.ground"
+      ],
+      "sourceAssetId": "3d-road-tiles.road-tile-163",
+      "sourceLayer": "scene",
+      "transform": {
+        "position": {
+          "x": 6,
+          "y": 0,
+          "z": -2
+        },
+        "rotationY": 0,
+        "scale": 1.3333333333333333
+      },
+      "variantId": "3d-road-tiles.road-tile-163@r0"
+    },
+    {
+      "assetContentHash": "f8b4c387b23b777f3fcb57bbca52a8fbb2950c0d8b215459ea9b0c515ed2dfa0",
+      "bounds": {
+        "max": {
+          "x": 8.666666666666666,
+          "y": 5.333333333333333,
+          "z": 4.666666666666666
+        },
+        "min": {
+          "x": 3.3333333333333335,
+          "y": 0,
+          "z": -0.6666666666666665
+        }
+      },
+      "chunkId": "chunk_0_0",
+      "column": 6,
+      "id": "wfc-preview-6-5",
+      "row": 5,
+      "semanticRoles": [
+        "terrain.ground",
+        "terrain.water",
+        "terrain.shore"
+      ],
+      "sourceAssetId": "3d-road-tiles.road-tile-177",
+      "sourceLayer": "scene",
+      "transform": {
+        "position": {
+          "x": 6,
+          "y": 0,
+          "z": 2
+        },
+        "rotationY": 3.141592653589793,
+        "scale": 1.3333333333333333
+      },
+      "variantId": "3d-road-tiles.road-tile-177@r180"
+    },
+    {
+      "assetContentHash": "f8b4c387b23b777f3fcb57bbca52a8fbb2950c0d8b215459ea9b0c515ed2dfa0",
+      "bounds": {
+        "max": {
+          "x": 8.666666666666666,
+          "y": 5.333333333333333,
+          "z": 8.666666666666666
+        },
+        "min": {
+          "x": 3.3333333333333335,
+          "y": 0,
+          "z": 3.3333333333333335
+        }
+      },
+      "chunkId": "chunk_0_0",
+      "column": 6,
+      "id": "wfc-preview-6-6",
+      "row": 6,
+      "semanticRoles": [
+        "terrain.ground",
+        "terrain.water",
+        "terrain.shore"
+      ],
+      "sourceAssetId": "3d-road-tiles.road-tile-177",
+      "sourceLayer": "scene",
+      "transform": {
+        "position": {
+          "x": 6,
+          "y": 0,
+          "z": 6
+        },
+        "rotationY": 1.5707963267948966,
+        "scale": 1.3333333333333333
+      },
+      "variantId": "3d-road-tiles.road-tile-177@r90"
+    },
+    {
+      "assetContentHash": "31e6e9a5f1403e3f9329c4a151800383aa6764f99f2f8729d76d98c1c6c4f1f4",
+      "bounds": {
+        "max": {
+          "x": 8.666666666666666,
+          "y": 5.333333333333333,
+          "z": 12.666666666666666
+        },
+        "min": {
+          "x": 3.3333333333333335,
+          "y": 0,
+          "z": 7.333333333333334
+        }
+      },
+      "chunkId": "chunk_0_0",
+      "column": 6,
+      "id": "wfc-preview-6-7",
+      "row": 7,
+      "semanticRoles": [
+        "terrain.ground"
+      ],
+      "sourceAssetId": "3d-road-tiles.road-tile-163",
+      "sourceLayer": "scene",
+      "transform": {
+        "position": {
+          "x": 6,
+          "y": 0,
+          "z": 10
+        },
+        "rotationY": 0,
+        "scale": 1.3333333333333333
+      },
+      "variantId": "3d-road-tiles.road-tile-163@r0"
+    },
+    {
+      "assetContentHash": "71acfee905b753494b32d9fe1fa97eb49c8195cdbf951efa98b927b199120c0f",
+      "bounds": {
+        "max": {
+          "x": 8.666666666666666,
+          "y": 5.333333333333333,
+          "z": 16.666666666666668
+        },
+        "min": {
+          "x": 3.3333333333333335,
+          "y": 0,
+          "z": 11.333333333333334
+        }
+      },
+      "chunkId": "chunk_0_0",
+      "column": 6,
+      "id": "wfc-preview-6-8",
+      "row": 8,
+      "semanticRoles": [],
+      "sourceAssetId": "3d-road-tiles.road-tile-162",
+      "sourceLayer": "scene",
+      "transform": {
+        "position": {
+          "x": 6,
+          "y": 0,
+          "z": 14
+        },
+        "rotationY": 0,
+        "scale": 1.3333333333333333
+      },
+      "variantId": "3d-road-tiles.road-tile-162@r0"
+    },
+    {
+      "assetContentHash": "31e6e9a5f1403e3f9329c4a151800383aa6764f99f2f8729d76d98c1c6c4f1f4",
+      "bounds": {
+        "max": {
+          "x": 8.666666666666666,
+          "y": 5.333333333333333,
+          "z": 20.666666666666668
+        },
+        "min": {
+          "x": 3.3333333333333335,
+          "y": 0,
+          "z": 15.333333333333334
+        }
+      },
+      "chunkId": "chunk_0_0",
+      "column": 6,
+      "id": "wfc-preview-6-9",
+      "row": 9,
+      "semanticRoles": [
+        "terrain.ground"
+      ],
+      "sourceAssetId": "3d-road-tiles.road-tile-163",
+      "sourceLayer": "scene",
+      "transform": {
+        "position": {
+          "x": 6,
+          "y": 0,
+          "z": 18
+        },
+        "rotationY": 0,
+        "scale": 1.3333333333333333
+      },
+      "variantId": "3d-road-tiles.road-tile-163@r0"
+    },
+    {
+      "assetContentHash": "31e6e9a5f1403e3f9329c4a151800383aa6764f99f2f8729d76d98c1c6c4f1f4",
+      "bounds": {
+        "max": {
+          "x": 12.666666666666666,
+          "y": 5.333333333333333,
+          "z": -15.333333333333334
+        },
+        "min": {
+          "x": 7.333333333333334,
+          "y": 0,
+          "z": -20.666666666666668
+        }
+      },
+      "chunkId": "chunk_0_0",
+      "column": 7,
+      "id": "wfc-preview-7-0",
+      "row": 0,
+      "semanticRoles": [
+        "terrain.ground"
+      ],
+      "sourceAssetId": "3d-road-tiles.road-tile-163",
+      "sourceLayer": "scene",
+      "transform": {
+        "position": {
+          "x": 10,
+          "y": 0,
+          "z": -18
+        },
+        "rotationY": 0,
+        "scale": 1.3333333333333333
+      },
+      "variantId": "3d-road-tiles.road-tile-163@r0"
+    },
+    {
+      "assetContentHash": "71acfee905b753494b32d9fe1fa97eb49c8195cdbf951efa98b927b199120c0f",
+      "bounds": {
+        "max": {
+          "x": 12.666666666666666,
+          "y": 5.333333333333333,
+          "z": -11.333333333333334
+        },
+        "min": {
+          "x": 7.333333333333334,
+          "y": 0,
+          "z": -16.666666666666668
+        }
+      },
+      "chunkId": "chunk_0_0",
+      "column": 7,
+      "id": "wfc-preview-7-1",
+      "row": 1,
+      "semanticRoles": [],
+      "sourceAssetId": "3d-road-tiles.road-tile-162",
+      "sourceLayer": "scene",
+      "transform": {
+        "position": {
+          "x": 10,
+          "y": 0,
+          "z": -14
+        },
+        "rotationY": 0,
+        "scale": 1.3333333333333333
+      },
+      "variantId": "3d-road-tiles.road-tile-162@r0"
+    },
+    {
+      "assetContentHash": "31e6e9a5f1403e3f9329c4a151800383aa6764f99f2f8729d76d98c1c6c4f1f4",
+      "bounds": {
+        "max": {
+          "x": 12.666666666666666,
+          "y": 5.333333333333333,
+          "z": -7.333333333333334
+        },
+        "min": {
+          "x": 7.333333333333334,
+          "y": 0,
+          "z": -12.666666666666666
+        }
+      },
+      "chunkId": "chunk_0_0",
+      "column": 7,
+      "id": "wfc-preview-7-2",
+      "row": 2,
+      "semanticRoles": [
+        "terrain.ground"
+      ],
+      "sourceAssetId": "3d-road-tiles.road-tile-163",
+      "sourceLayer": "scene",
+      "transform": {
+        "position": {
+          "x": 10,
+          "y": 0,
+          "z": -10
+        },
+        "rotationY": 0,
+        "scale": 1.3333333333333333
+      },
+      "variantId": "3d-road-tiles.road-tile-163@r0"
+    },
+    {
+      "assetContentHash": "2a63dd23a6eea6e50ac8ed09a881eb95a1e0612b127dbff2ee16654cee4b4f74",
+      "bounds": {
+        "max": {
+          "x": 12.666666666666666,
+          "y": 5.333333333333333,
+          "z": -3.3333333333333335
+        },
+        "min": {
+          "x": 7.333333333333334,
+          "y": 0,
+          "z": -8.666666666666666
+        }
+      },
+      "chunkId": "chunk_0_0",
+      "column": 7,
+      "id": "wfc-preview-7-3",
+      "row": 3,
+      "semanticRoles": [],
+      "sourceAssetId": "3d-road-tiles.road-tile-025",
+      "sourceLayer": "scene",
+      "transform": {
+        "position": {
+          "x": 10,
+          "y": 0,
+          "z": -6
+        },
+        "rotationY": 0,
+        "scale": 1.3333333333333333
+      },
+      "variantId": "3d-road-tiles.road-tile-025@r0"
+    },
+    {
+      "assetContentHash": "31e6e9a5f1403e3f9329c4a151800383aa6764f99f2f8729d76d98c1c6c4f1f4",
+      "bounds": {
+        "max": {
+          "x": 12.666666666666666,
+          "y": 5.333333333333333,
+          "z": 0.6666666666666665
+        },
+        "min": {
+          "x": 7.333333333333334,
+          "y": 0,
+          "z": -4.666666666666666
+        }
+      },
+      "chunkId": "chunk_0_0",
+      "column": 7,
+      "id": "wfc-preview-7-4",
+      "row": 4,
+      "semanticRoles": [
+        "terrain.ground"
+      ],
+      "sourceAssetId": "3d-road-tiles.road-tile-163",
+      "sourceLayer": "scene",
+      "transform": {
+        "position": {
+          "x": 10,
+          "y": 0,
+          "z": -2
+        },
+        "rotationY": 0,
+        "scale": 1.3333333333333333
+      },
+      "variantId": "3d-road-tiles.road-tile-163@r0"
+    },
+    {
+      "assetContentHash": "31e6e9a5f1403e3f9329c4a151800383aa6764f99f2f8729d76d98c1c6c4f1f4",
+      "bounds": {
+        "max": {
+          "x": 12.666666666666666,
+          "y": 5.333333333333333,
+          "z": 4.666666666666666
+        },
+        "min": {
+          "x": 7.333333333333334,
+          "y": 0,
+          "z": -0.6666666666666665
+        }
+      },
+      "chunkId": "chunk_0_0",
+      "column": 7,
+      "id": "wfc-preview-7-5",
+      "row": 5,
+      "semanticRoles": [
+        "terrain.ground"
+      ],
+      "sourceAssetId": "3d-road-tiles.road-tile-163",
+      "sourceLayer": "scene",
+      "transform": {
+        "position": {
+          "x": 10,
+          "y": 0,
+          "z": 2
+        },
+        "rotationY": 0,
+        "scale": 1.3333333333333333
+      },
+      "variantId": "3d-road-tiles.road-tile-163@r0"
+    },
+    {
+      "assetContentHash": "31e6e9a5f1403e3f9329c4a151800383aa6764f99f2f8729d76d98c1c6c4f1f4",
+      "bounds": {
+        "max": {
+          "x": 12.666666666666666,
+          "y": 5.333333333333333,
+          "z": 8.666666666666666
+        },
+        "min": {
+          "x": 7.333333333333334,
+          "y": 0,
+          "z": 3.3333333333333335
+        }
+      },
+      "chunkId": "chunk_0_0",
+      "column": 7,
+      "id": "wfc-preview-7-6",
+      "row": 6,
+      "semanticRoles": [
+        "terrain.ground"
+      ],
+      "sourceAssetId": "3d-road-tiles.road-tile-163",
+      "sourceLayer": "scene",
+      "transform": {
+        "position": {
+          "x": 10,
+          "y": 0,
+          "z": 6
+        },
+        "rotationY": 0,
+        "scale": 1.3333333333333333
+      },
+      "variantId": "3d-road-tiles.road-tile-163@r0"
+    },
+    {
+      "assetContentHash": "03d82722ca5997297a58c5da2e1b5af963852cf097e6fea755203e064ba1a09b",
+      "bounds": {
+        "max": {
+          "x": 12.666666666666666,
+          "y": 5.333333333333333,
+          "z": 12.666666666666666
+        },
+        "min": {
+          "x": 7.333333333333334,
+          "y": 0,
+          "z": 7.333333333333334
+        }
+      },
+      "chunkId": "chunk_0_0",
+      "column": 7,
+      "id": "wfc-preview-7-7",
+      "row": 7,
+      "semanticRoles": [],
+      "sourceAssetId": "3d-road-tiles.road-tile-049",
+      "sourceLayer": "scene",
+      "transform": {
+        "position": {
+          "x": 10,
+          "y": 0,
+          "z": 10
+        },
+        "rotationY": 1.5707963267948966,
+        "scale": 1.3333333333333333
+      },
+      "variantId": "3d-road-tiles.road-tile-049@r90"
+    },
+    {
+      "assetContentHash": "d8fcd75a76afd39b3ec9db47b8e637ec218dfdc95db696bbde75c65eeddcbea4",
+      "bounds": {
+        "max": {
+          "x": 12.666666666666666,
+          "y": 5.333333333333333,
+          "z": 16.666666666666668
+        },
+        "min": {
+          "x": 7.333333333333334,
+          "y": 0,
+          "z": 11.333333333333334
+        }
+      },
+      "chunkId": "chunk_0_0",
+      "column": 7,
+      "id": "wfc-preview-7-8",
+      "row": 8,
+      "semanticRoles": [],
+      "sourceAssetId": "3d-road-tiles.road-tile-043",
+      "sourceLayer": "scene",
+      "transform": {
+        "position": {
+          "x": 10,
+          "y": 0,
+          "z": 14
+        },
+        "rotationY": 0,
+        "scale": 1.3333333333333333
+      },
+      "variantId": "3d-road-tiles.road-tile-043@r0"
+    },
+    {
+      "assetContentHash": "03d82722ca5997297a58c5da2e1b5af963852cf097e6fea755203e064ba1a09b",
+      "bounds": {
+        "max": {
+          "x": 12.666666666666666,
+          "y": 5.333333333333333,
+          "z": 20.666666666666668
+        },
+        "min": {
+          "x": 7.333333333333334,
+          "y": 0,
+          "z": 15.333333333333334
+        }
+      },
+      "chunkId": "chunk_0_0",
+      "column": 7,
+      "id": "wfc-preview-7-9",
+      "row": 9,
+      "semanticRoles": [],
+      "sourceAssetId": "3d-road-tiles.road-tile-049",
+      "sourceLayer": "scene",
+      "transform": {
+        "position": {
+          "x": 10,
+          "y": 0,
+          "z": 18
+        },
+        "rotationY": 3.141592653589793,
+        "scale": 1.3333333333333333
+      },
+      "variantId": "3d-road-tiles.road-tile-049@r180"
+    },
+    {
+      "assetContentHash": "31e6e9a5f1403e3f9329c4a151800383aa6764f99f2f8729d76d98c1c6c4f1f4",
+      "bounds": {
+        "max": {
+          "x": 16.666666666666668,
+          "y": 5.333333333333333,
+          "z": -15.333333333333334
+        },
+        "min": {
+          "x": 11.333333333333334,
+          "y": 0,
+          "z": -20.666666666666668
+        }
+      },
+      "chunkId": "chunk_0_0",
+      "column": 8,
+      "id": "wfc-preview-8-0",
+      "row": 0,
+      "semanticRoles": [
+        "terrain.ground"
+      ],
+      "sourceAssetId": "3d-road-tiles.road-tile-163",
+      "sourceLayer": "scene",
+      "transform": {
+        "position": {
+          "x": 14,
+          "y": 0,
+          "z": -18
+        },
+        "rotationY": 0,
+        "scale": 1.3333333333333333
+      },
+      "variantId": "3d-road-tiles.road-tile-163@r0"
+    },
+    {
+      "assetContentHash": "c5ea4463ea80b12dbdd7ea00096257aaea740a09e95db39a395dfc83d057ac97",
+      "bounds": {
+        "max": {
+          "x": 16.666666666666668,
+          "y": 5.333333333333333,
+          "z": -11.333333333333334
+        },
+        "min": {
+          "x": 11.333333333333334,
+          "y": 0,
+          "z": -16.666666666666668
+        }
+      },
+      "chunkId": "chunk_0_0",
+      "column": 8,
+      "id": "wfc-preview-8-1",
+      "row": 1,
+      "semanticRoles": [],
+      "sourceAssetId": "3d-road-tiles.road-tile-153",
+      "sourceLayer": "scene",
+      "transform": {
+        "position": {
+          "x": 14,
+          "y": 0,
+          "z": -14
+        },
+        "rotationY": 3.141592653589793,
+        "scale": 1.3333333333333333
+      },
+      "variantId": "3d-road-tiles.road-tile-153@r180"
+    },
+    {
+      "assetContentHash": "2a63dd23a6eea6e50ac8ed09a881eb95a1e0612b127dbff2ee16654cee4b4f74",
+      "bounds": {
+        "max": {
+          "x": 16.666666666666668,
+          "y": 5.333333333333333,
+          "z": -7.333333333333334
+        },
+        "min": {
+          "x": 11.333333333333334,
+          "y": 0,
+          "z": -12.666666666666666
+        }
+      },
+      "chunkId": "chunk_0_0",
+      "column": 8,
+      "id": "wfc-preview-8-2",
+      "row": 2,
+      "semanticRoles": [],
+      "sourceAssetId": "3d-road-tiles.road-tile-025",
+      "sourceLayer": "scene",
+      "transform": {
+        "position": {
+          "x": 14,
+          "y": 0,
+          "z": -10
+        },
+        "rotationY": 1.5707963267948966,
+        "scale": 1.3333333333333333
+      },
+      "variantId": "3d-road-tiles.road-tile-025@r90"
+    },
+    {
+      "assetContentHash": "eea55cb988ec4868f2e7f096af44cefee61cee2578c1a84b86a29913e045decc",
+      "bounds": {
+        "max": {
+          "x": 16.666666666666668,
+          "y": 5.333333333333333,
+          "z": -3.3333333333333335
+        },
+        "min": {
+          "x": 11.333333333333334,
+          "y": 0,
+          "z": -8.666666666666666
+        }
+      },
+      "chunkId": "chunk_0_0",
+      "column": 8,
+      "id": "wfc-preview-8-3",
+      "row": 3,
+      "semanticRoles": [],
+      "sourceAssetId": "3d-road-tiles.road-tile-150",
+      "sourceLayer": "scene",
+      "transform": {
+        "position": {
+          "x": 14,
+          "y": 0,
+          "z": -6
+        },
+        "rotationY": 3.141592653589793,
+        "scale": 1.3333333333333333
+      },
+      "variantId": "3d-road-tiles.road-tile-150@r180"
+    },
+    {
+      "assetContentHash": "2a63dd23a6eea6e50ac8ed09a881eb95a1e0612b127dbff2ee16654cee4b4f74",
+      "bounds": {
+        "max": {
+          "x": 16.666666666666668,
+          "y": 5.333333333333333,
+          "z": 0.6666666666666665
+        },
+        "min": {
+          "x": 11.333333333333334,
+          "y": 0,
+          "z": -4.666666666666666
+        }
+      },
+      "chunkId": "chunk_0_0",
+      "column": 8,
+      "id": "wfc-preview-8-4",
+      "row": 4,
+      "semanticRoles": [],
+      "sourceAssetId": "3d-road-tiles.road-tile-025",
+      "sourceLayer": "scene",
+      "transform": {
+        "position": {
+          "x": 14,
+          "y": 0,
+          "z": -2
+        },
+        "rotationY": 1.5707963267948966,
+        "scale": 1.3333333333333333
+      },
+      "variantId": "3d-road-tiles.road-tile-025@r90"
+    },
+    {
+      "assetContentHash": "71acfee905b753494b32d9fe1fa97eb49c8195cdbf951efa98b927b199120c0f",
+      "bounds": {
+        "max": {
+          "x": 16.666666666666668,
+          "y": 5.333333333333333,
+          "z": 4.666666666666666
+        },
+        "min": {
+          "x": 11.333333333333334,
+          "y": 0,
+          "z": -0.6666666666666665
+        }
+      },
+      "chunkId": "chunk_0_0",
+      "column": 8,
+      "id": "wfc-preview-8-5",
+      "row": 5,
+      "semanticRoles": [],
+      "sourceAssetId": "3d-road-tiles.road-tile-162",
+      "sourceLayer": "scene",
+      "transform": {
+        "position": {
+          "x": 14,
+          "y": 0,
+          "z": 2
+        },
+        "rotationY": 1.5707963267948966,
+        "scale": 1.3333333333333333
+      },
+      "variantId": "3d-road-tiles.road-tile-162@r90"
+    },
+    {
+      "assetContentHash": "71acfee905b753494b32d9fe1fa97eb49c8195cdbf951efa98b927b199120c0f",
+      "bounds": {
+        "max": {
+          "x": 16.666666666666668,
+          "y": 5.333333333333333,
+          "z": 8.666666666666666
+        },
+        "min": {
+          "x": 11.333333333333334,
+          "y": 0,
+          "z": 3.3333333333333335
+        }
+      },
+      "chunkId": "chunk_0_0",
+      "column": 8,
+      "id": "wfc-preview-8-6",
+      "row": 6,
+      "semanticRoles": [],
+      "sourceAssetId": "3d-road-tiles.road-tile-162",
+      "sourceLayer": "scene",
+      "transform": {
+        "position": {
+          "x": 14,
+          "y": 0,
+          "z": 6
+        },
+        "rotationY": 1.5707963267948966,
+        "scale": 1.3333333333333333
+      },
+      "variantId": "3d-road-tiles.road-tile-162@r90"
+    },
+    {
+      "assetContentHash": "d8fcd75a76afd39b3ec9db47b8e637ec218dfdc95db696bbde75c65eeddcbea4",
+      "bounds": {
+        "max": {
+          "x": 16.666666666666668,
+          "y": 5.333333333333333,
+          "z": 12.666666666666666
+        },
+        "min": {
+          "x": 11.333333333333334,
+          "y": 0,
+          "z": 7.333333333333334
+        }
+      },
+      "chunkId": "chunk_0_0",
+      "column": 8,
+      "id": "wfc-preview-8-7",
+      "row": 7,
+      "semanticRoles": [],
+      "sourceAssetId": "3d-road-tiles.road-tile-043",
+      "sourceLayer": "scene",
+      "transform": {
+        "position": {
+          "x": 14,
+          "y": 0,
+          "z": 10
+        },
+        "rotationY": 4.71238898038469,
+        "scale": 1.3333333333333333
+      },
+      "variantId": "3d-road-tiles.road-tile-043@r270"
+    },
+    {
+      "assetContentHash": "5feccf25e1260cd383bdd585c679a3dec6866b412e0ff86b22ceaf5298d24d94",
+      "bounds": {
+        "max": {
+          "x": 16.666666666666668,
+          "y": 5.333333333333333,
+          "z": 16.666666666666668
+        },
+        "min": {
+          "x": 11.333333333333334,
+          "y": 0,
+          "z": 11.333333333333334
+        }
+      },
+      "chunkId": "chunk_0_0",
+      "column": 8,
+      "id": "wfc-preview-8-8",
+      "row": 8,
+      "semanticRoles": [
+        "terrain.ground",
+        "road.roundabout-island"
+      ],
+      "sourceAssetId": "3d-road-tiles.road-tile-039",
+      "sourceLayer": "scene",
+      "transform": {
+        "position": {
+          "x": 14,
+          "y": 0,
+          "z": 14
+        },
+        "rotationY": 0,
+        "scale": 1.3333333333333333
+      },
+      "variantId": "3d-road-tiles.road-tile-039@r0"
+    },
+    {
+      "assetContentHash": "dfc05747143c67ca580c5f56d4ae3380e8fafbc504e4f0f83cdff69b54c250cc",
+      "bounds": {
+        "max": {
+          "x": 16.666666666666668,
+          "y": 5.333333333333333,
+          "z": 20.666666666666668
+        },
+        "min": {
+          "x": 11.333333333333334,
+          "y": 0,
+          "z": 15.333333333333334
+        }
+      },
+      "chunkId": "chunk_0_0",
+      "column": 8,
+      "id": "wfc-preview-8-9",
+      "row": 9,
+      "semanticRoles": [],
+      "sourceAssetId": "3d-road-tiles.road-tile-048",
+      "sourceLayer": "scene",
+      "transform": {
+        "position": {
+          "x": 14,
+          "y": 0,
+          "z": 18
+        },
+        "rotationY": 1.5707963267948966,
+        "scale": 1.3333333333333333
+      },
+      "variantId": "3d-road-tiles.road-tile-048@r90"
+    },
+    {
+      "assetContentHash": "31e6e9a5f1403e3f9329c4a151800383aa6764f99f2f8729d76d98c1c6c4f1f4",
+      "bounds": {
+        "max": {
+          "x": 20.666666666666668,
+          "y": 5.333333333333333,
+          "z": -15.333333333333334
+        },
+        "min": {
+          "x": 15.333333333333334,
+          "y": 0,
+          "z": -20.666666666666668
+        }
+      },
+      "chunkId": "chunk_0_0",
+      "column": 9,
+      "id": "wfc-preview-9-0",
+      "row": 0,
+      "semanticRoles": [
+        "terrain.ground"
+      ],
+      "sourceAssetId": "3d-road-tiles.road-tile-163",
+      "sourceLayer": "scene",
+      "transform": {
+        "position": {
+          "x": 18,
+          "y": 0,
+          "z": -18
+        },
+        "rotationY": 0,
+        "scale": 1.3333333333333333
+      },
+      "variantId": "3d-road-tiles.road-tile-163@r0"
+    },
+    {
+      "assetContentHash": "31e6e9a5f1403e3f9329c4a151800383aa6764f99f2f8729d76d98c1c6c4f1f4",
+      "bounds": {
+        "max": {
+          "x": 20.666666666666668,
+          "y": 5.333333333333333,
+          "z": -11.333333333333334
+        },
+        "min": {
+          "x": 15.333333333333334,
+          "y": 0,
+          "z": -16.666666666666668
+        }
+      },
+      "chunkId": "chunk_0_0",
+      "column": 9,
+      "id": "wfc-preview-9-1",
+      "row": 1,
+      "semanticRoles": [
+        "terrain.ground"
+      ],
+      "sourceAssetId": "3d-road-tiles.road-tile-163",
+      "sourceLayer": "scene",
+      "transform": {
+        "position": {
+          "x": 18,
+          "y": 0,
+          "z": -14
+        },
+        "rotationY": 0,
+        "scale": 1.3333333333333333
+      },
+      "variantId": "3d-road-tiles.road-tile-163@r0"
+    },
+    {
+      "assetContentHash": "31e6e9a5f1403e3f9329c4a151800383aa6764f99f2f8729d76d98c1c6c4f1f4",
+      "bounds": {
+        "max": {
+          "x": 20.666666666666668,
+          "y": 5.333333333333333,
+          "z": -7.333333333333334
+        },
+        "min": {
+          "x": 15.333333333333334,
+          "y": 0,
+          "z": -12.666666666666666
+        }
+      },
+      "chunkId": "chunk_0_0",
+      "column": 9,
+      "id": "wfc-preview-9-2",
+      "row": 2,
+      "semanticRoles": [
+        "terrain.ground"
+      ],
+      "sourceAssetId": "3d-road-tiles.road-tile-163",
+      "sourceLayer": "scene",
+      "transform": {
+        "position": {
+          "x": 18,
+          "y": 0,
+          "z": -10
+        },
+        "rotationY": 0,
+        "scale": 1.3333333333333333
+      },
+      "variantId": "3d-road-tiles.road-tile-163@r0"
+    },
+    {
+      "assetContentHash": "31e6e9a5f1403e3f9329c4a151800383aa6764f99f2f8729d76d98c1c6c4f1f4",
+      "bounds": {
+        "max": {
+          "x": 20.666666666666668,
+          "y": 5.333333333333333,
+          "z": -3.3333333333333335
+        },
+        "min": {
+          "x": 15.333333333333334,
+          "y": 0,
+          "z": -8.666666666666666
+        }
+      },
+      "chunkId": "chunk_0_0",
+      "column": 9,
+      "id": "wfc-preview-9-3",
+      "row": 3,
+      "semanticRoles": [
+        "terrain.ground"
+      ],
+      "sourceAssetId": "3d-road-tiles.road-tile-163",
+      "sourceLayer": "scene",
+      "transform": {
+        "position": {
+          "x": 18,
+          "y": 0,
+          "z": -6
+        },
+        "rotationY": 0,
+        "scale": 1.3333333333333333
+      },
+      "variantId": "3d-road-tiles.road-tile-163@r0"
+    },
+    {
+      "assetContentHash": "31e6e9a5f1403e3f9329c4a151800383aa6764f99f2f8729d76d98c1c6c4f1f4",
+      "bounds": {
+        "max": {
+          "x": 20.666666666666668,
+          "y": 5.333333333333333,
+          "z": 0.6666666666666665
+        },
+        "min": {
+          "x": 15.333333333333334,
+          "y": 0,
+          "z": -4.666666666666666
+        }
+      },
+      "chunkId": "chunk_0_0",
+      "column": 9,
+      "id": "wfc-preview-9-4",
+      "row": 4,
+      "semanticRoles": [
+        "terrain.ground"
+      ],
+      "sourceAssetId": "3d-road-tiles.road-tile-163",
+      "sourceLayer": "scene",
+      "transform": {
+        "position": {
+          "x": 18,
+          "y": 0,
+          "z": -2
+        },
+        "rotationY": 0,
+        "scale": 1.3333333333333333
+      },
+      "variantId": "3d-road-tiles.road-tile-163@r0"
+    },
+    {
+      "assetContentHash": "31e6e9a5f1403e3f9329c4a151800383aa6764f99f2f8729d76d98c1c6c4f1f4",
+      "bounds": {
+        "max": {
+          "x": 20.666666666666668,
+          "y": 5.333333333333333,
+          "z": 4.666666666666666
+        },
+        "min": {
+          "x": 15.333333333333334,
+          "y": 0,
+          "z": -0.6666666666666665
+        }
+      },
+      "chunkId": "chunk_0_0",
+      "column": 9,
+      "id": "wfc-preview-9-5",
+      "row": 5,
+      "semanticRoles": [
+        "terrain.ground"
+      ],
+      "sourceAssetId": "3d-road-tiles.road-tile-163",
+      "sourceLayer": "scene",
+      "transform": {
+        "position": {
+          "x": 18,
+          "y": 0,
+          "z": 2
+        },
+        "rotationY": 0,
+        "scale": 1.3333333333333333
+      },
+      "variantId": "3d-road-tiles.road-tile-163@r0"
+    },
+    {
+      "assetContentHash": "31e6e9a5f1403e3f9329c4a151800383aa6764f99f2f8729d76d98c1c6c4f1f4",
+      "bounds": {
+        "max": {
+          "x": 20.666666666666668,
+          "y": 5.333333333333333,
+          "z": 8.666666666666666
+        },
+        "min": {
+          "x": 15.333333333333334,
+          "y": 0,
+          "z": 3.3333333333333335
+        }
+      },
+      "chunkId": "chunk_0_0",
+      "column": 9,
+      "id": "wfc-preview-9-6",
+      "row": 6,
+      "semanticRoles": [
+        "terrain.ground"
+      ],
+      "sourceAssetId": "3d-road-tiles.road-tile-163",
+      "sourceLayer": "scene",
+      "transform": {
+        "position": {
+          "x": 18,
+          "y": 0,
+          "z": 6
+        },
+        "rotationY": 0,
+        "scale": 1.3333333333333333
+      },
+      "variantId": "3d-road-tiles.road-tile-163@r0"
+    },
+    {
+      "assetContentHash": "03d82722ca5997297a58c5da2e1b5af963852cf097e6fea755203e064ba1a09b",
+      "bounds": {
+        "max": {
+          "x": 20.666666666666668,
+          "y": 5.333333333333333,
+          "z": 12.666666666666666
+        },
+        "min": {
+          "x": 15.333333333333334,
+          "y": 0,
+          "z": 7.333333333333334
+        }
+      },
+      "chunkId": "chunk_0_0",
+      "column": 9,
+      "id": "wfc-preview-9-7",
+      "row": 7,
+      "semanticRoles": [],
+      "sourceAssetId": "3d-road-tiles.road-tile-049",
+      "sourceLayer": "scene",
+      "transform": {
+        "position": {
+          "x": 18,
+          "y": 0,
+          "z": 10
+        },
+        "rotationY": 0,
+        "scale": 1.3333333333333333
+      },
+      "variantId": "3d-road-tiles.road-tile-049@r0"
+    },
+    {
+      "assetContentHash": "dfc05747143c67ca580c5f56d4ae3380e8fafbc504e4f0f83cdff69b54c250cc",
+      "bounds": {
+        "max": {
+          "x": 20.666666666666668,
+          "y": 5.333333333333333,
+          "z": 16.666666666666668
+        },
+        "min": {
+          "x": 15.333333333333334,
+          "y": 0,
+          "z": 11.333333333333334
+        }
+      },
+      "chunkId": "chunk_0_0",
+      "column": 9,
+      "id": "wfc-preview-9-8",
+      "row": 8,
+      "semanticRoles": [],
+      "sourceAssetId": "3d-road-tiles.road-tile-048",
+      "sourceLayer": "scene",
+      "transform": {
+        "position": {
+          "x": 18,
+          "y": 0,
+          "z": 14
+        },
+        "rotationY": 3.141592653589793,
+        "scale": 1.3333333333333333
+      },
+      "variantId": "3d-road-tiles.road-tile-048@r180"
+    },
+    {
+      "assetContentHash": "03d82722ca5997297a58c5da2e1b5af963852cf097e6fea755203e064ba1a09b",
+      "bounds": {
+        "max": {
+          "x": 20.666666666666668,
+          "y": 5.333333333333333,
+          "z": 20.666666666666668
+        },
+        "min": {
+          "x": 15.333333333333334,
+          "y": 0,
+          "z": 15.333333333333334
+        }
+      },
+      "chunkId": "chunk_0_0",
+      "column": 9,
+      "id": "wfc-preview-9-9",
+      "row": 9,
+      "semanticRoles": [],
+      "sourceAssetId": "3d-road-tiles.road-tile-049",
+      "sourceLayer": "scene",
+      "transform": {
+        "position": {
+          "x": 18,
+          "y": 0,
+          "z": 18
+        },
+        "rotationY": 4.71238898038469,
+        "scale": 1.3333333333333333
+      },
+      "variantId": "3d-road-tiles.road-tile-049@r270"
+    }
+  ],
+  "chunks": [
+    {
+      "bounds": {
+        "max": {
+          "x": 20,
+          "y": 0,
+          "z": 20
+        },
+        "min": {
+          "x": -20,
+          "y": 0,
+          "z": -20
+        }
+      },
+      "id": "chunk_0_0"
+    }
+  ],
+  "diagnostics": [],
+  "format": "steerlab-environment",
+  "formatVersion": 1,
+  "grid": {
+    "bounds": {
+      "max": {
+        "x": 20,
+        "y": 4,
+        "z": 20
+      },
+      "min": {
+        "x": -20,
+        "y": 0,
+        "z": -20
+      }
+    },
+    "cellSize": 4,
+    "depth": 10,
+    "origin": {
+      "x": -20,
+      "y": 0,
+      "z": -20
+    },
+    "width": 10
+  },
+  "ground": {
+    "bounds": {
+      "max": {
+        "x": 20,
+        "y": 0,
+        "z": 20
+      },
+      "min": {
+        "x": -20,
+        "y": 0,
+        "z": -20
+      }
+    },
+    "chunkIds": [
+      "chunk_0_0"
+    ],
+    "material": {
+      "color": "#050608",
+      "textureUrl": null
+    }
+  },
+  "metadata": {
+    "cellSize": 4,
+    "materials": [
+      "alternate_dirt",
+      "asphalt",
+      "frontcolor",
+      "grass",
+      "grey_asphalt",
+      "sand",
+      "stone",
+      "water"
+    ],
+    "name": "Downtown",
+    "sceneSize": 40,
+    "seed": 1
+  },
+  "model": {
+    "file": "environment.glb",
+    "rootNode": "SteerlabEnvironment",
+    "sha256": "61757e49bbf5aa9b9b8dd8371db5d9749101858794eb89fcf8506da63e27fb4e",
+    "unitsPerMeter": 1,
+    "upAxis": "Y"
+  },
+  "navigation": {
+    "edges": [
+      {
+        "bidirectional": true,
+        "channel": "road",
+        "cost": 4,
+        "direction": "east",
+        "fromNodeId": "nav_wfc-preview-1-1",
+        "id": "nav_edge_wfc-preview-1-1_wfc-preview-2-1",
+        "toNodeId": "nav_wfc-preview-2-1"
+      },
+      {
+        "bidirectional": true,
+        "channel": "road",
+        "cost": 4,
+        "direction": "north",
+        "fromNodeId": "nav_wfc-preview-1-3",
+        "id": "nav_edge_wfc-preview-1-3_wfc-preview-1-2",
+        "toNodeId": "nav_wfc-preview-1-2"
+      },
+      {
+        "bidirectional": true,
+        "channel": "road",
+        "cost": 4,
+        "direction": "east",
+        "fromNodeId": "nav_wfc-preview-1-3",
+        "id": "nav_edge_wfc-preview-1-3_wfc-preview-2-3",
+        "toNodeId": "nav_wfc-preview-2-3"
+      },
+      {
+        "bidirectional": true,
+        "channel": "road",
+        "cost": 4,
+        "direction": "north",
+        "fromNodeId": "nav_wfc-preview-1-4",
+        "id": "nav_edge_wfc-preview-1-4_wfc-preview-1-3",
+        "toNodeId": "nav_wfc-preview-1-3"
+      },
+      {
+        "bidirectional": true,
+        "channel": "road",
+        "cost": 4,
+        "direction": "north",
+        "fromNodeId": "nav_wfc-preview-1-5",
+        "id": "nav_edge_wfc-preview-1-5_wfc-preview-1-4",
+        "toNodeId": "nav_wfc-preview-1-4"
+      },
+      {
+        "bidirectional": true,
+        "channel": "road",
+        "cost": 4,
+        "direction": "north",
+        "fromNodeId": "nav_wfc-preview-1-6",
+        "id": "nav_edge_wfc-preview-1-6_wfc-preview-1-5",
+        "toNodeId": "nav_wfc-preview-1-5"
+      },
+      {
+        "bidirectional": true,
+        "channel": "road",
+        "cost": 4,
+        "direction": "north",
+        "fromNodeId": "nav_wfc-preview-1-7",
+        "id": "nav_edge_wfc-preview-1-7_wfc-preview-1-6",
+        "toNodeId": "nav_wfc-preview-1-6"
+      },
+      {
+        "bidirectional": true,
+        "channel": "road",
+        "cost": 4,
+        "direction": "east",
+        "fromNodeId": "nav_wfc-preview-1-7",
+        "id": "nav_edge_wfc-preview-1-7_wfc-preview-2-7",
+        "toNodeId": "nav_wfc-preview-2-7"
+      },
+      {
+        "bidirectional": true,
+        "channel": "road",
+        "cost": 4,
+        "direction": "east",
+        "fromNodeId": "nav_wfc-preview-1-8",
+        "id": "nav_edge_wfc-preview-1-8_wfc-preview-2-8",
+        "toNodeId": "nav_wfc-preview-2-8"
+      },
+      {
+        "bidirectional": true,
+        "channel": "road",
+        "cost": 4,
+        "direction": "east",
+        "fromNodeId": "nav_wfc-preview-2-1",
+        "id": "nav_edge_wfc-preview-2-1_wfc-preview-3-1",
+        "toNodeId": "nav_wfc-preview-3-1"
+      },
+      {
+        "bidirectional": true,
+        "channel": "road",
+        "cost": 4,
+        "direction": "east",
+        "fromNodeId": "nav_wfc-preview-2-3",
+        "id": "nav_edge_wfc-preview-2-3_wfc-preview-3-3",
+        "toNodeId": "nav_wfc-preview-3-3"
+      },
+      {
+        "bidirectional": true,
+        "channel": "road",
+        "cost": 4,
+        "direction": "east",
+        "fromNodeId": "nav_wfc-preview-2-8",
+        "id": "nav_edge_wfc-preview-2-8_wfc-preview-3-8",
+        "toNodeId": "nav_wfc-preview-3-8"
+      },
+      {
+        "bidirectional": true,
+        "channel": "road",
+        "cost": 4,
+        "direction": "east",
+        "fromNodeId": "nav_wfc-preview-3-1",
+        "id": "nav_edge_wfc-preview-3-1_wfc-preview-4-1",
+        "toNodeId": "nav_wfc-preview-4-1"
+      },
+      {
+        "bidirectional": true,
+        "channel": "road",
+        "cost": 4,
+        "direction": "east",
+        "fromNodeId": "nav_wfc-preview-3-3",
+        "id": "nav_edge_wfc-preview-3-3_wfc-preview-4-3",
+        "toNodeId": "nav_wfc-preview-4-3"
+      },
+      {
+        "bidirectional": true,
+        "channel": "road",
+        "cost": 4,
+        "direction": "east",
+        "fromNodeId": "nav_wfc-preview-3-8",
+        "id": "nav_edge_wfc-preview-3-8_wfc-preview-4-8",
+        "toNodeId": "nav_wfc-preview-4-8"
+      },
+      {
+        "bidirectional": true,
+        "channel": "road",
+        "cost": 4,
+        "direction": "east",
+        "fromNodeId": "nav_wfc-preview-4-1",
+        "id": "nav_edge_wfc-preview-4-1_wfc-preview-5-1",
+        "toNodeId": "nav_wfc-preview-5-1"
+      },
+      {
+        "bidirectional": true,
+        "channel": "road",
+        "cost": 4,
+        "direction": "east",
+        "fromNodeId": "nav_wfc-preview-4-3",
+        "id": "nav_edge_wfc-preview-4-3_wfc-preview-5-3",
+        "toNodeId": "nav_wfc-preview-5-3"
+      },
+      {
+        "bidirectional": true,
+        "channel": "road",
+        "cost": 4,
+        "direction": "east",
+        "fromNodeId": "nav_wfc-preview-4-8",
+        "id": "nav_edge_wfc-preview-4-8_wfc-preview-5-8",
+        "toNodeId": "nav_wfc-preview-5-8"
+      },
+      {
+        "bidirectional": true,
+        "channel": "road",
+        "cost": 4,
+        "direction": "east",
+        "fromNodeId": "nav_wfc-preview-5-1",
+        "id": "nav_edge_wfc-preview-5-1_wfc-preview-6-1",
+        "toNodeId": "nav_wfc-preview-6-1"
+      },
+      {
+        "bidirectional": true,
+        "channel": "road",
+        "cost": 4,
+        "direction": "east",
+        "fromNodeId": "nav_wfc-preview-5-3",
+        "id": "nav_edge_wfc-preview-5-3_wfc-preview-6-3",
+        "toNodeId": "nav_wfc-preview-6-3"
+      },
+      {
+        "bidirectional": true,
+        "channel": "road",
+        "cost": 4,
+        "direction": "east",
+        "fromNodeId": "nav_wfc-preview-5-8",
+        "id": "nav_edge_wfc-preview-5-8_wfc-preview-6-8",
+        "toNodeId": "nav_wfc-preview-6-8"
+      },
+      {
+        "bidirectional": true,
+        "channel": "road",
+        "cost": 4,
+        "direction": "east",
+        "fromNodeId": "nav_wfc-preview-6-1",
+        "id": "nav_edge_wfc-preview-6-1_wfc-preview-7-1",
+        "toNodeId": "nav_wfc-preview-7-1"
+      },
+      {
+        "bidirectional": true,
+        "channel": "road",
+        "cost": 4,
+        "direction": "east",
+        "fromNodeId": "nav_wfc-preview-6-3",
+        "id": "nav_edge_wfc-preview-6-3_wfc-preview-7-3",
+        "toNodeId": "nav_wfc-preview-7-3"
+      },
+      {
+        "bidirectional": true,
+        "channel": "road",
+        "cost": 4,
+        "direction": "east",
+        "fromNodeId": "nav_wfc-preview-6-8",
+        "id": "nav_edge_wfc-preview-6-8_wfc-preview-7-8",
+        "toNodeId": "nav_wfc-preview-7-8"
+      },
+      {
+        "bidirectional": true,
+        "channel": "road",
+        "cost": 4,
+        "direction": "east",
+        "fromNodeId": "nav_wfc-preview-7-1",
+        "id": "nav_edge_wfc-preview-7-1_wfc-preview-8-1",
+        "toNodeId": "nav_wfc-preview-8-1"
+      },
+      {
+        "bidirectional": true,
+        "channel": "road",
+        "cost": 4,
+        "direction": "east",
+        "fromNodeId": "nav_wfc-preview-7-3",
+        "id": "nav_edge_wfc-preview-7-3_wfc-preview-8-3",
+        "toNodeId": "nav_wfc-preview-8-3"
+      },
+      {
+        "bidirectional": true,
+        "channel": "road",
+        "cost": 4,
+        "direction": "east",
+        "fromNodeId": "nav_wfc-preview-7-7",
+        "id": "nav_edge_wfc-preview-7-7_wfc-preview-8-7",
+        "toNodeId": "nav_wfc-preview-8-7"
+      },
+      {
+        "bidirectional": true,
+        "channel": "road",
+        "cost": 4,
+        "direction": "east",
+        "fromNodeId": "nav_wfc-preview-7-9",
+        "id": "nav_edge_wfc-preview-7-9_wfc-preview-8-9",
+        "toNodeId": "nav_wfc-preview-8-9"
+      },
+      {
+        "bidirectional": true,
+        "channel": "road",
+        "cost": 4,
+        "direction": "north",
+        "fromNodeId": "nav_wfc-preview-8-3",
+        "id": "nav_edge_wfc-preview-8-3_wfc-preview-8-2",
+        "toNodeId": "nav_wfc-preview-8-2"
+      },
+      {
+        "bidirectional": true,
+        "channel": "road",
+        "cost": 4,
+        "direction": "north",
+        "fromNodeId": "nav_wfc-preview-8-4",
+        "id": "nav_edge_wfc-preview-8-4_wfc-preview-8-3",
+        "toNodeId": "nav_wfc-preview-8-3"
+      },
+      {
+        "bidirectional": true,
+        "channel": "road",
+        "cost": 4,
+        "direction": "north",
+        "fromNodeId": "nav_wfc-preview-8-5",
+        "id": "nav_edge_wfc-preview-8-5_wfc-preview-8-4",
+        "toNodeId": "nav_wfc-preview-8-4"
+      },
+      {
+        "bidirectional": true,
+        "channel": "road",
+        "cost": 4,
+        "direction": "north",
+        "fromNodeId": "nav_wfc-preview-8-6",
+        "id": "nav_edge_wfc-preview-8-6_wfc-preview-8-5",
+        "toNodeId": "nav_wfc-preview-8-5"
+      },
+      {
+        "bidirectional": true,
+        "channel": "road",
+        "cost": 4,
+        "direction": "east",
+        "fromNodeId": "nav_wfc-preview-8-7",
+        "id": "nav_edge_wfc-preview-8-7_wfc-preview-9-7",
+        "toNodeId": "nav_wfc-preview-9-7"
+      },
+      {
+        "bidirectional": true,
+        "channel": "road",
+        "cost": 4,
+        "direction": "east",
+        "fromNodeId": "nav_wfc-preview-8-9",
+        "id": "nav_edge_wfc-preview-8-9_wfc-preview-9-9",
+        "toNodeId": "nav_wfc-preview-9-9"
+      }
+    ],
+    "nodes": [
+      {
+        "cellId": "wfc-preview-0-0",
+        "channels": [],
+        "featureTags": [],
+        "id": "nav_wfc-preview-0-0",
+        "position": {
+          "x": -18,
+          "y": 0,
+          "z": -18
+        }
+      },
+      {
+        "cellId": "wfc-preview-0-1",
+        "channels": [],
+        "featureTags": [],
+        "id": "nav_wfc-preview-0-1",
+        "position": {
+          "x": -18,
+          "y": 0,
+          "z": -14
+        }
+      },
+      {
+        "cellId": "wfc-preview-0-2",
+        "channels": [],
+        "featureTags": [],
+        "id": "nav_wfc-preview-0-2",
+        "position": {
+          "x": -18,
+          "y": 0,
+          "z": -10
+        }
+      },
+      {
+        "cellId": "wfc-preview-0-3",
+        "channels": [],
+        "featureTags": [],
+        "id": "nav_wfc-preview-0-3",
+        "position": {
+          "x": -18,
+          "y": 0,
+          "z": -6
+        }
+      },
+      {
+        "cellId": "wfc-preview-0-4",
+        "channels": [],
+        "featureTags": [],
+        "id": "nav_wfc-preview-0-4",
+        "position": {
+          "x": -18,
+          "y": 0,
+          "z": -2
+        }
+      },
+      {
+        "cellId": "wfc-preview-0-5",
+        "channels": [],
+        "featureTags": [],
+        "id": "nav_wfc-preview-0-5",
+        "position": {
+          "x": -18,
+          "y": 0,
+          "z": 2
+        }
+      },
+      {
+        "cellId": "wfc-preview-0-6",
+        "channels": [],
+        "featureTags": [],
+        "id": "nav_wfc-preview-0-6",
+        "position": {
+          "x": -18,
+          "y": 0,
+          "z": 6
+        }
+      },
+      {
+        "cellId": "wfc-preview-0-7",
+        "channels": [],
+        "featureTags": [],
+        "id": "nav_wfc-preview-0-7",
+        "position": {
+          "x": -18,
+          "y": 0,
+          "z": 10
+        }
+      },
+      {
+        "cellId": "wfc-preview-0-8",
+        "channels": [],
+        "featureTags": [],
+        "id": "nav_wfc-preview-0-8",
+        "position": {
+          "x": -18,
+          "y": 0,
+          "z": 14
+        }
+      },
+      {
+        "cellId": "wfc-preview-0-9",
+        "channels": [],
+        "featureTags": [],
+        "id": "nav_wfc-preview-0-9",
+        "position": {
+          "x": -18,
+          "y": 0,
+          "z": 18
+        }
+      },
+      {
+        "cellId": "wfc-preview-1-0",
+        "channels": [],
+        "featureTags": [],
+        "id": "nav_wfc-preview-1-0",
+        "position": {
+          "x": -14,
+          "y": 0,
+          "z": -18
+        }
+      },
+      {
+        "cellId": "wfc-preview-1-1",
+        "channels": [
+          "road"
+        ],
+        "featureTags": [],
+        "id": "nav_wfc-preview-1-1",
+        "position": {
+          "x": -14,
+          "y": 0,
+          "z": -14
+        }
+      },
+      {
+        "cellId": "wfc-preview-1-2",
+        "channels": [
+          "road"
+        ],
+        "featureTags": [],
+        "id": "nav_wfc-preview-1-2",
+        "position": {
+          "x": -14,
+          "y": 0,
+          "z": -10
+        }
+      },
+      {
+        "cellId": "wfc-preview-1-3",
+        "channels": [
+          "road"
+        ],
+        "featureTags": [],
+        "id": "nav_wfc-preview-1-3",
+        "position": {
+          "x": -14,
+          "y": 0,
+          "z": -6
+        }
+      },
+      {
+        "cellId": "wfc-preview-1-4",
+        "channels": [
+          "road"
+        ],
+        "featureTags": [],
+        "id": "nav_wfc-preview-1-4",
+        "position": {
+          "x": -14,
+          "y": 0,
+          "z": -2
+        }
+      },
+      {
+        "cellId": "wfc-preview-1-5",
+        "channels": [
+          "road"
+        ],
+        "featureTags": [],
+        "id": "nav_wfc-preview-1-5",
+        "position": {
+          "x": -14,
+          "y": 0,
+          "z": 2
+        }
+      },
+      {
+        "cellId": "wfc-preview-1-6",
+        "channels": [
+          "road"
+        ],
+        "featureTags": [],
+        "id": "nav_wfc-preview-1-6",
+        "position": {
+          "x": -14,
+          "y": 0,
+          "z": 6
+        }
+      },
+      {
+        "cellId": "wfc-preview-1-7",
+        "channels": [
+          "road"
+        ],
+        "featureTags": [],
+        "id": "nav_wfc-preview-1-7",
+        "position": {
+          "x": -14,
+          "y": 0,
+          "z": 10
+        }
+      },
+      {
+        "cellId": "wfc-preview-1-8",
+        "channels": [
+          "road"
+        ],
+        "featureTags": [],
+        "id": "nav_wfc-preview-1-8",
+        "position": {
+          "x": -14,
+          "y": 0,
+          "z": 14
+        }
+      },
+      {
+        "cellId": "wfc-preview-1-9",
+        "channels": [],
+        "featureTags": [],
+        "id": "nav_wfc-preview-1-9",
+        "position": {
+          "x": -14,
+          "y": 0,
+          "z": 18
+        }
+      },
+      {
+        "cellId": "wfc-preview-2-0",
+        "channels": [],
+        "featureTags": [],
+        "id": "nav_wfc-preview-2-0",
+        "position": {
+          "x": -10,
+          "y": 0,
+          "z": -18
+        }
+      },
+      {
+        "cellId": "wfc-preview-2-1",
+        "channels": [
+          "road"
+        ],
+        "featureTags": [],
+        "id": "nav_wfc-preview-2-1",
+        "position": {
+          "x": -10,
+          "y": 0,
+          "z": -14
+        }
+      },
+      {
+        "cellId": "wfc-preview-2-2",
+        "channels": [],
+        "featureTags": [],
+        "id": "nav_wfc-preview-2-2",
+        "position": {
+          "x": -10,
+          "y": 0,
+          "z": -10
+        }
+      },
+      {
+        "cellId": "wfc-preview-2-3",
+        "channels": [
+          "road"
+        ],
+        "featureTags": [],
+        "id": "nav_wfc-preview-2-3",
+        "position": {
+          "x": -10,
+          "y": 0,
+          "z": -6
+        }
+      },
+      {
+        "cellId": "wfc-preview-2-4",
+        "channels": [
+          "water"
+        ],
+        "featureTags": [],
+        "id": "nav_wfc-preview-2-4",
+        "position": {
+          "x": -10,
+          "y": 0,
+          "z": -2
+        }
+      },
+      {
+        "cellId": "wfc-preview-2-5",
+        "channels": [
+          "water"
+        ],
+        "featureTags": [],
+        "id": "nav_wfc-preview-2-5",
+        "position": {
+          "x": -10,
+          "y": 0,
+          "z": 2
+        }
+      },
+      {
+        "cellId": "wfc-preview-2-6",
+        "channels": [],
+        "featureTags": [],
+        "id": "nav_wfc-preview-2-6",
+        "position": {
+          "x": -10,
+          "y": 0,
+          "z": 6
+        }
+      },
+      {
+        "cellId": "wfc-preview-2-7",
+        "channels": [
+          "road"
+        ],
+        "featureTags": [],
+        "id": "nav_wfc-preview-2-7",
+        "position": {
+          "x": -10,
+          "y": 0,
+          "z": 10
+        }
+      },
+      {
+        "cellId": "wfc-preview-2-8",
+        "channels": [
+          "road"
+        ],
+        "featureTags": [],
+        "id": "nav_wfc-preview-2-8",
+        "position": {
+          "x": -10,
+          "y": 0,
+          "z": 14
+        }
+      },
+      {
+        "cellId": "wfc-preview-2-9",
+        "channels": [],
+        "featureTags": [],
+        "id": "nav_wfc-preview-2-9",
+        "position": {
+          "x": -10,
+          "y": 0,
+          "z": 18
+        }
+      },
+      {
+        "cellId": "wfc-preview-3-0",
+        "channels": [],
+        "featureTags": [],
+        "id": "nav_wfc-preview-3-0",
+        "position": {
+          "x": -6,
+          "y": 0,
+          "z": -18
+        }
+      },
+      {
+        "cellId": "wfc-preview-3-1",
+        "channels": [
+          "road"
+        ],
+        "featureTags": [],
+        "id": "nav_wfc-preview-3-1",
+        "position": {
+          "x": -6,
+          "y": 0,
+          "z": -14
+        }
+      },
+      {
+        "cellId": "wfc-preview-3-2",
+        "channels": [],
+        "featureTags": [],
+        "id": "nav_wfc-preview-3-2",
+        "position": {
+          "x": -6,
+          "y": 0,
+          "z": -10
+        }
+      },
+      {
+        "cellId": "wfc-preview-3-3",
+        "channels": [
+          "road"
+        ],
+        "featureTags": [],
+        "id": "nav_wfc-preview-3-3",
+        "position": {
+          "x": -6,
+          "y": 0,
+          "z": -6
+        }
+      },
+      {
+        "cellId": "wfc-preview-3-4",
+        "channels": [
+          "water"
+        ],
+        "featureTags": [],
+        "id": "nav_wfc-preview-3-4",
+        "position": {
+          "x": -6,
+          "y": 0,
+          "z": -2
+        }
+      },
+      {
+        "cellId": "wfc-preview-3-5",
+        "channels": [
+          "water"
+        ],
+        "featureTags": [],
+        "id": "nav_wfc-preview-3-5",
+        "position": {
+          "x": -6,
+          "y": 0,
+          "z": 2
+        }
+      },
+      {
+        "cellId": "wfc-preview-3-6",
+        "channels": [
+          "water"
+        ],
+        "featureTags": [],
+        "id": "nav_wfc-preview-3-6",
+        "position": {
+          "x": -6,
+          "y": 0,
+          "z": 6
+        }
+      },
+      {
+        "cellId": "wfc-preview-3-7",
+        "channels": [],
+        "featureTags": [],
+        "id": "nav_wfc-preview-3-7",
+        "position": {
+          "x": -6,
+          "y": 0,
+          "z": 10
+        }
+      },
+      {
+        "cellId": "wfc-preview-3-8",
+        "channels": [
+          "road"
+        ],
+        "featureTags": [],
+        "id": "nav_wfc-preview-3-8",
+        "position": {
+          "x": -6,
+          "y": 0,
+          "z": 14
+        }
+      },
+      {
+        "cellId": "wfc-preview-3-9",
+        "channels": [],
+        "featureTags": [],
+        "id": "nav_wfc-preview-3-9",
+        "position": {
+          "x": -6,
+          "y": 0,
+          "z": 18
+        }
+      },
+      {
+        "cellId": "wfc-preview-4-0",
+        "channels": [],
+        "featureTags": [],
+        "id": "nav_wfc-preview-4-0",
+        "position": {
+          "x": -2,
+          "y": 0,
+          "z": -18
+        }
+      },
+      {
+        "cellId": "wfc-preview-4-1",
+        "channels": [
+          "road"
+        ],
+        "featureTags": [],
+        "id": "nav_wfc-preview-4-1",
+        "position": {
+          "x": -2,
+          "y": 0,
+          "z": -14
+        }
+      },
+      {
+        "cellId": "wfc-preview-4-2",
+        "channels": [
+          "water"
+        ],
+        "featureTags": [],
+        "id": "nav_wfc-preview-4-2",
+        "position": {
+          "x": -2,
+          "y": 0,
+          "z": -10
+        }
+      },
+      {
+        "cellId": "wfc-preview-4-3",
+        "channels": [
+          "water",
+          "road"
+        ],
+        "featureTags": [],
+        "id": "nav_wfc-preview-4-3",
+        "position": {
+          "x": -2,
+          "y": 0,
+          "z": -6
+        }
+      },
+      {
+        "cellId": "wfc-preview-4-4",
+        "channels": [
+          "water"
+        ],
+        "featureTags": [],
+        "id": "nav_wfc-preview-4-4",
+        "position": {
+          "x": -2,
+          "y": 0,
+          "z": -2
+        }
+      },
+      {
+        "cellId": "wfc-preview-4-5",
+        "channels": [
+          "water"
+        ],
+        "featureTags": [],
+        "id": "nav_wfc-preview-4-5",
+        "position": {
+          "x": -2,
+          "y": 0,
+          "z": 2
+        }
+      },
+      {
+        "cellId": "wfc-preview-4-6",
+        "channels": [
+          "water"
+        ],
+        "featureTags": [],
+        "id": "nav_wfc-preview-4-6",
+        "position": {
+          "x": -2,
+          "y": 0,
+          "z": 6
+        }
+      },
+      {
+        "cellId": "wfc-preview-4-7",
+        "channels": [],
+        "featureTags": [],
+        "id": "nav_wfc-preview-4-7",
+        "position": {
+          "x": -2,
+          "y": 0,
+          "z": 10
+        }
+      },
+      {
+        "cellId": "wfc-preview-4-8",
+        "channels": [
+          "road"
+        ],
+        "featureTags": [],
+        "id": "nav_wfc-preview-4-8",
+        "position": {
+          "x": -2,
+          "y": 0,
+          "z": 14
+        }
+      },
+      {
+        "cellId": "wfc-preview-4-9",
+        "channels": [],
+        "featureTags": [],
+        "id": "nav_wfc-preview-4-9",
+        "position": {
+          "x": -2,
+          "y": 0,
+          "z": 18
+        }
+      },
+      {
+        "cellId": "wfc-preview-5-0",
+        "channels": [],
+        "featureTags": [],
+        "id": "nav_wfc-preview-5-0",
+        "position": {
+          "x": 2,
+          "y": 0,
+          "z": -18
+        }
+      },
+      {
+        "cellId": "wfc-preview-5-1",
+        "channels": [
+          "road"
+        ],
+        "featureTags": [],
+        "id": "nav_wfc-preview-5-1",
+        "position": {
+          "x": 2,
+          "y": 0,
+          "z": -14
+        }
+      },
+      {
+        "cellId": "wfc-preview-5-2",
+        "channels": [],
+        "featureTags": [],
+        "id": "nav_wfc-preview-5-2",
+        "position": {
+          "x": 2,
+          "y": 0,
+          "z": -10
+        }
+      },
+      {
+        "cellId": "wfc-preview-5-3",
+        "channels": [
+          "road"
+        ],
+        "featureTags": [],
+        "id": "nav_wfc-preview-5-3",
+        "position": {
+          "x": 2,
+          "y": 0,
+          "z": -6
+        }
+      },
+      {
+        "cellId": "wfc-preview-5-4",
+        "channels": [
+          "water"
+        ],
+        "featureTags": [],
+        "id": "nav_wfc-preview-5-4",
+        "position": {
+          "x": 2,
+          "y": 0,
+          "z": -2
+        }
+      },
+      {
+        "cellId": "wfc-preview-5-5",
+        "channels": [
+          "water"
+        ],
+        "featureTags": [],
+        "id": "nav_wfc-preview-5-5",
+        "position": {
+          "x": 2,
+          "y": 0,
+          "z": 2
+        }
+      },
+      {
+        "cellId": "wfc-preview-5-6",
+        "channels": [
+          "water"
+        ],
+        "featureTags": [],
+        "id": "nav_wfc-preview-5-6",
+        "position": {
+          "x": 2,
+          "y": 0,
+          "z": 6
+        }
+      },
+      {
+        "cellId": "wfc-preview-5-7",
+        "channels": [],
+        "featureTags": [],
+        "id": "nav_wfc-preview-5-7",
+        "position": {
+          "x": 2,
+          "y": 0,
+          "z": 10
+        }
+      },
+      {
+        "cellId": "wfc-preview-5-8",
+        "channels": [
+          "road"
+        ],
+        "featureTags": [],
+        "id": "nav_wfc-preview-5-8",
+        "position": {
+          "x": 2,
+          "y": 0,
+          "z": 14
+        }
+      },
+      {
+        "cellId": "wfc-preview-5-9",
+        "channels": [],
+        "featureTags": [],
+        "id": "nav_wfc-preview-5-9",
+        "position": {
+          "x": 2,
+          "y": 0,
+          "z": 18
+        }
+      },
+      {
+        "cellId": "wfc-preview-6-0",
+        "channels": [],
+        "featureTags": [],
+        "id": "nav_wfc-preview-6-0",
+        "position": {
+          "x": 6,
+          "y": 0,
+          "z": -18
+        }
+      },
+      {
+        "cellId": "wfc-preview-6-1",
+        "channels": [
+          "road"
+        ],
+        "featureTags": [],
+        "id": "nav_wfc-preview-6-1",
+        "position": {
+          "x": 6,
+          "y": 0,
+          "z": -14
+        }
+      },
+      {
+        "cellId": "wfc-preview-6-2",
+        "channels": [],
+        "featureTags": [],
+        "id": "nav_wfc-preview-6-2",
+        "position": {
+          "x": 6,
+          "y": 0,
+          "z": -10
+        }
+      },
+      {
+        "cellId": "wfc-preview-6-3",
+        "channels": [
+          "road"
+        ],
+        "featureTags": [],
+        "id": "nav_wfc-preview-6-3",
+        "position": {
+          "x": 6,
+          "y": 0,
+          "z": -6
+        }
+      },
+      {
+        "cellId": "wfc-preview-6-4",
+        "channels": [],
+        "featureTags": [],
+        "id": "nav_wfc-preview-6-4",
+        "position": {
+          "x": 6,
+          "y": 0,
+          "z": -2
+        }
+      },
+      {
+        "cellId": "wfc-preview-6-5",
+        "channels": [
+          "water"
+        ],
+        "featureTags": [],
+        "id": "nav_wfc-preview-6-5",
+        "position": {
+          "x": 6,
+          "y": 0,
+          "z": 2
+        }
+      },
+      {
+        "cellId": "wfc-preview-6-6",
+        "channels": [
+          "water"
+        ],
+        "featureTags": [],
+        "id": "nav_wfc-preview-6-6",
+        "position": {
+          "x": 6,
+          "y": 0,
+          "z": 6
+        }
+      },
+      {
+        "cellId": "wfc-preview-6-7",
+        "channels": [],
+        "featureTags": [],
+        "id": "nav_wfc-preview-6-7",
+        "position": {
+          "x": 6,
+          "y": 0,
+          "z": 10
+        }
+      },
+      {
+        "cellId": "wfc-preview-6-8",
+        "channels": [
+          "road"
+        ],
+        "featureTags": [],
+        "id": "nav_wfc-preview-6-8",
+        "position": {
+          "x": 6,
+          "y": 0,
+          "z": 14
+        }
+      },
+      {
+        "cellId": "wfc-preview-6-9",
+        "channels": [],
+        "featureTags": [],
+        "id": "nav_wfc-preview-6-9",
+        "position": {
+          "x": 6,
+          "y": 0,
+          "z": 18
+        }
+      },
+      {
+        "cellId": "wfc-preview-7-0",
+        "channels": [],
+        "featureTags": [],
+        "id": "nav_wfc-preview-7-0",
+        "position": {
+          "x": 10,
+          "y": 0,
+          "z": -18
+        }
+      },
+      {
+        "cellId": "wfc-preview-7-1",
+        "channels": [
+          "road"
+        ],
+        "featureTags": [],
+        "id": "nav_wfc-preview-7-1",
+        "position": {
+          "x": 10,
+          "y": 0,
+          "z": -14
+        }
+      },
+      {
+        "cellId": "wfc-preview-7-2",
+        "channels": [],
+        "featureTags": [],
+        "id": "nav_wfc-preview-7-2",
+        "position": {
+          "x": 10,
+          "y": 0,
+          "z": -10
+        }
+      },
+      {
+        "cellId": "wfc-preview-7-3",
+        "channels": [
+          "road"
+        ],
+        "featureTags": [],
+        "id": "nav_wfc-preview-7-3",
+        "position": {
+          "x": 10,
+          "y": 0,
+          "z": -6
+        }
+      },
+      {
+        "cellId": "wfc-preview-7-4",
+        "channels": [],
+        "featureTags": [],
+        "id": "nav_wfc-preview-7-4",
+        "position": {
+          "x": 10,
+          "y": 0,
+          "z": -2
+        }
+      },
+      {
+        "cellId": "wfc-preview-7-5",
+        "channels": [],
+        "featureTags": [],
+        "id": "nav_wfc-preview-7-5",
+        "position": {
+          "x": 10,
+          "y": 0,
+          "z": 2
+        }
+      },
+      {
+        "cellId": "wfc-preview-7-6",
+        "channels": [],
+        "featureTags": [],
+        "id": "nav_wfc-preview-7-6",
+        "position": {
+          "x": 10,
+          "y": 0,
+          "z": 6
+        }
+      },
+      {
+        "cellId": "wfc-preview-7-7",
+        "channels": [
+          "road"
+        ],
+        "featureTags": [],
+        "id": "nav_wfc-preview-7-7",
+        "position": {
+          "x": 10,
+          "y": 0,
+          "z": 10
+        }
+      },
+      {
+        "cellId": "wfc-preview-7-8",
+        "channels": [
+          "road"
+        ],
+        "featureTags": [],
+        "id": "nav_wfc-preview-7-8",
+        "position": {
+          "x": 10,
+          "y": 0,
+          "z": 14
+        }
+      },
+      {
+        "cellId": "wfc-preview-7-9",
+        "channels": [
+          "road"
+        ],
+        "featureTags": [],
+        "id": "nav_wfc-preview-7-9",
+        "position": {
+          "x": 10,
+          "y": 0,
+          "z": 18
+        }
+      },
+      {
+        "cellId": "wfc-preview-8-0",
+        "channels": [],
+        "featureTags": [],
+        "id": "nav_wfc-preview-8-0",
+        "position": {
+          "x": 14,
+          "y": 0,
+          "z": -18
+        }
+      },
+      {
+        "cellId": "wfc-preview-8-1",
+        "channels": [
+          "road"
+        ],
+        "featureTags": [],
+        "id": "nav_wfc-preview-8-1",
+        "position": {
+          "x": 14,
+          "y": 0,
+          "z": -14
+        }
+      },
+      {
+        "cellId": "wfc-preview-8-2",
+        "channels": [
+          "road"
+        ],
+        "featureTags": [],
+        "id": "nav_wfc-preview-8-2",
+        "position": {
+          "x": 14,
+          "y": 0,
+          "z": -10
+        }
+      },
+      {
+        "cellId": "wfc-preview-8-3",
+        "channels": [
+          "road"
+        ],
+        "featureTags": [],
+        "id": "nav_wfc-preview-8-3",
+        "position": {
+          "x": 14,
+          "y": 0,
+          "z": -6
+        }
+      },
+      {
+        "cellId": "wfc-preview-8-4",
+        "channels": [
+          "road"
+        ],
+        "featureTags": [],
+        "id": "nav_wfc-preview-8-4",
+        "position": {
+          "x": 14,
+          "y": 0,
+          "z": -2
+        }
+      },
+      {
+        "cellId": "wfc-preview-8-5",
+        "channels": [
+          "road"
+        ],
+        "featureTags": [],
+        "id": "nav_wfc-preview-8-5",
+        "position": {
+          "x": 14,
+          "y": 0,
+          "z": 2
+        }
+      },
+      {
+        "cellId": "wfc-preview-8-6",
+        "channels": [
+          "road"
+        ],
+        "featureTags": [],
+        "id": "nav_wfc-preview-8-6",
+        "position": {
+          "x": 14,
+          "y": 0,
+          "z": 6
+        }
+      },
+      {
+        "cellId": "wfc-preview-8-7",
+        "channels": [
+          "road"
+        ],
+        "featureTags": [],
+        "id": "nav_wfc-preview-8-7",
+        "position": {
+          "x": 14,
+          "y": 0,
+          "z": 10
+        }
+      },
+      {
+        "cellId": "wfc-preview-8-8",
+        "channels": [],
+        "featureTags": [],
+        "id": "nav_wfc-preview-8-8",
+        "position": {
+          "x": 14,
+          "y": 0,
+          "z": 14
+        }
+      },
+      {
+        "cellId": "wfc-preview-8-9",
+        "channels": [
+          "road"
+        ],
+        "featureTags": [],
+        "id": "nav_wfc-preview-8-9",
+        "position": {
+          "x": 14,
+          "y": 0,
+          "z": 18
+        }
+      },
+      {
+        "cellId": "wfc-preview-9-0",
+        "channels": [],
+        "featureTags": [],
+        "id": "nav_wfc-preview-9-0",
+        "position": {
+          "x": 18,
+          "y": 0,
+          "z": -18
+        }
+      },
+      {
+        "cellId": "wfc-preview-9-1",
+        "channels": [],
+        "featureTags": [],
+        "id": "nav_wfc-preview-9-1",
+        "position": {
+          "x": 18,
+          "y": 0,
+          "z": -14
+        }
+      },
+      {
+        "cellId": "wfc-preview-9-2",
+        "channels": [],
+        "featureTags": [],
+        "id": "nav_wfc-preview-9-2",
+        "position": {
+          "x": 18,
+          "y": 0,
+          "z": -10
+        }
+      },
+      {
+        "cellId": "wfc-preview-9-3",
+        "channels": [],
+        "featureTags": [],
+        "id": "nav_wfc-preview-9-3",
+        "position": {
+          "x": 18,
+          "y": 0,
+          "z": -6
+        }
+      },
+      {
+        "cellId": "wfc-preview-9-4",
+        "channels": [],
+        "featureTags": [],
+        "id": "nav_wfc-preview-9-4",
+        "position": {
+          "x": 18,
+          "y": 0,
+          "z": -2
+        }
+      },
+      {
+        "cellId": "wfc-preview-9-5",
+        "channels": [],
+        "featureTags": [],
+        "id": "nav_wfc-preview-9-5",
+        "position": {
+          "x": 18,
+          "y": 0,
+          "z": 2
+        }
+      },
+      {
+        "cellId": "wfc-preview-9-6",
+        "channels": [],
+        "featureTags": [],
+        "id": "nav_wfc-preview-9-6",
+        "position": {
+          "x": 18,
+          "y": 0,
+          "z": 6
+        }
+      },
+      {
+        "cellId": "wfc-preview-9-7",
+        "channels": [
+          "road"
+        ],
+        "featureTags": [],
+        "id": "nav_wfc-preview-9-7",
+        "position": {
+          "x": 18,
+          "y": 0,
+          "z": 10
+        }
+      },
+      {
+        "cellId": "wfc-preview-9-8",
+        "channels": [
+          "road"
+        ],
+        "featureTags": [],
+        "id": "nav_wfc-preview-9-8",
+        "position": {
+          "x": 18,
+          "y": 0,
+          "z": 14
+        }
+      },
+      {
+        "cellId": "wfc-preview-9-9",
+        "channels": [
+          "road"
+        ],
+        "featureTags": [],
+        "id": "nav_wfc-preview-9-9",
+        "position": {
+          "x": 18,
+          "y": 0,
+          "z": 18
+        }
+      }
+    ]
+  },
+  "objects": [],
+  "provenance": {
+    "generationRuns": [
+      {
+        "cellSize": 4,
+        "depth": 10,
+        "seed": 1,
+        "width": 10
+      }
+    ],
+    "generatorVersion": "0.1.0",
+    "source": "editor"
+  }
+}
