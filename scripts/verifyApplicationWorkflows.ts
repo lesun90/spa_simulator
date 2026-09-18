@@ -222,7 +222,17 @@ try {
   await page.mouse.click(550, 736); // Agents tab.
   await page.mouse.click(80, 810); // First available agent asset.
   await page.waitForFunction(() => (window.verificationScenario.verificationHud as unknown as { agentInspector: { context: unknown } }).agentInspector.context !== null);
-  await page.mouse.click(92, 131); // Name field help.
+  const nameHelpPoint = await page.evaluate(() => {
+    const inspector = (window.verificationScenario.verificationHud as unknown as {
+      agentInspector: { helpButtons: Array<{ root: THREE.Object3D }> };
+    }).agentInspector;
+    let node: THREE.Object3D | null = inspector.helpButtons[0].root.children[0] ?? null;
+    let x = 0;
+    let y = 0;
+    while (node) { x += node.position.x; y += node.position.y; node = node.parent; }
+    return { x, y };
+  });
+  await page.mouse.click(nameHelpPoint.x, nameHelpPoint.y); // Name field help.
   await page.waitForFunction(() => (window.verificationScenario.verificationHud as unknown as { agentInspector: { status: { text: string } } }).agentInspector.status.text.includes("name used to identify"));
   observations.agentPlacement = await page.evaluate(async () => {
     const app = window.verificationScenario as unknown as {

@@ -12,6 +12,7 @@ import { disposeObject } from "../src/engine/disposeObject";
 import type { SceneChoice } from "../src/scenario-studio/domain/scene";
 import type { AgentChoice } from "../src/scenario-studio/domain/agent";
 import type { ScenarioRecord } from "../src/scenario-studio/domain/scenarioRecord";
+import { hashControllerSource } from "../src/scenario-studio/domain/controller";
 
 // Built-client walkthrough: real files and middleware, normal canvas clicks/keys.
 // Canvas text is observed for assertions; no application modules/state are injected.
@@ -276,7 +277,7 @@ try {
   const initialSaveBody = await initialSave.text();
   assert.equal(initialSave.status(), 200, initialSaveBody);
   const saved = (JSON.parse(initialSaveBody) as { scenario: ScenarioRecord }).scenario;
-  assert.equal(saved.version, 1);
+  assert.equal(saved.version, 2);
   assert.equal(saved.name, "Harbor traffic");
   assert.equal(saved.engineKey, "rapier");
   assert.equal(saved.agents.length, 2);
@@ -350,7 +351,97 @@ try {
   const finalSaveResponse = page.waitForResponse((item) => item.request().method() === "PUT" && item.url().endsWith(`/scenarios/${encodeURIComponent(saved.id)}`));
   await page.mouse.click(685, 27);
   assert.equal(((await (await finalSaveResponse).json()).scenario as ScenarioRecord).agents.length, 2);
-  observations.persistence = { scenarioId: saved.id, agents: 2, invalidSavePreserved: true, failedOpenPreserved: true, failedSavePreserved: true, newAndReopen: true };
+  const statefulSource = `let ticks = 0; defineController({ onStart(context) { context.log("started"); }, onTick(context) { ticks++; context.command({ throttle: ticks / 10, steering: 0, brake: 0 }); }, onStop(context) { context.log("stopped"); } });`;
+  const script = { id: "review-controller", name: "Review controller", source: statefulSource, contentHash: hashControllerSource(statefulSource) };
+  const assignment = { controllerId: script.id, agentIds: saved.agents.map((agent) => agent.id) };
+  const directStart = await page.request.post("http://127.0.0.1:4174/api/scenario-studio/controller-runs/start", { data: { sessionId: "review-session", generation: 1, controllers: [script], assignments: [assignment], agentIds: assignment.agentIds } });
+  assert.equal(directStart.status(), 200);
+  const directRun = await directStart.json() as { runId: string };
+  const directTick = await page.request.post(`http://127.0.0.1:4174/api/scenario-studio/controller-runs/${directRun.runId}/tick`, { data: { sessionId: "review-session", generation: 1, step: 0, seconds: 0, dt: 1 / 60 } });
+  const directTickBody = await directTick.json() as { commands: Array<{ agentId: string; throttle: number }>; diagnostics: unknown[] };
+  assert.equal(directTickBody.commands.length, 2);
+  assert.deepEqual(directTickBody.commands.map((command) => command.throttle), [0.1, 0.1], "Controller instances did not keep independent state");
+  assert.equal((await page.request.post(`http://127.0.0.1:4174/api/scenario-studio/controller-runs/${directRun.runId}/tick`, { data: { sessionId: "review-session", generation: 99, step: 1, seconds: 1 / 60, dt: 1 / 60 } })).status(), 400, "Stale controller generation was accepted");
+  await page.request.post(`http://127.0.0.1:4174/api/scenario-studio/controller-runs/${directRun.runId}/stop`, { data: { sessionId: "review-session", generation: 1 } });
+  assert.equal((await page.request.post("http://127.0.0.1:4174/api/scenario-studio/controllers/validate", { data: { source: "defineController({ onTick( });" } })).status(), 400, "Syntax error was accepted");
+  assert.equal((await page.request.post("http://127.0.0.1:4174/api/scenario-studio/controllers/validate", { data: { source: "defineController({ async onTick() {} });" } })).status(), 400, "Async controller hook was accepted");
+  assert.equal((await page.request.post("http://127.0.0.1:4174/api/scenario-studio/controllers/validate", { data: { source: "Promise.resolve().then(() => { while (true) {} }); defineController({});" } })).status(), 400, "Unbounded controller microtask escaped validation");
+  const failureSources = [
+    `defineController({ onTick() { throw new Error("runtime marker"); } });`,
+    `defineController({ onTick() { while (true) {} } });`,
+    `defineController({ onTick(context) { context.command({ throttle: 4, steering: 0, brake: 0 }); } });`,
+    `defineController({ onTick(context) { for (let i = 0; i < 40; i++) context.command({ throttle: 0, steering: 0, brake: 0 }); } });`
+  ];
+  const failureDiagnostics: string[] = [];
+  for (const [index, source] of failureSources.entries()) {
+    const controller = { id: `failure-${index}`, name: `Failure ${index}`, source, contentHash: hashControllerSource(source) };
+    const start = await page.request.post("http://127.0.0.1:4174/api/scenario-studio/controller-runs/start", { data: { sessionId: `failure-${index}`, generation: 1, controllers: [controller], assignments: [{ controllerId: controller.id, agentIds: [assignment.agentIds[0]] }], agentIds: assignment.agentIds } });
+    assert.equal(start.status(), 200);
+    const run = await start.json() as { runId: string };
+    const tick = await page.request.post(`http://127.0.0.1:4174/api/scenario-studio/controller-runs/${run.runId}/tick`, { data: { sessionId: `failure-${index}`, generation: 1, step: 0, seconds: 0, dt: 1 / 60 } });
+    const body = await tick.json() as { diagnostics: Array<{ controllerId: string; agentId: string; message: string }> };
+    assert.equal(body.diagnostics[0]?.controllerId, controller.id);
+    assert.equal(body.diagnostics[0]?.agentId, assignment.agentIds[0]);
+    failureDiagnostics.push(body.diagnostics[0].message);
+    await page.request.post(`http://127.0.0.1:4174/api/scenario-studio/controller-runs/${run.runId}/stop`, { data: { sessionId: `failure-${index}`, generation: 1 } });
+  }
+  assert(failureDiagnostics.some((item) => item.includes("runtime marker")));
+  assert(failureDiagnostics.some((item) => item.toLowerCase().includes("timed out")));
+  assert(failureDiagnostics.some((item) => item.includes("between -1 and 1")));
+  assert(failureDiagnostics.some((item) => item.includes("queue exceeds")));
+
+  await page.locator(".scenario-controller-trigger").click();
+  await page.getByRole("button", { name: "New controller" }).click();
+  await page.locator('.scenario-controller-field input[type="text"]').fill("Constant throttle");
+  await page.locator(".scenario-controller-field textarea").fill(`defineController({ onTick(context) { context.command({ throttle: 0.2, steering: 0, brake: 0 }); } });`);
+  const assignmentChecks = page.locator('.scenario-controller-assignments input[type="checkbox"]');
+  assert.equal(await assignmentChecks.count(), 2);
+  await assignmentChecks.nth(0).check();
+  await assignmentChecks.nth(1).check();
+  await page.getByRole("button", { name: "Validate & save" }).click();
+  await page.getByText("Controller source and assignments saved.").waitFor();
+  await page.locator(".scenario-controller-drawer").evaluate((drawer) => { drawer.scrollTop = 0; });
+  await shot("01d-controller-editor");
+  await page.setViewportSize({ width: 390, height: 844 });
+  await shot("01e-controller-editor-mobile");
+  await page.setViewportSize({ width: 1366, height: 900 });
+  await page.getByRole("button", { name: "Close" }).click();
+  const controllerSaveResponse = page.waitForResponse((item) => item.request().method() === "PUT" && item.url().endsWith(`/scenarios/${encodeURIComponent(saved.id)}`));
+  await page.mouse.click(685, 27);
+  const controllerRecord = (await (await controllerSaveResponse).json()).scenario as ScenarioRecord;
+  assert.equal(controllerRecord.controllers.length, 1);
+  assert.equal(controllerRecord.controllerAssignments[0].agentIds.length, 2);
+
+  const finishControllerReopen = answerDialogs([{ type: "prompt", value: saved.id }]);
+  await page.mouse.click(617, 27);
+  await finishControllerReopen();
+  await page.locator(".scenario-controller-trigger").click();
+  assert((await page.locator(".scenario-controller-field textarea").inputValue()).includes("throttle: 0.2"));
+  await page.getByRole("button", { name: "Close" }).click();
+  let runtimeTickCount = 0;
+  let runtimeCommandCount = 0;
+  page.on("response", async (response) => {
+    if (!response.url().includes("/controller-runs/") || !response.url().endsWith("/tick") || response.status() !== 200) return;
+    runtimeTickCount++;
+    runtimeCommandCount = Math.max(runtimeCommandCount, ((await response.json()) as { commands: unknown[] }).commands.length);
+  });
+  await page.mouse.click(321, 67); // Play.
+  await saw("Running");
+  for (let attempt = 0; attempt < 80 && runtimeCommandCount < 2; attempt++) await page.waitForTimeout(100);
+  assert.equal(runtimeCommandCount, 2, "Managed controller did not command both assigned vehicles");
+  await page.mouse.click(389, 67); // Pause.
+  await saw("Paused");
+  await page.waitForTimeout(250);
+  const pausedTicks = runtimeTickCount;
+  await page.waitForTimeout(400);
+  assert.equal(runtimeTickCount, pausedTicks, "Pause accumulated controller ticks");
+  await page.mouse.click(321, 67); // Resume.
+  for (let attempt = 0; attempt < 40 && runtimeTickCount === pausedTicks; attempt++) await page.waitForTimeout(100);
+  assert(runtimeTickCount > pausedTicks, "Resume did not continue controller ticks");
+  await page.mouse.click(457, 67); // Reset.
+  await saw("Ready");
+  observations.persistence = { scenarioId: saved.id, agents: 2, controllers: 1, assignments: 2, invalidSavePreserved: true, failedOpenPreserved: true, failedSavePreserved: true, newAndReopen: true };
+  observations.controllers = { independentState: true, staleRejected: true, syntaxRejected: true, asyncRejected: true, microtaskRejected: true, runtimeError: true, timeout: true, malformedCommand: true, queueLimit: true, twoAgentCommands: runtimeCommandCount, pauseNoBurst: true, reset: true };
   await page.mouse.click(470, 736); // Scenes tab.
   await select("review empty");
   await use();
@@ -527,7 +618,7 @@ try {
   await saw("24m · cell 2m · seed 91");
   assert.deepEqual(errors, [], "Browser errors");
   observations.result = "PASS";
-  observations.checks = ["default ground", "agent-only catalog with duplicate/malformed diagnostics", "two agent types at asset scale", "agent drag ghost and placement", "scenario save/reopen and New", "atomic invalid-save preservation", "failed open and failed save preserve current work", "bridge placement above water", "overlap, water, and steep-surface rejection", "instance selection, transform, duplicate and delete", "scene warning count and successful population cleanup", "case-insensitive search and no matches", "selection preserved through filtering/refresh", "named confirmation, cancel/Escape/backdrop", "unchanged reference no-op", "sample and scene2 loading", "stale content rejected without replacement", "invalid package disabled", "empty geometry preserves previous scene", "groundless geometry without fallback", "orbit/zoom/reset and narrow layout", "root package and source routes", "catalog additions/removals", "rapid hover/refresh/resize"];
+  observations.checks = ["default ground", "agent-only catalog with duplicate/malformed diagnostics", "two agent types at asset scale", "agent drag ghost and placement", "scenario and controller save/reopen and New", "two-agent managed JavaScript with independent state", "controller syntax/runtime/timeout/malformed/stale/queue diagnostics", "Pause without command burst and Reset teardown", "atomic invalid-save preservation", "failed open and failed save preserve current work", "bridge placement above water", "overlap, water, and steep-surface rejection", "instance selection, transform, duplicate and delete", "scene warning count and successful population cleanup", "case-insensitive search and no matches", "selection preserved through filtering/refresh", "named confirmation, cancel/Escape/backdrop", "unchanged reference no-op", "sample and scene2 loading", "stale content rejected without replacement", "invalid package disabled", "empty geometry preserves previous scene", "groundless geometry without fallback", "orbit/zoom/reset and narrow layout", "root package and source routes", "catalog additions/removals", "rapid hover/refresh/resize"];
   observations.browser = await browser.version();
   observations.rendering = "headless Chromium / SwiftShader; functional evidence only, no FPS claim";
   observations.manifestRequests = manifestRequests;

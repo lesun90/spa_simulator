@@ -20,14 +20,14 @@ export class RapierPhysicsWorld implements PhysicsWorld {
   updateAgent(agent: AgentSnapshot, expectedSceneRevision: number): Promise<void> { return this.client.updateAgent(agent, expectedSceneRevision); }
   removeAgent(id: string): Promise<void> { return this.client.removeAgent(id); }
   clearAgents(): Promise<void> { return this.client.clearAgents(); }
-  preparePlayback(agents: readonly AgentPhysicsInput[], controlledAgentId: string | null, expectedSceneRevision: number, generation: number): Promise<void> {
+  preparePlayback(agents: readonly AgentPhysicsInput[], expectedSceneRevision: number, generation: number): Promise<void> {
     // Clone before transfer: chassisHullPoints may be AssetManager's cached array, shared by every instance of
     // that asset — transferring its buffer directly would detach (neuter) the cache for everyone else.
     const copies = agents.map((agent) => agent.chassisHullPoints ? { ...agent, chassisHullPoints: agent.chassisHullPoints.slice() } : agent);
-    return this.client.preparePlayback(copies, controlledAgentId, expectedSceneRevision, generation);
+    return this.client.preparePlayback(copies, expectedSceneRevision, generation);
   }
   stepPlayback(dt: number, generation: number): Promise<PlaybackSnapshot> { return this.client.stepPlayback(dt, generation); }
-  driveControlledAgent(command: DriveCommand, generation: number): Promise<void> { return this.client.driveControlledAgent(command, generation); }
+  driveAgent(agentId: string, command: DriveCommand, generation: number): Promise<void> { return this.client.driveAgent(agentId, command, generation); }
   resetPlayback(agents: readonly AgentSnapshot[], generation: number): Promise<void> { return this.client.resetPlayback(agents, generation); }
   dispose(): Promise<void> { return this.client.dispose(); }
 }

@@ -5,15 +5,38 @@ import type { ScenarioRecord } from "../../src/scenario-studio/domain/scenarioRe
 import { PublishedScenes } from "./publishedScenes";
 import { PublishedAgents } from "./agentCatalog";
 import { ScenarioStore } from "./scenarioStore";
+import { ScriptSupervisor } from "./scriptSupervisor";
+import type { ControllerAssignment, ControllerScript } from "../../src/scenario-studio/domain/controller";
 
 export function scenarioStudioRoutes(assetRoot: string, scenarioRoot: string) {
   const scenes = new PublishedScenes(join(assetRoot, "scenes"));
   const agents = new PublishedAgents(join(assetRoot, "agents"));
   const scenarios = new ScenarioStore(scenarioRoot);
+  const scripts = new ScriptSupervisor();
   return async (request: IncomingMessage, response: ServerResponse): Promise<boolean> => {
     const url = new URL(request.url ?? "/", "http://localhost");
     const method = request.method ?? "GET";
     try {
+      if (method === "POST" && url.pathname === "/api/scenario-studio/controllers/validate") {
+        const body = await readJson<{ source?: unknown }>(request);
+        if (typeof body.source !== "string") throw new Error("Controller source is required.");
+        scripts.validate(body.source);
+        json(response, { valid: true });
+        return true;
+      }
+      if (method === "POST" && url.pathname === "/api/scenario-studio/controller-runs/start") {
+        const body = await readJson<{ sessionId?: string; generation?: number; controllers?: ControllerScript[]; assignments?: ControllerAssignment[]; agentIds?: string[] }>(request);
+        json(response, scripts.start(body.sessionId ?? "", body.generation ?? 0, body.controllers ?? [], body.assignments ?? [], body.agentIds ?? []));
+        return true;
+      }
+      const runMatch = url.pathname.match(/^\/api\/scenario-studio\/controller-runs\/([^/]+)\/(tick|stop)$/);
+      if (method === "POST" && runMatch) {
+        const runId = decodeURIComponent(runMatch[1]);
+        const body = await readJson<{ sessionId?: string; generation?: number; step?: number; seconds?: number; dt?: number }>(request);
+        if (runMatch[2] === "tick") json(response, scripts.tick(runId, body.sessionId ?? "", body.generation ?? 0, body.step ?? -1, body.seconds ?? Number.NaN, body.dt ?? Number.NaN));
+        else json(response, { diagnostics: scripts.stop(runId, body.sessionId, body.generation) });
+        return true;
+      }
       if (method === "GET" && url.pathname === "/api/scenario-studio/scenes") {
         json(response, { scenes: await scenes.list() });
         return true;

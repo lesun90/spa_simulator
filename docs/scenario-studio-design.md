@@ -1,8 +1,8 @@
 # Scenario Studio
 
-Updated 2026-09-17. Source-checked at commit `530ef75` on `main`.
+Updated 2026-09-17. Source-checked at commit `c53cc04` plus the current working tree on `main`.
 
-**Progress: 4 of 11 milestones complete. Next: Milestone 5, typed runtime bus and multi-agent control.**
+**Progress: 5 of 12 milestones complete. Next: Milestone 6, connect external controllers.**
 
 This is the single design, delivery, and review document for `/scenario_studio`. Sections marked **Finished** describe code present in the current checkout. Sections marked **Planned** define future requirements and do not claim implementation.
 
@@ -15,10 +15,10 @@ The target product supports:
 - Published scenes and agents with durable scenario persistence.
 - Rapier simulation with replaceable physics boundaries.
 - Concurrent per-agent control through a typed pub/sub bus.
-- JavaScript controllers managed by the local backend and independently managed Python/C++ services.
+- JavaScript controllers authored in Scenario Studio and managed by the local backend, plus independently managed Python/C++ services.
 - First-class IMU, camera, and LiDAR objects attached to agents or the world.
 - Foxglove-style world and panel visualization driven by messages.
-- Creator scripts, runtime populations, optional distance suspension, a MuJoCo adapter, and measured 100-agent operation as later milestones.
+- Creator scripts, runtime populations, user-selected MuJoCo physics, optional distance suspension, and measured 100-agent operation as later milestones.
 
 The first gateway is local to the simulator host. Durable broker storage, distributed federation, arbitrary unsandboxed browser code, general source-asset editing, buoyancy, two engines solving one interacting world, and live engine switching during playback are outside the current target.
 
@@ -47,12 +47,23 @@ The first gateway is local to the simulator host. Durable broker storage, distri
 
 - Ready, Preparing, Running, Paused, and Error states coordinate Play, Pause, Resume, and Reset.
 - The worker advances fixed `1/60 s` substeps, stamps snapshots by run generation, rejects stale work, and restores authored state on Reset.
-- One `inputEligible` agent accepts validated throttle, steering, and brake input from W/A/S/D, arrow keys, and Space.
+- Keyboard input supplies validated throttle, steering, and brake commands from W/A/S/D, arrow keys, and Space.
 - Vehicles support raycast wheels and an optional physical wheel rig with chassis hulls, steering joints, suspension joints, and wheel bodies.
 - Vehicle tuning scales with authored size; wheel steering, spin, and suspension animate from playback snapshots.
 - Scene material names drive persisted friction overrides and vehicle traction. Saving during playback still writes authored state only.
 
-Current limitations: control remains single-agent and vehicle-shaped. The repository has no runtime message bus, controller process gateway, authored scripts, sensors, object hierarchy, custom visualization plugins, creator scripts, distance suspension, MuJoCo adapter, or 100-agent performance proof.
+### Milestone 5: create and run JavaScript controllers
+
+- [x] Added typed in-process channels, simulation timestamps, session/run metadata, bounded routing, and disposable advertisements and subscriptions.
+- [x] Added registry-built agent components and moved commands into per-agent `VehicleComponent` instances and physics-worker command state.
+- [x] Published lifecycle, ticks, agent state, capabilities, keyboard input, and correlated command status.
+- [x] Added an accessible source editor, version-2 persisted script assets and assignments, version-1 migration, validation diagnostics, and dirty-state protection.
+- [x] Added the backend-managed JavaScript `ScriptSupervisor` and lifecycle SDK with source, import, execution, instance, and queue limits.
+- [x] Routed keyboard and script commands through the same component channels and removed the single-agent physics command path.
+
+Verified outcome: one saved constant-throttle controller runs two assigned vehicles with independent script state. Pause emits no ticks or command burst, Resume continues the run, Reset restores authored state, and reopening restores source and assignments. Syntax, runtime, timeout, malformed-command, queue-limit, and stale-generation failures identify their controller and agent.
+
+Current limitations: managed controllers are local JavaScript only. Users cannot connect external controller services, add sensors, create custom visualizations, generate runtime populations, select MuJoCo, or run a verified 100-agent workload.
 
 ## Architecture rules
 
@@ -249,66 +260,88 @@ Authoring is allowed only in Ready unless a feature defines a safe staged edit. 
 
 ## Remaining work
 
-### Milestone 5: typed runtime bus and multi-agent control
+### Milestone 6: connect external controllers
 
-- [ ] Add typed channels, advertisement, subscription disposal, simulation timestamps, session/run metadata, and bounded in-process routing.
-- [ ] Introduce automatic and explicit agent components plus registry-driven construction.
-- [ ] Move vehicle commands from the one controlled-agent global into per-agent `VehicleComponent` instances.
-- [ ] Publish lifecycle, ticks, agent state, and capabilities.
-- [ ] Remove the single-agent compatibility path after keyboard control works through the bus.
+**User outcome:** A user can run an independently managed service that discovers the active simulation, subscribes to available data, and controls agents through the local backend.
 
-Acceptance: two vehicles accept independent typed commands in one run; invalid and stale commands return diagnostics; Pause and Reset clear controls without leaks or bursts.
+- [ ] Expose the runtime bus through the local WebSocket/protobuf gateway with channel discovery, schemas, client publishing, status, timestamps, and session identity.
+- [ ] Add per-client queue and frame limits, latest-value pressure for controls, reliable lifecycle/status delivery, reconnection, origin policy, authentication policy, and disconnect cleanup.
+- [ ] Add Python and external JavaScript SDKs; keep C++ compatible through generated protobuf bindings.
+- [ ] Show gateway connection, client, session, and diagnostic status in Scenario Studio.
+- [ ] Package the gateway as an explicit production service while retaining contained Vite middleware for development and review.
 
-### Milestone 6: backend gateway and controller SDKs
+Acceptance: start an external Python controller, discover two agents without hardcoded IDs, subscribe to ticks and agent state, and publish independent commands. Disconnect and reconnect without retaining stale commands; Pause, Resume, Reset, and application shutdown leave no client, subscription, or process resources behind.
 
-- [ ] Ship the local WebSocket/protobuf gateway with channel discovery, queue limits, reconnection, origin policy, and cleanup.
-- [ ] Add `ScriptSupervisor` for validated managed JavaScript assets.
-- [ ] Add JavaScript and Python client SDKs; keep C++ compatible through generated protobuf bindings.
-- [ ] Persist script assets and assignments in a migrated scenario record.
-- [ ] Replace the old in-browser worker/Pyodide plan in all implementation decisions.
+### Milestone 7: add and use IMU sensors
 
-Acceptance: two managed JavaScript controllers and one external Python controller can discover agents, consume ticks/state, publish commands, survive Pause/Resume, and stop cleanly on Reset.
+**User outcome:** A user can add an IMU to an agent or the world, configure its frame and rate, inspect its live values, and save the sensor with the scenario.
 
-### Milestone 7: sensor objects and hierarchy
+- [ ] Add `SensorSnapshot`, `SensorPopulation`, parent-frame references, validation, migration, persistence, and stable sensor identities.
+- [ ] Add the scenario hierarchy, sensor Add/Remove controls, inspector, attach/detach behavior, and explicit cascade-or-detach handling when an agent is deleted.
+- [ ] Add `TransformResolver`, sensor registry/runtime ownership, and bodyless, fixed, and dynamic body policies behind physics adapters.
+- [ ] Publish IMU metadata, pose, linear/angular velocity, and acceleration at simulation-time rates with bounded noise configuration.
+- [ ] Add a live IMU panel and expose the same typed data to managed and external controllers.
 
-- [ ] Add `SensorSnapshot`, `SensorPopulation`, frame references, validation, migration, and persistence.
-- [ ] Add `TransformResolver`, sensor factory registry, lifecycle owner, hierarchy UI, inspector, attach/detach, and deletion policy.
-- [ ] Add bodyless, fixed, and dynamic body policies behind physics adapters.
+Acceptance: attach an IMU to a vehicle, view its values while driving, consume the same samples from a controller, save, reopen, and recover the configured local pose and rate. Moving the vehicle moves the sensor frame; invalid parents and cycles cannot commit; repeated Play/Reset releases sampling resources.
 
-Acceptance: standalone and agent-attached sensors save/reopen with stable local/world poses; moving an agent moves its attached bodyless sensor; invalid or dangling parents cannot commit.
+### Milestone 8: use camera and LiDAR data
 
-### Milestone 8: IMU, camera, and LiDAR
+**User outcome:** A user can attach cameras and LiDARs, preview their output, and consume typed image and point-cloud messages in controllers.
 
-- [ ] Extend neutral physics snapshots/queries with kinematics and bounded ray batches.
-- [ ] Implement IMU sampling, camera render targets, and LiDAR point clouds at simulation-time rates.
-- [ ] Add schemas, frame metadata, noise/config validation, previews, backpressure, and complete cleanup.
+- [ ] Add camera and LiDAR sensor factories using the hierarchy, frame resolution, body policy, persistence, and lifecycle introduced by Milestone 7.
+- [ ] Add owned camera render targets, bounded image encoding, batched physics rays, point-cloud generation, and declared coordinate frames.
+- [ ] Add configuration for rate, resolution, range, field of view, sampling density, noise, and output limits.
+- [ ] Add live previews, message schemas, backpressure, diagnostics, and cleanup for GPU targets, ray buffers, image buffers, and pending samples.
 
-Acceptance: each sensor publishes typed, timestamped data from the correct frame; configured rates remain tied to simulation time; repeated Play/Reset returns resources to baseline.
+Acceptance: attach a camera and LiDAR to a moving vehicle, view both previews, and consume timestamped images and point clouds from a controller. Samples follow the configured frame and simulation-time rate. Invalid configuration preserves the last valid setup, and repeated Play/Reset returns owned resources to baseline.
 
-### Milestone 9: custom visualization
+### Milestone 9: create custom visualizations
 
-- [ ] Implement declarative world layers and contained panels.
-- [ ] Add schema-driven built-in visualizers and a custom plugin registry.
-- [ ] Add Worker/iframe isolation, quotas, lifecycle diagnostics, and persisted configuration.
+**User outcome:** A user can choose available message channels and create a saved world overlay or panel that updates during simulation.
 
-Acceptance: an external script visualizes a path and point cloud, a custom panel displays camera messages, and removing or resetting a plugin releases all subscriptions, DOM, and GPU resources.
+- [ ] Add a visualization browser/editor that lists compatible channels and creates persisted visualization instances from built-in or user-authored plugins.
+- [ ] Implement declarative world layers for poses, lines, paths, boxes, point clouds, frustums, markers, and labels.
+- [ ] Implement contained panels for images, plots, tables, state, and diagnostics with bounded history.
+- [ ] Run user-authored transforms in Workers and panel code in sandboxed iframes with capability-limited APIs, quotas, and useful diagnostics.
+- [ ] Add schema-driven `VisualizationRegistry` selection and `VisualizationHost` ownership for subscriptions, DOM, Three.js objects, and GPU resources.
 
-### Milestone 10: creator scripts and runtime populations
+Acceptance: select agent-state data to draw a path, select LiDAR data to draw a point cloud, and create a panel for camera images. Save and reopen all three. Removing a visualization, disconnecting its source, or resetting the run clears its subscriptions and owned resources without affecting the source data.
 
-- [ ] Add declared dependencies, generation-bound runtime identities, spawn/configure/despawn commands, and stable ordering.
-- [ ] Stage render, physics, controller, sensor, and visualization resources transactionally.
-- [ ] Remove all runtime mutations on Reset and recover cleanly from partial failures.
+### Milestone 10: generate runtime populations
 
-Acceptance: a creator spawns and removes agents with controllers and sensors; failed creation leaves no partial resources; Reset restores the authored population.
+**User outcome:** A user can write a creator script that spawns, configures, controls, and removes agents and sensors while a scenario runs.
 
-### Milestone 11: engine and scale hardening
+- [ ] Add creator-script assets, dependency declarations, editor diagnostics, and assignments using the existing controller workflow.
+- [ ] Add generation-bound runtime identities and typed spawn, configure, assign-controller, attach-sensor, and despawn commands.
+- [ ] Stage rendering, physics, controller, sensor, and visualization resources as one transaction before exposing a runtime object.
+- [ ] Show authored and runtime-created objects distinctly in the hierarchy while keeping runtime mutations out of persisted authored state.
+- [ ] Tear down creator state on Reset, replacement, failure, disconnect, and disposal in stable order.
 
-- [ ] Add measured distance suspension only if active-world cost requires it.
-- [ ] Implement and verify the MuJoCo adapter when a scenario requires behavior Rapier cannot provide.
-- [ ] Profile representative scenes and optimize measured bottlenecks for 100 simultaneously active vehicles.
-- [ ] Harden recording, diagnostics, reconnect behavior, lifecycle cleanup, and cross-language compatibility.
+Acceptance: write a creator that spawns a configured vehicle with a controller and sensor, observes it through a visualization, then removes it. A failed creation leaves no partial object or resource. Reset removes all runtime mutations, and the next Play recreates the same deterministic population.
 
-Performance acceptance: after preload and warmup, run a representative 100-agent workload for 60 seconds in a foreground hardware-accelerated browser. Record browser, viewport/DPR, CPU/GPU, scene complexity, engine versions, substeps, controller/sensor costs, backlog, active counts, memory, FPS, and simulation/wall-time ratio. Target average FPS at least 58, p95 frame interval at most 25 ms, and simulation/wall-time ratio at least 0.95. Headless software rendering proves behavior, not hardware performance.
+### Milestone 11: choose a simulation engine
+
+**User outcome:** A user can choose Rapier or MuJoCo for a scenario and understand whether the authored scenario is supported before starting playback.
+
+- [ ] Implement the MuJoCo adapter through official browser WASM bindings behind the existing neutral physics boundary.
+- [ ] Add engine selection, capability reporting, preflight validation, persisted engine configuration, and clear unsupported-feature diagnostics.
+- [ ] Preserve stable domain IDs across MuJoCo model rebuilds and commit a prepared replacement only after every required body, joint, material, and sensor query succeeds.
+- [ ] Keep Rapier as the default; never switch engines or downgrade behavior without an explicit user action.
+- [ ] Verify equivalent lifecycle, command, sensor, reset, replacement, failure-preservation, and cleanup behavior across both engines where their declared capabilities overlap.
+
+Acceptance: save one scenario with Rapier and another with MuJoCo, reopen each, and run supported controllers and sensors. An unsupported configuration blocks Play with actionable diagnostics while preserving the authored scenario and prior prepared world. Switching engines in Ready rebuilds successfully or leaves the previous engine active.
+
+### Milestone 12: run large scenarios reliably
+
+**User outcome:** A user can run, inspect, and diagnose a representative 100-agent scenario without unbounded latency, resource growth, or hidden simulation slowdown.
+
+- [ ] Add runtime metrics for frame interval, simulation/wall-time ratio, step backlog, controller/sensor cost, message pressure, active/suspended counts, and memory/resource ownership.
+- [ ] Add recording and diagnostic export for lifecycle, commands, state, sensor rates, disconnects, and dropped/coalesced messages.
+- [ ] Profile representative saved scenarios and optimize measured bottlenecks across rendering, physics, messaging, controllers, sensors, and visualization.
+- [ ] Add distance suspension only if measurements show inactive distant agents prevent the target workload from meeting its budget; expose its state and preserve safe step-boundary behavior.
+- [ ] Harden reconnect, Reset, replacement, error recovery, and cross-language compatibility under sustained load.
+
+Acceptance: after preload and warmup, run a representative 100-agent workload for 60 seconds in a foreground hardware-accelerated browser. Record browser, viewport/DPR, CPU/GPU, scene complexity, engine versions, substeps, controller/sensor costs, backlog, active counts, memory, FPS, and simulation/wall-time ratio. Target average FPS at least 58, p95 frame interval at most 25 ms, and simulation/wall-time ratio at least 0.95. The user can export diagnostics and identify throttled, suspended, disconnected, or failing participants. Headless software rendering proves behavior, not hardware performance.
 
 ## Verification
 
@@ -332,7 +365,7 @@ docker compose run --rm --no-deps -p 127.0.0.1:4173:4173 app sh -c 'npm run revi
 
 Verify behavior through product controls rather than console-injected state. Every milestone covers success, failure preservation, stale-work rejection, Reset/replacement/disposal, and affected application regressions. Do not add unit tests unless requested. A passing headless walkthrough does not establish hardware FPS.
 
-The completed-work summary above is source-verified at `530ef75`. Historical browser and test counts from earlier reviews are intentionally omitted; run the commands above for current evidence before making a release claim.
+The completed-work summary above is source-verified at `c53cc04` plus the current working tree. Historical browser and test counts from earlier reviews are intentionally omitted; run the commands above for current evidence before making a release claim.
 
 ## Runtime references
 

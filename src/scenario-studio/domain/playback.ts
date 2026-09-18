@@ -1,7 +1,7 @@
 /** Legal playback states and the transitions `ScenarioSession` enforces between them. */
 export type PlaybackState = "ready" | "preparing" | "running" | "paused" | "error";
 
-/** Engine-neutral control input for the single controlled agent. */
+/** Engine-neutral control input for one vehicle agent. */
 export interface DriveCommand {
   readonly throttle: number;
   readonly steering: number;

@@ -6,11 +6,14 @@ import type { AgentDraft, AgentPresenter, AgentSnapshot, PlacementPreview, Ray3,
 import { agentFootprintContainsPoint, agentSupportsFootprint, assetEntry, authoredBounds, placementOriginY, scaledAgentCollision, validateAgentDraft } from "./agent";
 import { AgentPopulation } from "./AgentPopulation";
 import type { DriveCommand, PlaybackState } from "./playback";
-import { validateDriveCommand } from "./playback";
 import type { ScenePresentation, ScenePresenter } from "./ScenePresentation";
 import { ScenarioDocument } from "./ScenarioDocument";
 import { sameSceneReference, type SceneReference } from "./scene";
 import { validateScenarioRecord, type ScenarioRecord } from "./scenarioRecord";
+import { AgentComponentRegistry, type AgentComponent, type CommandContext } from "../runtime/AgentComponents";
+import { InProcessMiddleware, type Advertisement, type SimulationTime } from "../runtime/Middleware";
+import { agentStateChannel, capabilityChannel, commandStatusChannel, keyboardChannel, lifecycleChannel, tickChannel, vehicleControlChannel, type CommandStatusMessage } from "../runtime/messages";
+import type { ControllerDiagnostic, ControllerRuntime } from "../runtime/ManagedControllerClient";
 
 /** Coordinates transactional scene and agent commits while rejecting obsolete asynchronous work. */
 export class ScenarioSession {
@@ -23,7 +26,14 @@ export class ScenarioSession {
   private sceneRevision = 0;
   private playbackState: PlaybackState = "ready";
   private playbackGeneration = 0;
-  private controlledAgentId: string | null = null;
+  private readonly middleware = new InProcessMiddleware();
+  private readonly componentRegistry = new AgentComponentRegistry();
+  private components = new Map<string, readonly AgentComponent[]>();
+  private runtimeAdvertisements: Advertisement[] = [];
+  private readonly permanentAdvertisements: Advertisement[];
+  private readonly sessionId = typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `session-${Date.now()}`;
+  private playbackStep = 0;
+  private playbackTime = 0;
 
   constructor(
     readonly document: ScenarioDocument,
@@ -34,19 +44,21 @@ export class ScenarioSession {
     private readonly engineKey: string,
     private readonly agentPresenter: AgentPresenter,
     private readonly assetManager: AssetManager,
+    private readonly controllers: ControllerRuntime,
     private readonly onPopulationChanged: (agents: readonly AgentSnapshot[]) => void = () => {},
-    private readonly onPlaybackChanged: (state: PlaybackState, message?: string) => void = () => {}
+    private readonly onPlaybackChanged: (state: PlaybackState, message?: string) => void = () => {},
+    private readonly onControllerDiagnostic: (diagnostic: ControllerDiagnostic | CommandStatusMessage) => void = () => {}
   ) {
     this.presentation = presenter.createDefault();
     presenter.show(this.presentation);
     this.physics = physics;
     this.ready = physics.then(async (world) => { this.sceneRevision = await world.replaceScene(this.presentation.geometry, this.document.materialFriction); });
     void this.ready.catch(() => {});
+    this.permanentAdvertisements = [this.middleware.advertise(lifecycleChannel), this.middleware.advertise(tickChannel), this.middleware.advertise(keyboardChannel), this.middleware.advertise(commandStatusChannel)];
   }
 
   get agents(): readonly AgentSnapshot[] { return this.population.snapshots(); }
   get playback(): PlaybackState { return this.playbackState; }
-  get controlledAgent(): string | null { return this.controlledAgentId; }
 
   async open(record: ScenarioRecord): Promise<void> {
     if (this.disposed) throw new Error("Scenario session was disposed.");
@@ -204,65 +216,75 @@ export class ScenarioSession {
     if (this.disposed) throw new Error("Scenario session was disposed.");
     if (this.playbackState === "running" || this.playbackState === "preparing") return;
     if (this.playbackState === "paused") {
-      this.playbackState = "running";
-      this.onPlaybackChanged(this.playbackState);
+      const context = this.commandContext();
+      for (const components of this.components.values()) for (const component of components) component.setContext(context);
+      this.setPlaybackState("running");
       return;
     }
     if (this.playbackState !== "ready") throw new Error("Reset the scenario before playing again.");
-    this.playbackState = "preparing";
-    this.onPlaybackChanged(this.playbackState);
     const generation = ++this.playbackGeneration;
+    this.setPlaybackState("preparing");
     const agents = this.agents;
-    const controlledAgentId = agents.find((agent) => agent.inputEligible)?.id ?? null;
     try {
       const world = await this.physics;
       await this.ready;
       if (this.disposed || generation !== this.playbackGeneration) return;
       const physicsAgents = await this.resolvePhysicsInputs(agents);
       if (this.disposed || generation !== this.playbackGeneration) return;
-      await world.preparePlayback(physicsAgents, controlledAgentId, this.sceneRevision, generation);
+      await world.preparePlayback(physicsAgents, this.sceneRevision, generation);
       if (this.disposed || generation !== this.playbackGeneration) {
         await world.resetPlayback(agents, generation).catch(() => {});
         return;
       }
-      this.controlledAgentId = controlledAgentId;
-      this.playbackState = "running";
-      this.onPlaybackChanged(this.playbackState);
+      this.middleware.beginRun(this.sessionId, generation);
+      this.playbackStep = 0;
+      this.playbackTime = 0;
+      this.createRuntimeComponents(agents, generation);
+      const diagnostics = await this.controllers.start(this.sessionId, generation, this.document.controllers, this.document.controllerAssignments, agents.map((agent) => agent.id));
+      if (this.disposed || generation !== this.playbackGeneration) return;
+      for (const diagnostic of diagnostics) this.onControllerDiagnostic(diagnostic);
+      this.setPlaybackState("running");
     } catch (error) {
       if (this.disposed || generation !== this.playbackGeneration) return;
-      this.playbackState = "error";
-      this.controlledAgentId = null;
-      this.onPlaybackChanged(this.playbackState, error instanceof Error ? error.message : "Play failed.");
+      this.disposeRuntimeComponents();
+      await this.controllers.stop();
+      const world = await this.physics.catch(() => null);
+      await world?.resetPlayback(agents, generation).catch(() => {});
+      this.setPlaybackState("error", error instanceof Error ? error.message : "Play failed.");
     }
   }
 
   pause(): void {
     if (this.playbackState !== "running") return;
-    this.playbackState = "paused";
-    this.onPlaybackChanged(this.playbackState);
+    this.clearComponentCommands();
+    this.setPlaybackState("paused");
   }
 
   reset(): void {
     if (this.disposed || this.playbackState === "ready") return;
     const generation = ++this.playbackGeneration;
-    this.playbackState = "ready";
-    this.controlledAgentId = null;
+    this.disposeRuntimeComponents();
+    void this.controllers.stop().then((diagnostics) => diagnostics.forEach((diagnostic) => this.onControllerDiagnostic(diagnostic)));
     const agents = this.agents;
     for (const agent of agents) this.agentPresenter.update(agent);
-    this.onPlaybackChanged(this.playbackState);
+    this.playbackStep = 0;
+    this.playbackTime = 0;
+    this.setPlaybackState("ready");
     void this.physics.then((world) => world.resetPlayback(agents, generation)).catch(() => {});
   }
 
-  drive(command: DriveCommand): void {
+  driveWithKeyboard(command: DriveCommand): void {
     if (this.disposed || this.playbackState !== "running") return;
-    const generation = this.playbackGeneration;
-    const validated = validateDriveCommand(command);
-    void this.physics.then((world) => world.driveControlledAgent(validated, generation)).catch((error) => {
-      if (this.disposed || generation !== this.playbackGeneration) return;
-      this.playbackState = "error";
-      this.controlledAgentId = null;
-      this.onPlaybackChanged(this.playbackState, error instanceof Error ? error.message : "Drive command failed.");
-    });
+    const target = this.agents.find((agent) => agent.inputEligible && this.components.get(agent.id)?.some((component) => component.key === "vehicle"));
+    if (!target) return;
+    const context = this.commandContext();
+    this.middleware.publish(vehicleControlChannel(target.id), { type: "vehicle-command", correlationId: `keyboard:${context.step}`, source: "keyboard", sessionId: this.sessionId, generation: this.playbackGeneration, targetStep: context.step + 1, ...command }, context.time);
+  }
+
+  publishKeyboard(code: string, pressed: boolean): void {
+    if (this.playbackState !== "running") return;
+    const context = this.commandContext();
+    this.middleware.publish(keyboardChannel, { type: "keyboard", code, pressed }, context.time);
   }
 
   updateMaterialFriction(): void {
@@ -274,14 +296,28 @@ export class ScenarioSession {
     const generation = this.playbackGeneration;
     try {
       const world = await this.physics;
+      const context = this.commandContext(dt);
+      for (const components of this.components.values()) for (const component of components) component.setContext(context);
+      this.middleware.publish(tickChannel, { type: "tick", generation, step: this.playbackStep, timeSeconds: this.playbackTime, dt }, context.time);
+      const controllerResult = await this.controllers.tick(this.playbackStep, this.playbackTime, dt);
+      if (this.disposed || generation !== this.playbackGeneration || this.playbackState !== "running") return null;
+      for (const diagnostic of controllerResult.diagnostics) this.onControllerDiagnostic(diagnostic);
+      for (const command of controllerResult.commands) this.middleware.publish(vehicleControlChannel(command.agentId), command.message, context.time);
+      await Promise.all([...this.components.values()].flatMap((components) => components.map((component) => component.flush())));
       const snapshot = await world.stepPlayback(dt, generation);
       if (this.disposed || generation !== this.playbackGeneration) return null;
+      this.playbackStep++;
+      this.playbackTime += dt;
+      const stateTime = { step: this.playbackStep, seconds: this.playbackTime };
+      for (const transform of snapshot.transforms) this.middleware.publish(agentStateChannel(transform.id), { type: "agent-state", agentId: transform.id, transform }, stateTime);
       return snapshot.transforms;
     } catch (error) {
       if (this.disposed || generation !== this.playbackGeneration) return null;
-      this.playbackState = "error";
-      this.controlledAgentId = null;
-      this.onPlaybackChanged(this.playbackState, error instanceof Error ? error.message : "Playback step failed.");
+      this.disposeRuntimeComponents();
+      await this.controllers.stop();
+      const world = await this.physics.catch(() => null);
+      await world?.resetPlayback(this.agents, generation).catch(() => {});
+      this.setPlaybackState("error", error instanceof Error ? error.message : "Playback step failed.");
       return null;
     }
   }
@@ -302,11 +338,14 @@ export class ScenarioSession {
   }
 
   private resetPlaybackState(): void {
-    if (this.playbackState === "ready" && this.controlledAgentId === null) return;
-    ++this.playbackGeneration;
-    this.playbackState = "ready";
-    this.controlledAgentId = null;
-    this.onPlaybackChanged(this.playbackState);
+    if (this.playbackState === "ready") return;
+    const generation = ++this.playbackGeneration;
+    this.disposeRuntimeComponents();
+    void this.controllers.stop();
+    this.playbackStep = 0;
+    this.playbackTime = 0;
+    this.setPlaybackState("ready");
+    void this.physics.then((world) => world.resetPlayback(this.agents, generation)).catch(() => {});
   }
 
   private async commitAgent(draft: AgentDraft, revision: number, request: number): Promise<string> {
@@ -330,11 +369,47 @@ export class ScenarioSession {
     this.onPopulationChanged(this.agents);
   }
 
+  private createRuntimeComponents(agents: readonly AgentSnapshot[], generation: number): void {
+    this.disposeRuntimeComponents();
+    const time = { seconds: 0, step: 0 };
+    for (const agent of agents) {
+      const state = agentStateChannel(agent.id);
+      const capabilities = capabilityChannel(agent.id);
+      this.runtimeAdvertisements.push(this.middleware.advertise(state), this.middleware.advertise(capabilities));
+      const components = this.componentRegistry.create(agent, this.middleware, this.physics, (status, statusTime) => {
+        this.middleware.publish(commandStatusChannel, status, statusTime);
+        this.onControllerDiagnostic(status);
+      });
+      this.components.set(agent.id, components);
+      this.middleware.publish(capabilities, { type: "capabilities", agentId: agent.id, capabilities: components.flatMap((component) => component.capabilities) }, time);
+    }
+    const context: CommandContext = { sessionId: this.sessionId, generation, step: 0, time };
+    for (const components of this.components.values()) for (const component of components) component.setContext(context);
+  }
+
+  private clearComponentCommands(): void { for (const components of this.components.values()) for (const component of components) component.clear(); }
+  private disposeRuntimeComponents(): void {
+    for (const components of this.components.values()) for (const component of components) component.dispose();
+    this.components.clear();
+    for (const advertisement of this.runtimeAdvertisements.splice(0)) advertisement.dispose();
+  }
+  private commandContext(_dt = 0): CommandContext { return { sessionId: this.sessionId, generation: this.playbackGeneration, step: this.playbackStep, time: { seconds: this.playbackTime, step: this.playbackStep } }; }
+  private setPlaybackState(state: PlaybackState, message?: string): void {
+    this.playbackState = state;
+    this.onPlaybackChanged(state, message);
+    this.publishLifecycle();
+  }
+  private publishLifecycle(): void { this.middleware.publish(lifecycleChannel, { type: "lifecycle", state: this.playbackState, sessionId: this.sessionId, generation: this.playbackGeneration }, { seconds: this.playbackTime, step: this.playbackStep }); }
+
   async dispose(): Promise<void> {
     if (this.disposed) return;
     this.disposed = true;
     ++this.generation;
     ++this.playbackGeneration;
+    this.disposeRuntimeComponents();
+    for (const advertisement of this.permanentAdvertisements) advertisement.dispose();
+    this.middleware.dispose();
+    await this.controllers.stop();
     this.presentation.dispose();
     this.population.clear();
     this.agentPresenter.clear();

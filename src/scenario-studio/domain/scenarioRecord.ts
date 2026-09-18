@@ -1,7 +1,8 @@
 import { DEFAULT_VEHICLE_PHYSICS_MODEL, DEFAULT_VEHICLE_TUNING, validateAgentDraft, type AgentAssetReference, type AgentSnapshot, type Vector3Value, type VehiclePhysicsModel, type VehicleTuning, type WheelDescriptor } from "./agent";
 import type { SceneReference } from "./scene";
+import { validateControllerAssignment, validateControllerScript, type ControllerAssignment, type ControllerScript } from "./controller";
 
-export const SCENARIO_RECORD_VERSION = 1 as const;
+export const SCENARIO_RECORD_VERSION = 2 as const;
 
 export interface ScenarioRecord {
   readonly version: typeof SCENARIO_RECORD_VERSION;
@@ -11,6 +12,8 @@ export interface ScenarioRecord {
   readonly engineKey: string;
   readonly agents: readonly AgentSnapshot[];
   readonly materialFriction: Readonly<Record<string, number>>;
+  readonly controllers: readonly ControllerScript[];
+  readonly controllerAssignments: readonly ControllerAssignment[];
 }
 
 export interface ScenarioSummary {
@@ -22,7 +25,7 @@ export interface ScenarioSummary {
 
 export function validateScenarioRecord(value: unknown): ScenarioRecord {
   const source = record(value, "Scenario record");
-  if (source.version !== SCENARIO_RECORD_VERSION) throw new Error(`Unsupported scenario record version ${String(source.version)}.`);
+  if (source.version !== 1 && source.version !== SCENARIO_RECORD_VERSION) throw new Error(`Unsupported scenario record version ${String(source.version)}.`);
   const id = identity(source.id, "Scenario ID");
   const name = requiredText(source.name, "Scenario name", 80);
   const engineKey = identity(source.engineKey, "Physics engine key");
@@ -50,7 +53,12 @@ export function validateScenarioRecord(value: unknown): ScenarioRecord {
       support = agents.find((candidate) => candidate.id === support!.id)?.pose.support;
     }
   }
-  return freezeRecord({ version: SCENARIO_RECORD_VERSION, id, name, sceneReference, engineKey, agents, materialFriction });
+  const controllers = source.version === 1 || source.controllers === undefined ? [] : array(source.controllers, "Scenario controllers").map(validateControllerScript);
+  const controllerIds = new Set(controllers.map((controller) => controller.id));
+  if (controllerIds.size !== controllers.length) throw new Error("Scenario contains duplicate controller IDs.");
+  const controllerAssignments = source.version === 1 || source.controllerAssignments === undefined ? [] : array(source.controllerAssignments, "Controller assignments").map((assignment) => validateControllerAssignment(assignment, controllerIds, ids));
+  if (new Set(controllerAssignments.map((assignment) => assignment.controllerId)).size !== controllerAssignments.length) throw new Error("A controller may have only one assignment record.");
+  return freezeRecord({ version: SCENARIO_RECORD_VERSION, id, name, sceneReference, engineKey, agents, materialFriction, controllers, controllerAssignments });
 }
 
 export function validateScenarioSummary(value: unknown): ScenarioSummary {
@@ -74,7 +82,9 @@ export function freezeRecord(value: ScenarioRecord): ScenarioRecord {
     engineKey: value.engineKey,
     sceneReference: value.sceneReference ? Object.freeze({ ...value.sceneReference }) : null,
     agents: Object.freeze(value.agents.map((agent) => Object.freeze({ id: agent.id, ...validateAgentDraft(agent) }))),
-    materialFriction: Object.freeze({ ...value.materialFriction })
+    materialFriction: Object.freeze({ ...value.materialFriction }),
+    controllers: Object.freeze(value.controllers.map(validateControllerScript)),
+    controllerAssignments: Object.freeze(value.controllerAssignments.map((assignment) => Object.freeze({ controllerId: assignment.controllerId, agentIds: Object.freeze([...assignment.agentIds]) })))
   });
 }
 
@@ -204,6 +214,11 @@ function materialFrictionMap(value: unknown): Record<string, number> {
 function record(value: unknown, label: string): Record<string, unknown> {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error(`${label} must be an object.`);
   return value as Record<string, unknown>;
+}
+
+function array(value: unknown, label: string): unknown[] {
+  if (!Array.isArray(value)) throw new Error(`${label} must be an array.`);
+  return value;
 }
 
 function vector(value: unknown, label: string): Vector3Value {

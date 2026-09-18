@@ -53,12 +53,12 @@ export interface PhysicsWorld extends PlacementSurface {
   updateAgent(agent: AgentSnapshot, expectedSceneRevision: number): Promise<void>;
   removeAgent(id: string): Promise<void>;
   clearAgents(): Promise<void>;
-  /** Builds live bodies for every authored agent from their baseline snapshot. `controlledAgentId` names the one agent, if any, that accepts drive commands. */
-  preparePlayback(agents: readonly AgentPhysicsInput[], controlledAgentId: string | null, expectedSceneRevision: number, generation: number): Promise<void>;
+  /** Builds live bodies for every authored agent from their baseline snapshot. */
+  preparePlayback(agents: readonly AgentPhysicsInput[], expectedSceneRevision: number, generation: number): Promise<void>;
   /** Advances fixed 1/60 s substeps to cover wall-clock `dt` and returns transforms stamped with `generation`; rejects once `generation` is no longer the active run. */
   stepPlayback(dt: number, generation: number): Promise<PlaybackSnapshot>;
-  /** Applies a validated throttle/steering/brake command to the controlled agent; rejects once `generation` is no longer the active run. */
-  driveControlledAgent(command: DriveCommand, generation: number): Promise<void>;
+  /** Applies a validated throttle/steering/brake command to one agent; rejects stale runs and invalid targets. */
+  driveAgent(agentId: string, command: DriveCommand, generation: number): Promise<void>;
   /** Releases live bodies and restores the authored, query-only colliders for `agents`. Safe to call repeatedly. */
   resetPlayback(agents: readonly AgentSnapshot[], generation: number): Promise<void>;
   dispose(): Promise<void>;

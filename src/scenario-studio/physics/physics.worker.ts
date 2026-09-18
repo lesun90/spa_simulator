@@ -59,8 +59,7 @@ const nonSupportingHandles = new Set<number>();
 const agentColliders = new Map<string, RAPIER.Collider>();
 
 let playbackGeneration = 0;
-let controlledBodyId: string | null = null;
-let driveCommand: DriveCommand = NEUTRAL_DRIVE_COMMAND;
+const driveCommands = new Map<string, DriveCommand>();
 let stepAccumulator = 0;
 const playbackBodies = new Map<string, PlaybackBody>();
 /** The agents the live bodies were built from, so the step loop can read their tuning without re-sending them each step. */
@@ -87,9 +86,9 @@ async function dispatch(request: PhysicsWorkerRequest): Promise<unknown> {
     case "updateAgent": return updateAgent(operation.agent, operation.expectedSceneRevision);
     case "removeAgent": return removeAgent(operation.id);
     case "clearAgents": return clearAgents();
-    case "preparePlayback": return preparePlayback(operation.agents, operation.controlledAgentId, operation.expectedSceneRevision, operation.generation);
+    case "preparePlayback": return preparePlayback(operation.agents, operation.expectedSceneRevision, operation.generation);
     case "stepPlayback": return stepPlayback(operation.dt, operation.generation);
-    case "driveControlledAgent": return driveControlledAgent(operation.command, operation.generation);
+    case "driveAgent": return driveAgent(operation.agentId, operation.command, operation.generation);
     case "resetPlayback": return resetPlayback(operation.agents, operation.generation);
     case "dispose": dispose(); return undefined;
   }
@@ -253,13 +252,12 @@ function removeAgent(id: string): void {
 
 function clearAgents(): void { for (const id of [...agentColliders.keys()]) removeAgent(id); }
 
-function preparePlayback(agents: readonly AgentPhysicsInput[], controlledAgentId: string | null, expectedSceneRevision: number, generation: number): void {
+function preparePlayback(agents: readonly AgentPhysicsInput[], expectedSceneRevision: number, generation: number): void {
   assertRevision(expectedSceneRevision);
   const active = requireWorld();
   teardownPlaybackBodies(active);
   for (const collider of agentColliders.values()) active.removeCollider(collider, false);
   agentColliders.clear();
-  let controlledKind: "generic" | "vehicle" | null = null;
   for (const agent of agents) {
     const kind: "generic" | "vehicle" = agent.asset.category === "vehicles" ? "vehicle" : "generic";
     const collision = scaledAgentCollision(agent);
@@ -274,19 +272,18 @@ function preparePlayback(agents: readonly AgentPhysicsInput[], controlledAgentId
     if (drive && agent.vehiclePhysicsModel === "physical") {
       const scaled = scaledVehicleTuning(drive.tuning, agent.mass, agent.scale);
       const body = buildPhysicalChassisBody(active, agent, center, agent.pose.headingRadians, agent.chassisHullPoints, scaled.mass);
-      body.setLinearDamping(agent.id === controlledAgentId ? 0.02 : 0.15);
-      body.setAngularDamping(agent.id === controlledAgentId ? 0.3 : 0.6);
+      body.setLinearDamping(0.02);
+      body.setAngularDamping(0.3);
       const wheels = drive.wheels.map((wheel) => buildPhysicalWheelRig(active, body, agent, localCenter, wheel, scaled));
       playbackBodies.set(agent.id, { body, kind, localCenter, rig: { wheels }, wheelCount: wheels.length, tuning: scaled });
-      if (agent.id === controlledAgentId) controlledKind = kind;
       continue;
     }
 
     const body = active.createRigidBody(RAPIER.RigidBodyDesc.dynamic()
       .setTranslation(center.x, center.y, center.z)
       .setRotation(rotation(agent.pose.headingRadians))
-      .setLinearDamping(drive && agent.id === controlledAgentId ? 0.02 : 0.15)
-      .setAngularDamping(drive && agent.id === controlledAgentId ? 0.3 : 0.6));
+      .setLinearDamping(drive ? 0.02 : 0.15)
+      .setAngularDamping(drive ? 0.3 : 0.6));
     if (drive) {
       const { tuning, wheels } = drive;
       // Treat the vehicle as a uniformly scaled, constant-density copy of the authored car rather than the
@@ -321,12 +318,10 @@ function preparePlayback(agents: readonly AgentPhysicsInput[], controlledAgentId
       active.createCollider(RAPIER.ColliderDesc.cuboid(half.x, half.y, half.z).setMass(scaledMass(agent.mass, agent.scale)).setFriction(1), body);
       playbackBodies.set(agent.id, { body, kind, localCenter, wheelCount: 0 });
     }
-    if (agent.id === controlledAgentId) controlledKind = kind;
   }
-  controlledBodyId = controlledAgentId && controlledKind === "vehicle" ? controlledAgentId : null;
   preparedAgents = agents;
   wheelSteeringRadians.clear();
-  driveCommand = NEUTRAL_DRIVE_COMMAND;
+  driveCommands.clear();
   stepAccumulator = 0;
   playbackGeneration = generation;
   active.step();
@@ -421,16 +416,19 @@ function stepPlayback(dt: number, generation: number): PlaybackSnapshot {
   return { generation: playbackGeneration, transforms: collectTransforms() };
 }
 
-function driveControlledAgent(command: DriveCommand, generation: number): void {
+function driveAgent(agentId: string, command: DriveCommand, generation: number): void {
   assertPlaybackGeneration(generation);
-  driveCommand = validateDriveCommand(command);
+  if (playbackBodies.get(agentId)?.kind !== "vehicle") throw new Error(`Agent ${agentId} cannot accept vehicle commands.`);
+  driveCommands.set(agentId, validateDriveCommand(command));
 }
 
 function resetPlayback(agents: readonly AgentSnapshot[], generation: number): void {
+  // Requests are serialized by the worker, but stale async callers can enqueue cleanup after a
+  // newer Play has prepared its bodies. Older ownership must never tear down the newer run.
+  if (generation < playbackGeneration) return;
   const active = requireWorld();
   teardownPlaybackBodies(active);
-  controlledBodyId = null;
-  driveCommand = NEUTRAL_DRIVE_COMMAND;
+  driveCommands.clear();
   stepAccumulator = 0;
   playbackGeneration = generation;
   for (const agent of agents) {
@@ -463,8 +461,7 @@ function clearPlaybackState(): void {
   playbackBodies.clear();
   preparedAgents = [];
   wheelSteeringRadians.clear();
-  controlledBodyId = null;
-  driveCommand = NEUTRAL_DRIVE_COMMAND;
+  driveCommands.clear();
   stepAccumulator = 0;
   playbackGeneration = 0;
 }
@@ -478,7 +475,7 @@ function updateVehicle(agent: AgentSnapshot): void {
   const controller = entry?.controller;
   const tuning = entry?.tuning;
   if (!controller || !tuning || !agent.asset.wheels) return;
-  const command = agent.id === controlledBodyId ? driveCommand : NEUTRAL_DRIVE_COMMAND;
+  const command = driveCommands.get(agent.id) ?? NEUTRAL_DRIVE_COMMAND;
   const maxSteeringRadians = tuning.maxSteeringAngleDegrees * Math.PI / 180;
   const targetSteering = command.steering * maxSteeringRadians;
   const currentSteering = wheelSteeringRadians.get(agent.id) ?? 0;
@@ -504,7 +501,7 @@ function updateVehiclePhysical(agent: AgentSnapshot): void {
   const rig = entry?.rig;
   const tuning = entry?.tuning;
   if (!rig || !tuning) return;
-  const command = agent.id === controlledBodyId ? driveCommand : NEUTRAL_DRIVE_COMMAND;
+  const command = driveCommands.get(agent.id) ?? NEUTRAL_DRIVE_COMMAND;
   const maxSteeringRadians = tuning.maxSteeringAngleDegrees * Math.PI / 180;
   const targetSteering = command.steering * maxSteeringRadians;
   const currentSteering = wheelSteeringRadians.get(agent.id) ?? 0;

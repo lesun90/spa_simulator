@@ -19,6 +19,8 @@ import { RapierPhysicsEngineFactory } from "./physics/RapierPhysicsWorld";
 import type { PlacementPreview } from "./domain/agent";
 import type { DriveCommand } from "./domain/playback";
 import { HttpScenarioRepository } from "./persistence/HttpScenarioRepository";
+import { ManagedControllerClient } from "./runtime/ManagedControllerClient";
+import { ControllerEditor } from "./ui/ControllerEditor";
 
 const DRIVE_KEYS = new Set(["KeyW", "KeyA", "KeyS", "KeyD", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Space"]);
 const NEUTRAL_DRIVE_COMMAND: DriveCommand = { throttle: 0, steering: 0, brake: 0 };
@@ -39,6 +41,8 @@ export class ScenarioStudioApp {
   private readonly session: ScenarioSession;
   private readonly assetManager: AssetManager;
   private readonly agentVisuals: AgentVisuals;
+  private readonly controllerRuntime: ManagedControllerClient;
+  private readonly controllerEditor: ControllerEditor;
   private readonly unsubscribe: () => void;
   private disposed = false;
   private placementPreview: PlacementPreview | null = null;
@@ -49,7 +53,7 @@ export class ScenarioStudioApp {
   private playbackAccumulator = 0;
   private playbackStepBusy = false;
   private readonly beforeUnload = (event: BeforeUnloadEvent) => {
-    if (!this.session.document.isDirty) return;
+    if (!this.session.document.isDirty && !this.controllerEditor?.isDirty) return;
     event.preventDefault();
     event.returnValue = "";
   };
@@ -70,6 +74,7 @@ export class ScenarioStudioApp {
     const catalog = new HttpSceneCatalog();
     const agentCatalog = new HttpAgentCatalog();
     const scenarios = new HttpScenarioRepository();
+    this.controllerRuntime = new ManagedControllerClient();
     this.assetManager = new AssetManager();
     this.agentVisuals = new AgentVisuals(this.world.scene, this.assetManager, this.interaction, {
       getGroundPoint: (x, y) => this.world.groundPointFromCanvasPoint(x, y, this.viewport.size.width, this.viewport.size.height),
@@ -87,23 +92,26 @@ export class ScenarioStudioApp {
     });
     const physicsEngines = new PhysicsEngineRegistry();
     physicsEngines.register(new RapierPhysicsEngineFactory());
-    this.session = new ScenarioSession(new ScenarioDocument(), catalog, agentCatalog, this.world, physicsEngines.create("rapier"), "rapier", this.agentVisuals, this.assetManager,
+    this.session = new ScenarioSession(new ScenarioDocument(), catalog, agentCatalog, this.world, physicsEngines.create("rapier"), "rapier", this.agentVisuals, this.assetManager, this.controllerRuntime,
       (agents) => {
         if (!this.disposed) {
           this.hud?.setPopulation(agents);
+          this.controllerEditor?.refresh();
           this.syncScenarioState();
         }
       },
       (state, message) => {
         if (this.disposed) return;
         this.hud?.setPlaybackState(state, message);
+        this.controllerEditor?.setPlaybackReady(state === "ready");
         if (state !== "running") this.clearDriveKeys();
         if (state !== "ready") {
           this.agentVisuals.select(null);
           this.hud?.clearAgentSelection();
           this.clearPlacement();
         }
-      });
+      },
+      (diagnostic) => this.controllerEditor?.showDiagnostic(diagnostic));
     this.hud = new ScenarioHudFeature(
       this.viewport.size,
       this.interaction,
@@ -178,6 +186,7 @@ export class ScenarioStudioApp {
       }
     );
     this.syncScenarioState();
+    this.controllerEditor = new ControllerEditor(host, this.session.document, this.controllerRuntime, () => this.session.agents, () => this.syncScenarioState());
     window.addEventListener("beforeunload", this.beforeUnload);
     this.hudCache = new ScenarioHudCache();
     this.interaction.setLayers([
@@ -266,6 +275,7 @@ export class ScenarioStudioApp {
     this.hudCache.dispose();
     this.sceneThumbnails.dispose();
     this.agentVisuals.dispose();
+    this.controllerEditor.dispose();
     this.assetManager.dispose();
     this.input.dispose();
     this.world.dispose();
@@ -278,7 +288,7 @@ export class ScenarioStudioApp {
   }
 
   private confirmDiscard(action: string): boolean {
-    return !this.session.document.isDirty || window.confirm(`Discard unsaved changes and ${action}?`);
+    return (!this.session.document.isDirty && !this.controllerEditor.isDirty) || window.confirm(`Discard unsaved changes and ${action}?`);
   }
 
   private tickPlayback(dt: number): void {
@@ -301,6 +311,7 @@ export class ScenarioStudioApp {
     }
     event.preventDefault();
     if (pressed) this.driveKeys.add(event.code); else this.driveKeys.delete(event.code);
+    this.session.publishKeyboard(event.code, pressed);
     this.updateDriveCommand();
   }
 
@@ -311,14 +322,14 @@ export class ScenarioStudioApp {
     const next: DriveCommand = { throttle, steering, brake };
     if (next.throttle === this.currentDriveCommand.throttle && next.steering === this.currentDriveCommand.steering && next.brake === this.currentDriveCommand.brake) return;
     this.currentDriveCommand = next;
-    this.session.drive(next);
+    this.session.driveWithKeyboard(next);
   }
 
   private clearDriveKeys(): void {
     if (!this.driveKeys.size && this.currentDriveCommand === NEUTRAL_DRIVE_COMMAND) return;
     this.driveKeys.clear();
     this.currentDriveCommand = NEUTRAL_DRIVE_COMMAND;
-    this.session.drive(NEUTRAL_DRIVE_COMMAND);
+    this.session.driveWithKeyboard(NEUTRAL_DRIVE_COMMAND);
   }
 
   private syncScenarioState(): void {
@@ -331,6 +342,7 @@ export class ScenarioStudioApp {
     this.clearPlacement();
     this.hud.setActive(this.session.document.sceneReference);
     this.hud.setPopulation(this.session.agents);
+    this.controllerEditor.refresh(true);
     this.hud.sceneReplaced();
     this.syncScenarioState();
     this.hud.setScenarioStatus(status);

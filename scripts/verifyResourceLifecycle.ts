@@ -82,7 +82,7 @@ try {
         canvas.remove();
         const remaining = records.slice(initialListeners).map((record) => `${record.target === window ? "window" : record.target === document ? "document" : "canvas"}:${record.type}`);
         if (remaining.length || frames.size) throw new Error(`${kind} cycle ${cycle}: listeners=${remaining.join(",")} frames=${frames.size}`);
-        if (document.querySelector(".viewer-panel") || [...document.querySelectorAll("button")].some((button) => button.textContent === "Perf")) throw new Error(`${kind}: owned DOM survived disposal`);
+        if (document.querySelector(".viewer-panel, .scenario-controller-drawer, .scenario-controller-trigger") || [...document.querySelectorAll("button")].some((button) => button.textContent === "Perf")) throw new Error(`${kind}: owned DOM survived disposal`);
         cycles.push({ cycle, listeners: remaining.length, animationFrames: frames.size, pendingLoadTeardown: cycle === 2 });
       }
       return { application: kind, cycles };

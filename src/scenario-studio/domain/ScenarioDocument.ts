@@ -2,6 +2,7 @@ import type { SceneReference } from "./scene";
 import type { AgentSnapshot } from "./agent";
 import { createId } from "../../editor-core/scene";
 import { freezeRecord, SCENARIO_RECORD_VERSION, validateScenarioRecord, type ScenarioRecord } from "./scenarioRecord";
+import { validateControllerAssignment, validateControllerScript, type ControllerAssignment, type ControllerScript } from "./controller";
 
 /** Owns persisted scenario identity, authored state, and dirty-state transitions. */
 export class ScenarioDocument {
@@ -11,6 +12,8 @@ export class ScenarioDocument {
   private activeScene: SceneReference | null = null;
   private authoredAgents: readonly AgentSnapshot[] = Object.freeze([]);
   private materialFrictionOverrides: Readonly<Record<string, number>> = Object.freeze({});
+  private controllerScripts: readonly ControllerScript[] = Object.freeze([]);
+  private assignments: readonly ControllerAssignment[] = Object.freeze([]);
   private modified = false;
 
   constructor(record: ScenarioRecord = newScenarioRecord()) {
@@ -21,6 +24,8 @@ export class ScenarioDocument {
     this.activeScene = valid.sceneReference;
     this.authoredAgents = valid.agents;
     this.materialFrictionOverrides = valid.materialFriction;
+    this.controllerScripts = valid.controllers;
+    this.assignments = valid.controllerAssignments;
   }
 
   get id(): string { return this.identity; }
@@ -51,9 +56,16 @@ export class ScenarioDocument {
   }
 
   get materialFriction(): Readonly<Record<string, number>> { return this.materialFrictionOverrides; }
+  get controllers(): readonly ControllerScript[] { return this.controllerScripts; }
+  get controllerAssignments(): readonly ControllerAssignment[] { return this.assignments; }
 
   replaceAgents(agents: readonly AgentSnapshot[]): void {
     this.authoredAgents = Object.freeze([...agents]);
+    const ids = new Set(agents.map((agent) => agent.id));
+    this.assignments = Object.freeze(this.assignments.flatMap((assignment) => {
+      const agentIds = assignment.agentIds.filter((id) => ids.has(id));
+      return agentIds.length ? [Object.freeze({ controllerId: assignment.controllerId, agentIds: Object.freeze(agentIds) })] : [];
+    }));
     this.modified = true;
   }
 
@@ -64,8 +76,24 @@ export class ScenarioDocument {
     this.modified = true;
   }
 
+  saveController(script: ControllerScript, agentIds: readonly string[]): void {
+    const validScript = validateControllerScript(script);
+    const controllers = [...this.controllerScripts.filter((item) => item.id !== validScript.id), validScript];
+    const assignment = validateControllerAssignment({ controllerId: validScript.id, agentIds }, new Set(controllers.map((item) => item.id)), new Set(this.authoredAgents.map((agent) => agent.id)));
+    this.controllerScripts = Object.freeze(controllers);
+    this.assignments = Object.freeze([...this.assignments.filter((item) => item.controllerId !== validScript.id), assignment]);
+    this.modified = true;
+  }
+
+  deleteController(id: string): void {
+    if (!this.controllerScripts.some((item) => item.id === id)) return;
+    this.controllerScripts = Object.freeze(this.controllerScripts.filter((item) => item.id !== id));
+    this.assignments = Object.freeze(this.assignments.filter((item) => item.controllerId !== id));
+    this.modified = true;
+  }
+
   toRecord(): ScenarioRecord {
-    return freezeRecord({ version: SCENARIO_RECORD_VERSION, id: this.identity, name: this.scenarioName, sceneReference: this.activeScene, engineKey: this.physicsEngineKey, agents: this.authoredAgents, materialFriction: this.materialFrictionOverrides });
+    return freezeRecord({ version: SCENARIO_RECORD_VERSION, id: this.identity, name: this.scenarioName, sceneReference: this.activeScene, engineKey: this.physicsEngineKey, agents: this.authoredAgents, materialFriction: this.materialFrictionOverrides, controllers: this.controllerScripts, controllerAssignments: this.assignments });
   }
 
   replaceWith(record: ScenarioRecord): void {
@@ -76,6 +104,8 @@ export class ScenarioDocument {
     this.activeScene = valid.sceneReference;
     this.authoredAgents = valid.agents;
     this.materialFrictionOverrides = valid.materialFriction;
+    this.controllerScripts = valid.controllers;
+    this.assignments = valid.controllerAssignments;
     this.modified = false;
   }
 
@@ -89,7 +119,7 @@ export class ScenarioDocument {
 }
 
 export function newScenarioRecord(name = "Untitled scenario", id = createScenarioId()): ScenarioRecord {
-  return freezeRecord({ version: SCENARIO_RECORD_VERSION, id, name, sceneReference: null, engineKey: "rapier", agents: [], materialFriction: {} });
+  return freezeRecord({ version: SCENARIO_RECORD_VERSION, id, name, sceneReference: null, engineKey: "rapier", agents: [], materialFriction: {}, controllers: [], controllerAssignments: [] });
 }
 
 function createScenarioId(): string {
