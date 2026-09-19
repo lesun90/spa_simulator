@@ -237,7 +237,7 @@ try {
   observations.agentPlacement = await page.evaluate(async () => {
     const app = window.verificationScenario as unknown as {
       session: ScenarioSession;
-      hud: { agentInspector: { currentPlacementDraft(): import("../src/scenario-studio/domain/agent").AgentDraft | null }; setPopulation(agents: readonly import("../src/scenario-studio/domain/agent").AgentSnapshot[]): void };
+      hud: { agentInspector: { currentPlacementDraft(): import("../src/scenario-studio/domain/agent").AgentDraft | null }; setPopulation(agents: readonly import("../src/scenario-studio/domain/agent").SceneObjectSnapshot[]): void };
     };
     const draft = app.hud.agentInspector.currentPlacementDraft();
     if (!draft) throw new Error("Agent Inspector did not expose its configured placement draft");

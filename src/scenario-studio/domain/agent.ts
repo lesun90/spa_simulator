@@ -118,7 +118,7 @@ export interface AgentDraft {
   readonly vehiclePhysicsModel: VehiclePhysicsModel;
 }
 
-export interface AgentSnapshot extends AgentDraft {
+export interface SceneObjectSnapshot extends AgentDraft {
   readonly id: string;
 }
 
@@ -131,15 +131,15 @@ export interface PlacementPreview {
 
 export interface AgentPresentation { dispose(): void; }
 export interface AgentPresenter {
-  prepare(agent: AgentSnapshot): Promise<AgentPresentation>;
-  show(agent: AgentSnapshot, presentation: AgentPresentation): void;
-  update(agent: AgentSnapshot): void;
+  prepare(agent: SceneObjectSnapshot): Promise<AgentPresentation>;
+  show(agent: SceneObjectSnapshot, presentation: AgentPresentation): void;
+  update(agent: SceneObjectSnapshot): void;
   remove(id: string): void;
   clear(): void;
   /** A presentation port bound to this agent's already-shown visual instance, for a live vehicle SceneObject. */
-  createVehiclePresentationPort(agent: AgentSnapshot): PresentationPort<VehiclePoseFrame>;
+  createVehiclePresentationPort(agent: SceneObjectSnapshot): PresentationPort<VehiclePoseFrame>;
   /** Same as above, for a non-vehicle physical SceneObject (RigidObject). */
-  createBodyPresentationPort(agent: AgentSnapshot): PresentationPort<VisualObjectPoseFrame>;
+  createBodyPresentationPort(agent: SceneObjectSnapshot): PresentationPort<VisualObjectPoseFrame>;
 }
 
 /** Whether this agent receives drive commands and a Vehicle SceneObject, rather than a plain RigidObject. */
@@ -148,7 +148,7 @@ export function isDrivenVehicle(agent: AgentDraft): boolean {
 }
 
 /** Adapts a placed agent's asset reference into the shape AssetManager's generic loader/cache understands. */
-export function assetEntry(agent: AgentSnapshot): AssetCatalogEntry {
+export function assetEntry(agent: SceneObjectSnapshot): AssetCatalogEntry {
   return {
     id: `${agent.asset.id}:${agent.asset.modelSha256}:${agent.asset.metadataSha256}`,
     label: agent.asset.label,

@@ -1,32 +1,32 @@
-import { agentBoundsOverlap, type AgentDraft, type AgentSnapshot } from "./agent";
-import { AgentInstance } from "./AgentInstance";
+import { agentBoundsOverlap, type AgentDraft, type SceneObjectSnapshot } from "./agent";
+import { SceneObjectInstance } from "./SceneObjectInstance";
 
 /** Allocates stable internal IDs and owns the authored agent collection. */
 export class AgentPopulation {
-  private readonly instances = new Map<string, AgentInstance>();
+  private readonly instances = new Map<string, SceneObjectInstance>();
   private nextIdentity = 1;
 
-  create(draft: AgentDraft): AgentInstance {
-    return new AgentInstance(`agent-${this.nextIdentity++}`, draft);
+  create(draft: AgentDraft): SceneObjectInstance {
+    return new SceneObjectInstance(`agent-${this.nextIdentity++}`, draft);
   }
 
-  commit(instance: AgentInstance): void {
+  commit(instance: SceneObjectInstance): void {
     if (this.instances.has(instance.id)) throw new Error(`Agent ${instance.id} already exists.`);
     this.instances.set(instance.id, instance);
   }
 
-  get(id: string): AgentInstance | null {
+  get(id: string): SceneObjectInstance | null {
     return this.instances.get(id) ?? null;
   }
 
-  remove(id: string): AgentSnapshot | null {
+  remove(id: string): SceneObjectSnapshot | null {
     const instance = this.instances.get(id);
     if (!instance) return null;
     this.instances.delete(id);
     return instance.snapshot();
   }
 
-  snapshots(): readonly AgentSnapshot[] {
+  snapshots(): readonly SceneObjectSnapshot[] {
     return Object.freeze([...this.instances.values()].map((instance) => instance.snapshot()));
   }
 
@@ -46,18 +46,18 @@ export class AgentPopulation {
     return false;
   }
 
-  clear(): readonly AgentSnapshot[] {
+  clear(): readonly SceneObjectSnapshot[] {
     const removed = this.snapshots();
     this.instances.clear();
     return removed;
   }
 
-  replace(agents: readonly AgentSnapshot[]): void {
-    const staged = new Map<string, AgentInstance>();
+  replace(agents: readonly SceneObjectSnapshot[]): void {
+    const staged = new Map<string, SceneObjectInstance>();
     let nextIdentity = 1;
     for (const agent of agents) {
       if (staged.has(agent.id)) throw new Error(`Agent ${agent.id} already exists.`);
-      staged.set(agent.id, new AgentInstance(agent.id, agent));
+      staged.set(agent.id, new SceneObjectInstance(agent.id, agent));
       const numericIdentity = /^agent-(\d+)$/.exec(agent.id)?.[1];
       if (numericIdentity) nextIdentity = Math.max(nextIdentity, Number(numericIdentity) + 1);
     }

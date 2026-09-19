@@ -1,6 +1,6 @@
 /// <reference lib="webworker" />
 import RAPIER from "@dimforge/rapier3d-compat";
-import { placementOriginY, scaledAgentCollision, scaledMass, scaledVehicleTuning, type AgentDraft, type AgentSnapshot, type PlacementHit, type PlacementPreview, type Ray3, type ScaledVehicleTuning, type Vector3Value, type WheelDescriptor } from "../domain/agent";
+import { placementOriginY, scaledAgentCollision, scaledMass, scaledVehicleTuning, type AgentDraft, type SceneObjectSnapshot, type PlacementHit, type PlacementPreview, type Ray3, type ScaledVehicleTuning, type Vector3Value, type WheelDescriptor } from "../domain/agent";
 import { NEUTRAL_DRIVE_COMMAND, validateDriveCommand, type DriveCommand } from "../domain/playback";
 import { DEFAULT_MATERIAL_FRICTION } from "../domain/materialFriction";
 import type { AgentPhysicsInput, AgentTransform, PlaybackSnapshot, SceneGeometryDescription } from "./PhysicsWorld";
@@ -94,7 +94,7 @@ const physicalContactHooks: RAPIER.PhysicsHooks = {
   filterIntersectionPair() { return true; }
 };
 /** The agents the live bodies were built from, so the step loop can read their tuning without re-sending them each step. */
-let preparedAgents: readonly AgentSnapshot[] = [];
+let preparedAgents: readonly SceneObjectSnapshot[] = [];
 /** Each raycast vehicle's per-wheel connection point in chassis-local space, needed to reconstruct full wheel poses from the controller's scalar outputs. */
 const wheelConnectionPoints = new Map<string, Vector3Value[]>();
 
@@ -270,13 +270,13 @@ function overlapsAgent(draft: AgentDraft, position: Vector3Value, heading: numbe
     (collider) => !environmentHandles.has(collider.handle) && !nonSupportingHandles.has(collider.handle) && collider !== ignored) !== null;
 }
 
-function addAgent(agent: AgentSnapshot, expectedSceneRevision: number): void {
+function addAgent(agent: SceneObjectSnapshot, expectedSceneRevision: number): void {
   assertRevision(expectedSceneRevision);
   if (agentColliders.has(agent.id)) throw new Error(`Agent ${agent.id} already exists in physics.`);
   createAgentCollider(agent);
 }
 
-function updateAgent(agent: AgentSnapshot, expectedSceneRevision: number): void {
+function updateAgent(agent: SceneObjectSnapshot, expectedSceneRevision: number): void {
   assertRevision(expectedSceneRevision);
   const old = agentColliders.get(agent.id);
   if (!old) throw new Error(`Agent ${agent.id} is not in physics.`);
@@ -287,7 +287,7 @@ function updateAgent(agent: AgentSnapshot, expectedSceneRevision: number): void 
   createAgentCollider(agent);
 }
 
-function createAgentCollider(agent: AgentSnapshot): void {
+function createAgentCollider(agent: SceneObjectSnapshot): void {
   const active = requireWorld();
   if (overlapsAgent(agent, agent.pose.position, agent.pose.headingRadians, agent.id)) throw new Error("This position overlaps another agent.");
   const center = collisionCenter(agent, agent.pose.position, agent.pose.headingRadians);
@@ -406,7 +406,7 @@ function scalePoints(points: Float32Array, scale: number): Float32Array {
 }
 
 /** Builds the physical-model chassis body: a convex hull of the real mesh when available, else the authored box. */
-function buildPhysicalChassisBody(active: RAPIER.World, agent: AgentSnapshot, center: Vector3Value, heading: number, hullPoints: Float32Array | undefined, mass: number): RAPIER.RigidBody {
+function buildPhysicalChassisBody(active: RAPIER.World, agent: SceneObjectSnapshot, center: Vector3Value, heading: number, hullPoints: Float32Array | undefined, mass: number): RAPIER.RigidBody {
   const body = active.createRigidBody(RAPIER.RigidBodyDesc.dynamic()
     .setTranslation(center.x, center.y, center.z)
     .setRotation(rotation(heading))
@@ -425,7 +425,7 @@ function buildPhysicalChassisBody(active: RAPIER.World, agent: AgentSnapshot, ce
 }
 
 /** Builds one wheel's real rigid-body chain (see PhysicalWheelRig) and attaches it to the chassis body. */
-function buildPhysicalWheelRig(active: RAPIER.World, chassis: RAPIER.RigidBody, agent: AgentSnapshot, localCenter: Vector3Value, wheel: WheelDescriptor, scaled: ScaledVehicleTuning): PhysicalWheelRig {
+function buildPhysicalWheelRig(active: RAPIER.World, chassis: RAPIER.RigidBody, agent: SceneObjectSnapshot, localCenter: Vector3Value, wheel: WheelDescriptor, scaled: ScaledVehicleTuning): PhysicalWheelRig {
   const localAnchor: Vector3Value = {
     x: wheel.position.x * agent.scale - localCenter.x,
     y: wheel.position.y * agent.scale - localCenter.y,
@@ -530,7 +530,7 @@ function driveAgent(agentId: string, command: DriveCommand, generation: number):
   }
 }
 
-function resetPlayback(agents: readonly AgentSnapshot[], generation: number): void {
+function resetPlayback(agents: readonly SceneObjectSnapshot[], generation: number): void {
   // Requests are serialized by the worker, but stale async callers can enqueue cleanup after a
   // newer Play has prepared its bodies. Older ownership must never tear down the newer run.
   if (generation < playbackGeneration) return;
@@ -583,11 +583,11 @@ function clearPlaybackState(): void {
   playbackGeneration = 0;
 }
 
-function applyDriveForces(agents: readonly AgentSnapshot[]): void {
+function applyDriveForces(agents: readonly SceneObjectSnapshot[]): void {
   for (const agent of agents) { updateVehicle(agent); updateVehiclePhysical(agent); }
 }
 
-function updateVehicle(agent: AgentSnapshot): void {
+function updateVehicle(agent: SceneObjectSnapshot): void {
   const entry = playbackBodies.get(agent.id);
   const controller = entry?.controller;
   const tuning = entry?.tuning;
@@ -613,7 +613,7 @@ function updateVehicle(agent: AgentSnapshot): void {
   controller.updateVehicle(FIXED_STEP);
 }
 
-function updateVehiclePhysical(agent: AgentSnapshot): void {
+function updateVehiclePhysical(agent: SceneObjectSnapshot): void {
   const entry = playbackBodies.get(agent.id);
   const rig = entry?.rig;
   const tuning = entry?.tuning;

@@ -1,4 +1,4 @@
-import type { AgentSnapshot } from "../domain/agent";
+import type { SceneObjectSnapshot } from "../domain/agent";
 import { DEFAULT_CONTROLLER_SOURCE, hashControllerSource, type ControllerScript } from "../domain/controller";
 import type { ScenarioDocument } from "../domain/ScenarioDocument";
 import type { ControllerDiagnostic, ControllerRuntime } from "../runtime/ManagedControllerClient";
@@ -21,7 +21,7 @@ export class ControllerEditor {
   private playbackReady = true;
   private disposed = false;
 
-  constructor(private readonly host: HTMLElement, private readonly scenario: ScenarioDocument, private readonly runtime: ControllerRuntime, private readonly agents: () => readonly AgentSnapshot[], private readonly onDocumentChanged: () => void) {
+  constructor(private readonly host: HTMLElement, private readonly scenario: ScenarioDocument, private readonly runtime: ControllerRuntime, private readonly agents: () => readonly SceneObjectSnapshot[], private readonly onDocumentChanged: () => void) {
     installStyles();
     this.trigger.type = "button";
     this.trigger.setAttribute("aria-expanded", "false");

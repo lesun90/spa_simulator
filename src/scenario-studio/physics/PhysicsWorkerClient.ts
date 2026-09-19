@@ -1,4 +1,4 @@
-import type { AgentDraft, AgentSnapshot, PlacementHit, PlacementPreview, Ray3 } from "../domain/agent";
+import type { AgentDraft, SceneObjectSnapshot, PlacementHit, PlacementPreview, Ray3 } from "../domain/agent";
 import type { DriveCommand } from "../domain/playback";
 import type { AgentPhysicsInput, PlaybackSnapshot, SceneGeometryDescription } from "./PhysicsWorld";
 
@@ -7,14 +7,14 @@ export type PhysicsWorkerOperation =
   | { type: "updateGroundFriction"; materialFriction: Readonly<Record<string, number>> }
   | { type: "pickSurface"; ray: Ray3 }
   | { type: "previewAgentPlacement"; draft: AgentDraft; ray: Ray3; ignoreAgentId?: string }
-  | { type: "addAgent"; agent: AgentSnapshot; expectedSceneRevision: number }
-  | { type: "updateAgent"; agent: AgentSnapshot; expectedSceneRevision: number }
+  | { type: "addAgent"; agent: SceneObjectSnapshot; expectedSceneRevision: number }
+  | { type: "updateAgent"; agent: SceneObjectSnapshot; expectedSceneRevision: number }
   | { type: "removeAgent"; id: string }
   | { type: "clearAgents" }
   | { type: "preparePlayback"; agents: readonly AgentPhysicsInput[]; expectedSceneRevision: number; generation: number }
   | { type: "stepPlayback"; dt: number; generation: number }
   | { type: "vehiclePortDriveCommand"; resourceId: number; command: DriveCommand; generation: number }
-  | { type: "resetPlayback"; agents: readonly AgentSnapshot[]; generation: number }
+  | { type: "resetPlayback"; agents: readonly SceneObjectSnapshot[]; generation: number }
   | { type: "dispose" };
 
 export interface PhysicsWorkerRequest { readonly id: number; readonly operation: PhysicsWorkerOperation; }
@@ -38,8 +38,8 @@ export class PhysicsWorkerClient {
   previewAgentPlacement(draft: AgentDraft, ray: Ray3, ignoreAgentId?: string): Promise<PlacementPreview> {
     return this.request({ type: "previewAgentPlacement", draft, ray, ignoreAgentId });
   }
-  addAgent(agent: AgentSnapshot, expectedSceneRevision: number): Promise<void> { return this.request({ type: "addAgent", agent, expectedSceneRevision }); }
-  updateAgent(agent: AgentSnapshot, expectedSceneRevision: number): Promise<void> { return this.request({ type: "updateAgent", agent, expectedSceneRevision }); }
+  addAgent(agent: SceneObjectSnapshot, expectedSceneRevision: number): Promise<void> { return this.request({ type: "addAgent", agent, expectedSceneRevision }); }
+  updateAgent(agent: SceneObjectSnapshot, expectedSceneRevision: number): Promise<void> { return this.request({ type: "updateAgent", agent, expectedSceneRevision }); }
   removeAgent(id: string): Promise<void> { return this.request({ type: "removeAgent", id }); }
   clearAgents(): Promise<void> { return this.request({ type: "clearAgents" }); }
   preparePlayback(agents: readonly AgentPhysicsInput[], expectedSceneRevision: number, generation: number): Promise<readonly { readonly id: string; readonly resourceId: number }[]> {
@@ -47,7 +47,7 @@ export class PhysicsWorkerClient {
   }
   stepPlayback(dt: number, generation: number): Promise<PlaybackSnapshot> { return this.request({ type: "stepPlayback", dt, generation }); }
   vehiclePortDriveCommand(resourceId: number, command: DriveCommand, generation: number): Promise<void> { return this.request({ type: "vehiclePortDriveCommand", resourceId, command, generation }); }
-  resetPlayback(agents: readonly AgentSnapshot[], generation: number): Promise<void> { return this.request({ type: "resetPlayback", agents, generation }); }
+  resetPlayback(agents: readonly SceneObjectSnapshot[], generation: number): Promise<void> { return this.request({ type: "resetPlayback", agents, generation }); }
 
   async dispose(): Promise<void> {
     if (this.disposed) return;

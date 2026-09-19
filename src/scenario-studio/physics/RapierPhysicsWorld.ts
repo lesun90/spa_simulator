@@ -1,4 +1,4 @@
-import type { AgentDraft, AgentSnapshot, PlacementHit, PlacementPreview, Ray3 } from "../domain/agent";
+import type { AgentDraft, SceneObjectSnapshot, PlacementHit, PlacementPreview, Ray3 } from "../domain/agent";
 import type { AgentPhysicsInput, PhysicsEngineFactory, PhysicsWorld, PlaybackSnapshot, SceneGeometryDescription } from "./PhysicsWorld";
 import { PhysicsWorkerClient } from "./PhysicsWorkerClient";
 import { RpcVehiclePhysicsPort, type VehiclePhysicsPort } from "./VehiclePhysicsPort";
@@ -17,8 +17,8 @@ export class RapierPhysicsWorld implements PhysicsWorld {
   previewAgentPlacement(draft: AgentDraft, ray: Ray3, ignoreAgentId?: string): Promise<PlacementPreview> {
     return this.client.previewAgentPlacement(draft, ray, ignoreAgentId);
   }
-  addAgent(agent: AgentSnapshot, expectedSceneRevision: number): Promise<void> { return this.client.addAgent(agent, expectedSceneRevision); }
-  updateAgent(agent: AgentSnapshot, expectedSceneRevision: number): Promise<void> { return this.client.updateAgent(agent, expectedSceneRevision); }
+  addAgent(agent: SceneObjectSnapshot, expectedSceneRevision: number): Promise<void> { return this.client.addAgent(agent, expectedSceneRevision); }
+  updateAgent(agent: SceneObjectSnapshot, expectedSceneRevision: number): Promise<void> { return this.client.updateAgent(agent, expectedSceneRevision); }
   removeAgent(id: string): Promise<void> { return this.client.removeAgent(id); }
   clearAgents(): Promise<void> { return this.client.clearAgents(); }
   preparePlayback(agents: readonly AgentPhysicsInput[], expectedSceneRevision: number, generation: number): Promise<readonly { readonly id: string; readonly resourceId: number }[]> {
@@ -28,7 +28,7 @@ export class RapierPhysicsWorld implements PhysicsWorld {
     return this.client.preparePlayback(copies, expectedSceneRevision, generation);
   }
   stepPlayback(dt: number, generation: number): Promise<PlaybackSnapshot> { return this.client.stepPlayback(dt, generation); }
-  resetPlayback(agents: readonly AgentSnapshot[], generation: number): Promise<void> { return this.client.resetPlayback(agents, generation); }
+  resetPlayback(agents: readonly SceneObjectSnapshot[], generation: number): Promise<void> { return this.client.resetPlayback(agents, generation); }
   createVehiclePhysicsPort(resourceId: number): VehiclePhysicsPort { return new RpcVehiclePhysicsPort(resourceId, this.client); }
   createRigidBodyPhysicsPort(resourceId: number): RigidBodyPhysicsPort { return new RpcRigidBodyPhysicsPort(resourceId); }
   dispose(): Promise<void> { return this.client.dispose(); }

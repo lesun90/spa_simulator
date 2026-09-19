@@ -1,4 +1,4 @@
-import { DEFAULT_VEHICLE_PHYSICS_MODEL, DEFAULT_VEHICLE_TUNING, validateAgentDraft, type AgentAssetReference, type AgentSnapshot, type Vector3Value, type VehiclePhysicsModel, type VehicleTuning, type WheelDescriptor } from "./agent";
+import { DEFAULT_VEHICLE_PHYSICS_MODEL, DEFAULT_VEHICLE_TUNING, validateAgentDraft, type AgentAssetReference, type SceneObjectSnapshot, type Vector3Value, type VehiclePhysicsModel, type VehicleTuning, type WheelDescriptor } from "./agent";
 import type { SceneReference } from "./scene";
 import { validateControllerAssignment, validateControllerScript, type ControllerAssignment, type ControllerScript } from "./controller";
 
@@ -10,7 +10,7 @@ export interface ScenarioRecord {
   readonly name: string;
   readonly sceneReference: SceneReference | null;
   readonly engineKey: string;
-  readonly agents: readonly AgentSnapshot[];
+  readonly agents: readonly SceneObjectSnapshot[];
   readonly materialFriction: Readonly<Record<string, number>>;
   readonly controllers: readonly ControllerScript[];
   readonly controllerAssignments: readonly ControllerAssignment[];
@@ -32,7 +32,7 @@ export function validateScenarioRecord(value: unknown): ScenarioRecord {
   const materialFriction = source.materialFriction === undefined ? {} : materialFrictionMap(source.materialFriction);
   const sceneReference = source.sceneReference === null ? null : validateSceneReference(source.sceneReference);
   if (!Array.isArray(source.agents)) throw new Error("Scenario agents must be an array.");
-  const agents = source.agents.map(validateAgentSnapshot);
+  const agents = source.agents.map(validateSceneObjectSnapshot);
   const ids = new Set<string>();
   for (const agent of agents) {
     if (ids.has(agent.id)) throw new Error(`Duplicate agent ID ${agent.id}.`);
@@ -99,14 +99,14 @@ function validateSceneReference(value: unknown): SceneReference {
   });
 }
 
-function validateAgentSnapshot(value: unknown): AgentSnapshot {
+function validateSceneObjectSnapshot(value: unknown): SceneObjectSnapshot {
   const source = record(value, "Authored agent");
   const asset = validateAgentAsset(source.asset);
   const pose = record(source.pose, "Agent pose");
   const collision = record(source.collision, "Agent collision");
   const placement = record(source.placement, "Agent placement settings");
   const supportValue = pose.support;
-  let support: AgentSnapshot["pose"]["support"] = null;
+  let support: SceneObjectSnapshot["pose"]["support"] = null;
   if (supportValue !== null && supportValue !== undefined) {
     const item = record(supportValue, "Agent support");
     if (item.kind !== "scene" && item.kind !== "agent") throw new Error("Agent support kind is invalid.");
@@ -135,7 +135,7 @@ function validateAgentSnapshot(value: unknown): AgentSnapshot {
     vehiclePhysicsModel: source.vehiclePhysicsModel === undefined
       ? DEFAULT_VEHICLE_PHYSICS_MODEL
       : validateVehiclePhysicsModel(source.vehiclePhysicsModel)
-  } satisfies AgentSnapshot);
+  } satisfies SceneObjectSnapshot);
 }
 
 function validateVehiclePhysicsModel(value: unknown): VehiclePhysicsModel {

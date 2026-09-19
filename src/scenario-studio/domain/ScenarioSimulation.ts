@@ -1,4 +1,4 @@
-import { isDrivenVehicle, type AgentPresenter, type AgentSnapshot } from "./agent";
+import { isDrivenVehicle, type AgentPresenter, type SceneObjectSnapshot } from "./agent";
 import type { AgentTransform, PhysicsWorld } from "../physics/PhysicsWorld";
 import { SceneObjectRegistry } from "./SceneObjectRegistry";
 import { Vehicle } from "./Vehicle";
@@ -15,7 +15,7 @@ function headingToQuaternion(headingRadians: number): { x: number; y: number; z:
 }
 
 /** Authored placement, before any physics tick has run; the object briefly presents this until the first real pose arrives. */
-function authoredPose(agent: AgentSnapshot, generation: number, topologyVersion: number): VehiclePoseFrame | VisualObjectPoseFrame {
+function authoredPose(agent: SceneObjectSnapshot, generation: number, topologyVersion: number): VehiclePoseFrame | VisualObjectPoseFrame {
   const body: BodyPose = { worldPositionMeters: agent.pose.position, worldOrientation: headingToQuaternion(agent.pose.headingRadians) };
   if (!isDrivenVehicle(agent)) return { resourceId: 0, generation, physicsStep: 0, topologyVersion, body };
   const wheels = (agent.asset.wheels ?? []).map((wheel) => ({ wheelId: wheel.id, suspensionBody: body, steeringBody: body, tireBody: body }));
@@ -45,7 +45,7 @@ export class ScenarioSimulation {
 
   constructor(private readonly generation: number) {}
 
-  async spawn(agent: AgentSnapshot, world: PhysicsWorld, presenter: AgentPresenter, resourceId: number): Promise<void> {
+  async spawn(agent: SceneObjectSnapshot, world: PhysicsWorld, presenter: AgentPresenter, resourceId: number): Promise<void> {
     const pose = authoredPose(agent, this.generation, this.topologyVersion);
     if (isDrivenVehicle(agent)) {
       const presentation = presenter.createVehiclePresentationPort(agent);

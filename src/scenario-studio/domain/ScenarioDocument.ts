@@ -1,5 +1,5 @@
 import type { SceneReference } from "./scene";
-import type { AgentSnapshot } from "./agent";
+import type { SceneObjectSnapshot } from "./agent";
 import { createId } from "../../editor-core/scene";
 import { freezeRecord, SCENARIO_RECORD_VERSION, validateScenarioRecord, type ScenarioRecord } from "./scenarioRecord";
 import { validateControllerAssignment, validateControllerScript, type ControllerAssignment, type ControllerScript } from "./controller";
@@ -10,7 +10,7 @@ export class ScenarioDocument {
   private scenarioName: string;
   private physicsEngineKey: string;
   private activeScene: SceneReference | null = null;
-  private authoredAgents: readonly AgentSnapshot[] = Object.freeze([]);
+  private authoredAgents: readonly SceneObjectSnapshot[] = Object.freeze([]);
   private materialFrictionOverrides: Readonly<Record<string, number>> = Object.freeze({});
   private controllerScripts: readonly ControllerScript[] = Object.freeze([]);
   private assignments: readonly ControllerAssignment[] = Object.freeze([]);
@@ -51,7 +51,7 @@ export class ScenarioDocument {
     this.modified = true;
   }
 
-  get agents(): readonly AgentSnapshot[] {
+  get agents(): readonly SceneObjectSnapshot[] {
     return this.authoredAgents;
   }
 
@@ -59,7 +59,7 @@ export class ScenarioDocument {
   get controllers(): readonly ControllerScript[] { return this.controllerScripts; }
   get controllerAssignments(): readonly ControllerAssignment[] { return this.assignments; }
 
-  replaceAgents(agents: readonly AgentSnapshot[]): void {
+  replaceAgents(agents: readonly SceneObjectSnapshot[]): void {
     this.authoredAgents = Object.freeze([...agents]);
     const ids = new Set(agents.map((agent) => agent.id));
     this.assignments = Object.freeze(this.assignments.flatMap((assignment) => {

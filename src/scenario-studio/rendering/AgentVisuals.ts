@@ -9,7 +9,7 @@ import {
   scaleFromGroundHandle,
   transformModeForPointerButton
 } from "../../features/world/objectTransform";
-import { assetEntry, scaledAgentCollision, type AgentDraft, type AgentPresentation, type AgentPresenter, type AgentSnapshot, type PlacementPreview, type Ray3, type Vector3Value } from "../domain/agent";
+import { assetEntry, scaledAgentCollision, type AgentDraft, type AgentPresentation, type AgentPresenter, type SceneObjectSnapshot, type PlacementPreview, type Ray3, type Vector3Value } from "../domain/agent";
 import type { PresentationPort, VehiclePoseFrame, VisualObjectPoseFrame } from "../domain/SceneObjectPorts";
 import { ThreePresentationPort } from "./ThreePresentationPort";
 
@@ -26,7 +26,7 @@ interface AgentVisualCallbacks {
 interface ActiveAgentTransform {
   readonly id: string;
   readonly mode: AgentTransformMode;
-  readonly start: AgentSnapshot;
+  readonly start: SceneObjectSnapshot;
   readonly startScreenX: number;
   readonly startPointer: Vector3Value;
   readonly center: Vector3Value;
@@ -47,7 +47,7 @@ class PreparedAgentVisual implements AgentPresentation {
 /** Owns borrowed visual clones; the injected AssetManager owns their shared GPU resources. */
 export class AgentVisuals implements AgentPresenter {
   private readonly instances = new Map<string, THREE.Object3D>();
-  private readonly agents = new Map<string, AgentSnapshot>();
+  private readonly agents = new Map<string, SceneObjectSnapshot>();
   private readonly ghost = new THREE.Mesh(
     new THREE.BoxGeometry(1, 1, 1),
     new THREE.MeshBasicMaterial({ color: 0x27a86b, transparent: true, opacity: 0.28, depthWrite: false })
@@ -69,7 +69,7 @@ export class AgentVisuals implements AgentPresenter {
     this.scene.add(this.ghost);
   }
 
-  async prepare(agent: AgentSnapshot): Promise<AgentPresentation> {
+  async prepare(agent: SceneObjectSnapshot): Promise<AgentPresentation> {
     if (this.disposed) throw new Error("Agent visuals were disposed.");
     const template = await this.assets.getTemplate(assetEntry(agent));
     if (this.disposed) throw new Error("Agent visuals were disposed.");
@@ -79,7 +79,7 @@ export class AgentVisuals implements AgentPresenter {
     return new PreparedAgentVisual(object);
   }
 
-  show(agent: AgentSnapshot, presentation: AgentPresentation): void {
+  show(agent: SceneObjectSnapshot, presentation: AgentPresentation): void {
     const prepared = presentation as PreparedAgentVisual;
     if (this.disposed) { prepared.dispose(); return; }
     prepared.object.userData.scenarioAgentId = agent.id;
@@ -88,7 +88,7 @@ export class AgentVisuals implements AgentPresenter {
     this.scene.add(prepared.object);
   }
 
-  update(agent: AgentSnapshot): void {
+  update(agent: SceneObjectSnapshot): void {
     const object = this.instances.get(agent.id);
     if (!object) return;
     this.agents.set(agent.id, agent);
@@ -107,11 +107,11 @@ export class AgentVisuals implements AgentPresenter {
     if (this.selectedId === id) this.select(null);
   }
 
-  createVehiclePresentationPort(agent: AgentSnapshot): PresentationPort<VehiclePoseFrame> {
+  createVehiclePresentationPort(agent: SceneObjectSnapshot): PresentationPort<VehiclePoseFrame> {
     return new ThreePresentationPort(this.scene, this.requireInstance(agent.id), agent.asset.wheels ?? []);
   }
 
-  createBodyPresentationPort(agent: AgentSnapshot): PresentationPort<VisualObjectPoseFrame> {
+  createBodyPresentationPort(agent: SceneObjectSnapshot): PresentationPort<VisualObjectPoseFrame> {
     return new ThreePresentationPort(this.scene, this.requireInstance(agent.id), []);
   }
 

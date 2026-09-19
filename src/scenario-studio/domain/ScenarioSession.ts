@@ -2,7 +2,7 @@ import type { AssetManager } from "../../engine/AssetManager";
 import type { SceneCatalog } from "../catalog/SceneCatalog";
 import type { AgentCatalog } from "../catalog/AgentCatalog";
 import type { AgentPhysicsInput, AgentTransform, PhysicsWorld } from "../physics/PhysicsWorld";
-import type { AgentDraft, AgentPresenter, AgentSnapshot, PlacementPreview, Ray3, Vector3Value } from "./agent";
+import type { AgentDraft, AgentPresenter, SceneObjectSnapshot, PlacementPreview, Ray3, Vector3Value } from "./agent";
 import { agentFootprintContainsPoint, agentSupportsFootprint, assetEntry, authoredBounds, isDrivenVehicle, placementOriginY, scaledAgentCollision, validateAgentDraft } from "./agent";
 import { AgentPopulation } from "./AgentPopulation";
 import type { DriveCommand, PlaybackState } from "./playback";
@@ -45,7 +45,7 @@ export class ScenarioSession {
     private readonly agentPresenter: AgentPresenter,
     private readonly assetManager: AssetManager,
     private readonly controllers: ControllerRuntime,
-    private readonly onPopulationChanged: (agents: readonly AgentSnapshot[]) => void = () => {},
+    private readonly onPopulationChanged: (agents: readonly SceneObjectSnapshot[]) => void = () => {},
     private readonly onPlaybackChanged: (state: PlaybackState, message?: string) => void = () => {},
     private readonly onControllerDiagnostic: (diagnostic: ControllerDiagnostic | CommandStatusMessage) => void = () => {}
   ) {
@@ -57,7 +57,7 @@ export class ScenarioSession {
     this.permanentAdvertisements = [this.middleware.advertise(lifecycleChannel), this.middleware.advertise(tickChannel), this.middleware.advertise(keyboardChannel), this.middleware.advertise(commandStatusChannel)];
   }
 
-  get agents(): readonly AgentSnapshot[] { return this.population.snapshots(); }
+  get agents(): readonly SceneObjectSnapshot[] { return this.population.snapshots(); }
   get playback(): PlaybackState { return this.playbackState; }
 
   async open(record: ScenarioRecord): Promise<void> {
@@ -67,7 +67,7 @@ export class ScenarioSession {
     this.resetPlaybackState();
     const request = ++this.generation;
     let scenePresentation: ScenePresentation | null = null;
-    const agentPresentations: { agent: AgentSnapshot; presentation: import("./agent").AgentPresentation }[] = [];
+    const agentPresentations: { agent: SceneObjectSnapshot; presentation: import("./agent").AgentPresentation }[] = [];
     try {
       const [world, choices, sceneData] = await Promise.all([
         this.physics,
@@ -328,7 +328,7 @@ export class ScenarioSession {
   presentPlayback(now: number): void { this.simulation?.present(now); }
 
   /** Resolves each physical-model vehicle's chassis hull from its real mesh; other agents pass through unchanged. */
-  private async resolvePhysicsInputs(agents: readonly AgentSnapshot[]): Promise<readonly AgentPhysicsInput[]> {
+  private async resolvePhysicsInputs(agents: readonly SceneObjectSnapshot[]): Promise<readonly AgentPhysicsInput[]> {
     return Promise.all(agents.map(async (agent) => {
       if (agent.vehiclePhysicsModel !== "physical" || !agent.asset.wheels?.length) return agent;
       const excludeNodeNames = new Set(agent.asset.wheels.map((wheel) => wheel.wheelNode));
@@ -375,7 +375,7 @@ export class ScenarioSession {
   }
 
   /** Builds one SceneObject per agent (Vehicle for drive-eligible vehicles, RigidObject otherwise) and wires keyboard/controller commands into it. */
-  private async createSimulation(agents: readonly AgentSnapshot[], generation: number, world: PhysicsWorld, resourceIds: readonly { readonly id: string; readonly resourceId: number }[]): Promise<void> {
+  private async createSimulation(agents: readonly SceneObjectSnapshot[], generation: number, world: PhysicsWorld, resourceIds: readonly { readonly id: string; readonly resourceId: number }[]): Promise<void> {
     await this.disposeSimulation();
     const simulation = new ScenarioSimulation(generation);
     const resourceIdByAgent = new Map(resourceIds.map((entry) => [entry.id, entry.resourceId]));
@@ -446,7 +446,7 @@ export class ScenarioSession {
   }
 }
 
-function placementChanged(current: AgentSnapshot, draft: AgentDraft): boolean {
+function placementChanged(current: SceneObjectSnapshot, draft: AgentDraft): boolean {
   const epsilon = 0.000001;
   return Math.abs(current.scale - draft.scale) > epsilon ||
     Math.abs(current.pose.headingRadians - draft.pose.headingRadians) > epsilon ||
@@ -458,12 +458,12 @@ function placementChanged(current: AgentSnapshot, draft: AgentDraft): boolean {
 function previewAuthoredSupport(
   draft: AgentDraft,
   ray: Ray3,
-  agents: readonly AgentSnapshot[],
+  agents: readonly SceneObjectSnapshot[],
   ignoreAgentId: string | undefined,
   sceneRevision: number
 ): PlacementPreview | null {
   if (ray.direction.y >= -0.0001) return null;
-  let nearest: { distance: number; support: AgentSnapshot; point: Vector3Value } | null = null;
+  let nearest: { distance: number; support: SceneObjectSnapshot; point: Vector3Value } | null = null;
   for (const support of agents) {
     if (support.id === ignoreAgentId) continue;
     const bounds = authoredBounds(support);

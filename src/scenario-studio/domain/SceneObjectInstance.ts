@@ -1,7 +1,7 @@
-import { freezeDraft, validateAgentDraft, type AgentDraft, type AgentSnapshot } from "./agent";
+import { freezeDraft, validateAgentDraft, type AgentDraft, type SceneObjectSnapshot } from "./agent";
 
 /** Owns one authored agent's stable identity and validated configuration. */
-export class AgentInstance {
+export class SceneObjectInstance {
   private draft: AgentDraft;
 
   constructor(readonly id: string, draft: AgentDraft) {
@@ -9,7 +9,7 @@ export class AgentInstance {
     this.draft = validateAgentDraft(draft);
   }
 
-  snapshot(): AgentSnapshot {
+  snapshot(): SceneObjectSnapshot {
     return Object.freeze({ id: this.id, ...freezeDraft(this.draft) });
   }
 

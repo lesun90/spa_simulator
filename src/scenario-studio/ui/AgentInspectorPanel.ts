@@ -8,7 +8,7 @@ import { Panel } from "../../features/hud/kit/Panel";
 import { ScrollRegion } from "../../features/hud/kit/ScrollRegion";
 import { segmentButtonRect } from "../../features/hud/kit/segmentedControl";
 import { TextField } from "../../features/hud/kit/TextField";
-import { createAgentDraft, DEFAULT_VEHICLE_PHYSICS_MODEL, freezeDraft, scaledAgentCollision, validateAgentDraft, type AgentChoice, type AgentDraft, type AgentSnapshot, type VehiclePhysicsModel } from "../domain/agent";
+import { createAgentDraft, DEFAULT_VEHICLE_PHYSICS_MODEL, freezeDraft, scaledAgentCollision, validateAgentDraft, type AgentChoice, type AgentDraft, type SceneObjectSnapshot, type VehiclePhysicsModel } from "../domain/agent";
 import { HudText } from "./HudText";
 
 type Context = { kind: "new"; key: string } | { kind: "existing"; key: string } | null;
@@ -65,7 +65,7 @@ export class AgentInspectorPanel extends BasePanel {
   private readonly newDrafts = new Map<string, AgentDraft>();
   private readonly newAvailability = new Map<string, boolean>();
   private readonly existingDrafts = new Map<string, AgentDraft>();
-  private readonly existing = new Map<string, AgentSnapshot>();
+  private readonly existing = new Map<string, SceneObjectSnapshot>();
   private context: Context = null;
   private busy = false;
   private vehicleTuningExpanded = false;
@@ -135,7 +135,7 @@ export class AgentInspectorPanel extends BasePanel {
     this.updateState();
   }
 
-  selectExisting(agent: AgentSnapshot): void {
+  selectExisting(agent: SceneObjectSnapshot): void {
     this.saveCurrentDraft();
     this.existing.set(agent.id, agent);
     if (!this.existingDrafts.has(agent.id)) this.existingDrafts.set(agent.id, freezeDraft(agent));
@@ -145,7 +145,7 @@ export class AgentInspectorPanel extends BasePanel {
     this.updateState();
   }
 
-  setPopulation(agents: readonly AgentSnapshot[]): void {
+  setPopulation(agents: readonly SceneObjectSnapshot[]): void {
     this.existing.clear();
     for (const agent of agents) {
       this.existing.set(agent.id, agent);

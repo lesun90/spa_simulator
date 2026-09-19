@@ -8,7 +8,7 @@ import { computeShellLayout, type Rect, type ShellRects } from "../../features/h
 import { Panel } from "../../features/hud/kit/Panel";
 import { TextField } from "../../features/hud/kit/TextField";
 import { sameSceneReference, type SceneChoice, type SceneReference } from "../domain/scene";
-import { createAgentDraft, type AgentChoice, type AgentDraft, type AgentSnapshot, type PlacementPreview } from "../domain/agent";
+import { createAgentDraft, type AgentChoice, type AgentDraft, type SceneObjectSnapshot, type PlacementPreview } from "../domain/agent";
 import { frictionForMaterial } from "../domain/materialFriction";
 import type { PlaybackState } from "../domain/playback";
 import { HudText } from "./HudText";
@@ -72,7 +72,7 @@ export class ScenarioHudFeature {
   private renderNeeded = true;
   private generation = 0;
   private agentGeneration = 0;
-  private population: readonly AgentSnapshot[] = [];
+  private population: readonly SceneObjectSnapshot[] = [];
   private placementDraft: AgentDraft | null = null;
   private activeTab: "scenes" | "agents" = "scenes";
   private scenarioBusy = false;
@@ -250,7 +250,7 @@ export class ScenarioHudFeature {
     this.update();
   }
 
-  setPopulation(agents: readonly AgentSnapshot[]): void {
+  setPopulation(agents: readonly SceneObjectSnapshot[]): void {
     this.population = agents;
     this.agentInspector.setPopulation(agents);
     this.labels.modalMessage.setText(replacementMessage(agents.length));
@@ -278,7 +278,7 @@ export class ScenarioHudFeature {
     this.invalidate();
   }
 
-  selectExistingAgent(agent: AgentSnapshot | null): void {
+  selectExistingAgent(agent: SceneObjectSnapshot | null): void {
     if (!agent) { this.clearAgentSelection(); return; }
     this.cancelPlacement();
     this.showTab("agents");
