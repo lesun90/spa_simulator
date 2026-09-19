@@ -13,7 +13,6 @@ export type PhysicsWorkerOperation =
   | { type: "clearAgents" }
   | { type: "preparePlayback"; agents: readonly AgentPhysicsInput[]; expectedSceneRevision: number; generation: number }
   | { type: "stepPlayback"; dt: number; generation: number }
-  | { type: "driveAgent"; agentId: string; command: DriveCommand; generation: number }
   | { type: "vehiclePortDriveCommand"; resourceId: number; command: DriveCommand; generation: number }
   | { type: "resetPlayback"; agents: readonly AgentSnapshot[]; generation: number }
   | { type: "dispose" };
@@ -43,11 +42,10 @@ export class PhysicsWorkerClient {
   updateAgent(agent: AgentSnapshot, expectedSceneRevision: number): Promise<void> { return this.request({ type: "updateAgent", agent, expectedSceneRevision }); }
   removeAgent(id: string): Promise<void> { return this.request({ type: "removeAgent", id }); }
   clearAgents(): Promise<void> { return this.request({ type: "clearAgents" }); }
-  preparePlayback(agents: readonly AgentPhysicsInput[], expectedSceneRevision: number, generation: number): Promise<void> {
+  preparePlayback(agents: readonly AgentPhysicsInput[], expectedSceneRevision: number, generation: number): Promise<readonly { readonly id: string; readonly resourceId: number }[]> {
     return this.request({ type: "preparePlayback", agents, expectedSceneRevision, generation });
   }
   stepPlayback(dt: number, generation: number): Promise<PlaybackSnapshot> { return this.request({ type: "stepPlayback", dt, generation }); }
-  driveAgent(agentId: string, command: DriveCommand, generation: number): Promise<void> { return this.request({ type: "driveAgent", agentId, command, generation }); }
   vehiclePortDriveCommand(resourceId: number, command: DriveCommand, generation: number): Promise<void> { return this.request({ type: "vehiclePortDriveCommand", resourceId, command, generation }); }
   resetPlayback(agents: readonly AgentSnapshot[], generation: number): Promise<void> { return this.request({ type: "resetPlayback", agents, generation }); }
 

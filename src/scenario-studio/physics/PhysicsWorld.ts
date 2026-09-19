@@ -1,6 +1,7 @@
 import type { AgentDraft, AgentSnapshot, PlacementHit, PlacementPreview, Ray3, Vector3Value } from "../domain/agent";
-import type { DriveCommand } from "../domain/playback";
 import type { AgentWheelPose } from "../domain/SceneObjectPorts";
+import type { VehiclePhysicsPort } from "./VehiclePhysicsPort";
+import type { RigidBodyPhysicsPort } from "./RigidBodyPhysicsPort";
 
 export type { BodyPose, AgentWheelPose } from "../domain/SceneObjectPorts";
 
@@ -56,14 +57,16 @@ export interface PhysicsWorld extends PlacementSurface {
   updateAgent(agent: AgentSnapshot, expectedSceneRevision: number): Promise<void>;
   removeAgent(id: string): Promise<void>;
   clearAgents(): Promise<void>;
-  /** Builds live bodies for every authored agent from their baseline snapshot. */
-  preparePlayback(agents: readonly AgentPhysicsInput[], expectedSceneRevision: number, generation: number): Promise<void>;
+  /** Builds live bodies for every authored agent from their baseline snapshot; returns each agent's worker-side physics resource ID. */
+  preparePlayback(agents: readonly AgentPhysicsInput[], expectedSceneRevision: number, generation: number): Promise<readonly { readonly id: string; readonly resourceId: number }[]>;
   /** Advances fixed 1/60 s substeps to cover wall-clock `dt` and returns transforms stamped with `generation`; rejects once `generation` is no longer the active run. */
   stepPlayback(dt: number, generation: number): Promise<PlaybackSnapshot>;
-  /** Applies a validated throttle/steering/brake command to one agent; rejects stale runs and invalid targets. */
-  driveAgent(agentId: string, command: DriveCommand, generation: number): Promise<void>;
   /** Releases live bodies and restores the authored, query-only colliders for `agents`. Safe to call repeatedly. */
   resetPlayback(agents: readonly AgentSnapshot[], generation: number): Promise<void>;
+  /** Builds the engine-specific physics port for a vehicle resource returned from `preparePlayback`. */
+  createVehiclePhysicsPort(resourceId: number): VehiclePhysicsPort;
+  /** Same as above, for a non-vehicle physical resource. */
+  createRigidBodyPhysicsPort(resourceId: number): RigidBodyPhysicsPort;
   dispose(): Promise<void>;
 }
 

@@ -48,8 +48,10 @@ export abstract class SceneObject<TPose extends SceneObjectPoseFrame> {
     this.presentation.applyPose(this.previousPose, this.currentPose, interpolationAlpha);
   }
 
+  /** Neutralizes the underlying physics command (the same hook `reset` uses) without advancing generation. */
   async pause(): Promise<void> {
     if (this.state !== "running") return;
+    await this.resetPhysics();
     this.state = "paused";
   }
 

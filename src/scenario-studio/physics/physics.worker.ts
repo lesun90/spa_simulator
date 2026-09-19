@@ -137,7 +137,6 @@ async function dispatch(request: PhysicsWorkerRequest): Promise<unknown> {
     case "clearAgents": return clearAgents();
     case "preparePlayback": return preparePlayback(operation.agents, operation.expectedSceneRevision, operation.generation);
     case "stepPlayback": return stepPlayback(operation.dt, operation.generation);
-    case "driveAgent": return driveAgent(operation.agentId, operation.command, operation.generation);
     case "vehiclePortDriveCommand": {
       const server = vehiclePortServers.get(operation.resourceId);
       if (!server) throw new Error(`No vehicle physics port for resource ${operation.resourceId}.`);
@@ -309,12 +308,13 @@ function removeAgent(id: string): void {
 
 function clearAgents(): void { for (const id of [...agentColliders.keys()]) removeAgent(id); }
 
-function preparePlayback(agents: readonly AgentPhysicsInput[], expectedSceneRevision: number, generation: number): void {
+function preparePlayback(agents: readonly AgentPhysicsInput[], expectedSceneRevision: number, generation: number): readonly { readonly id: string; readonly resourceId: number }[] {
   assertRevision(expectedSceneRevision);
   const active = requireWorld();
   teardownPlaybackBodies(active);
   for (const collider of agentColliders.values()) active.removeCollider(collider, false);
   agentColliders.clear();
+  const resourceIds: { readonly id: string; readonly resourceId: number }[] = [];
   for (const agent of agents) {
     const kind: "generic" | "vehicle" = agent.asset.category === "vehicles" ? "vehicle" : "generic";
     const collision = scaledAgentCollision(agent);
@@ -335,6 +335,7 @@ function preparePlayback(agents: readonly AgentPhysicsInput[], expectedSceneRevi
       const resourceId = nextResourceId++;
       playbackBodies.set(agent.id, { resourceId, body, kind, localCenter, rig: { wheels }, wheelCount: wheels.length, tuning: scaled });
       vehiclePortServers.set(resourceId, new VehiclePhysicsPortServer(resourceId, agent.id));
+      resourceIds.push({ id: agent.id, resourceId });
       continue;
     }
 
@@ -378,11 +379,13 @@ function preparePlayback(agents: readonly AgentPhysicsInput[], expectedSceneRevi
       const resourceId = nextResourceId++;
       playbackBodies.set(agent.id, { resourceId, body, kind, localCenter, controller, wheelCount: wheels.length, tuning: scaled });
       vehiclePortServers.set(resourceId, new VehiclePhysicsPortServer(resourceId, agent.id));
+      resourceIds.push({ id: agent.id, resourceId });
     } else {
       active.createCollider(RAPIER.ColliderDesc.cuboid(half.x, half.y, half.z).setMass(scaledMass(agent.mass, agent.scale)).setFriction(1), body);
       const resourceId = nextResourceId++;
       playbackBodies.set(agent.id, { resourceId, body, kind, localCenter, wheelCount: 0 });
       rigidBodyPortServers.set(resourceId, new RigidBodyPhysicsPortServer(resourceId, agent.id));
+      resourceIds.push({ id: agent.id, resourceId });
     }
   }
   active.integrationParameters.numInternalPgsIterations = physicalBodyOwners.size ? PHYSICAL_INTERNAL_SOLVER_ITERATIONS : 1;
@@ -392,6 +395,7 @@ function preparePlayback(agents: readonly AgentPhysicsInput[], expectedSceneRevi
   stepAccumulator = 0;
   playbackGeneration = generation;
   active.step(contactEventQueue, physicalContactHooks);
+  return resourceIds;
 }
 
 function scalePoints(points: Float32Array, scale: number): Float32Array {

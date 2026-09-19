@@ -1,4 +1,5 @@
 import type { AssetCatalogEntry } from "../../editor-core/assets";
+import type { PresentationPort, VehiclePoseFrame, VisualObjectPoseFrame } from "./SceneObjectPorts";
 
 export interface Vector3Value {
   readonly x: number;
@@ -135,6 +136,15 @@ export interface AgentPresenter {
   update(agent: AgentSnapshot): void;
   remove(id: string): void;
   clear(): void;
+  /** A presentation port bound to this agent's already-shown visual instance, for a live vehicle SceneObject. */
+  createVehiclePresentationPort(agent: AgentSnapshot): PresentationPort<VehiclePoseFrame>;
+  /** Same as above, for a non-vehicle physical SceneObject (RigidObject). */
+  createBodyPresentationPort(agent: AgentSnapshot): PresentationPort<VisualObjectPoseFrame>;
+}
+
+/** Whether this agent receives drive commands and a Vehicle SceneObject, rather than a plain RigidObject. */
+export function isDrivenVehicle(agent: AgentDraft): boolean {
+  return agent.asset.category === "vehicles" && Boolean(agent.vehicle) && Boolean(agent.asset.wheels?.length);
 }
 
 /** Adapts a placed agent's asset reference into the shape AssetManager's generic loader/cache understands. */

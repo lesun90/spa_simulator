@@ -256,7 +256,7 @@ export class ScenarioStudioApp {
       this.world.update();
       this.hud.updatePreviews(dt);
       this.tickPlayback(dt);
-      this.agentVisuals.presentInterpolated(performance.now());
+      this.session.presentPlayback(performance.now());
       if (this.hud.consumeRenderNeeded()) this.hudCache.refresh(this.renderer.renderer, this.hud.scene, this.hud.camera, this.viewport.size);
       this.renderer.renderLayers([
         { scene: this.world.scene, camera: this.world.camera },
@@ -300,9 +300,10 @@ export class ScenarioStudioApp {
     this.playbackAccumulator = 0;
     this.playbackStepBusy = true;
     const requestedAt = performance.now();
-    void this.session.stepPlayback(stepDt).then((transforms) => {
+    // ScenarioSession.stepPlayback already ingests the resulting poses into its live simulation;
+    // this caller only needs the round-trip timing.
+    void this.session.stepPlayback(stepDt).then(() => {
       this.performanceMonitor.recordPhysicsStep(performance.now() - requestedAt);
-      if (transforms && !this.disposed) this.agentVisuals.ingestLiveTransforms(transforms);
     }).finally(() => { this.playbackStepBusy = false; });
   }
 

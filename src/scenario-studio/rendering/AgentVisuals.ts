@@ -10,6 +10,8 @@ import {
   transformModeForPointerButton
 } from "../../features/world/objectTransform";
 import { assetEntry, scaledAgentCollision, type AgentDraft, type AgentPresentation, type AgentPresenter, type AgentSnapshot, type PlacementPreview, type Ray3, type Vector3Value } from "../domain/agent";
+import type { PresentationPort, VehiclePoseFrame, VisualObjectPoseFrame } from "../domain/SceneObjectPorts";
+import { ThreePresentationPort } from "./ThreePresentationPort";
 
 type AgentTransformMode = ObjectTransformControlMode | "move";
 
@@ -103,6 +105,20 @@ export class AgentVisuals implements AgentPresenter {
     this.instances.delete(id);
     this.agents.delete(id);
     if (this.selectedId === id) this.select(null);
+  }
+
+  createVehiclePresentationPort(agent: AgentSnapshot): PresentationPort<VehiclePoseFrame> {
+    return new ThreePresentationPort(this.scene, this.requireInstance(agent.id), agent.asset.wheels ?? []);
+  }
+
+  createBodyPresentationPort(agent: AgentSnapshot): PresentationPort<VisualObjectPoseFrame> {
+    return new ThreePresentationPort(this.scene, this.requireInstance(agent.id), []);
+  }
+
+  private requireInstance(id: string): THREE.Object3D {
+    const object = this.instances.get(id);
+    if (!object) throw new Error(`No visual instance for agent ${id}.`);
+    return object;
   }
 
   clear(): void {

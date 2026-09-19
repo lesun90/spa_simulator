@@ -3,16 +3,16 @@ import type { SceneCatalog } from "../catalog/SceneCatalog";
 import type { AgentCatalog } from "../catalog/AgentCatalog";
 import type { AgentPhysicsInput, AgentTransform, PhysicsWorld } from "../physics/PhysicsWorld";
 import type { AgentDraft, AgentPresenter, AgentSnapshot, PlacementPreview, Ray3, Vector3Value } from "./agent";
-import { agentFootprintContainsPoint, agentSupportsFootprint, assetEntry, authoredBounds, placementOriginY, scaledAgentCollision, validateAgentDraft } from "./agent";
+import { agentFootprintContainsPoint, agentSupportsFootprint, assetEntry, authoredBounds, isDrivenVehicle, placementOriginY, scaledAgentCollision, validateAgentDraft } from "./agent";
 import { AgentPopulation } from "./AgentPopulation";
 import type { DriveCommand, PlaybackState } from "./playback";
 import type { ScenePresentation, ScenePresenter } from "./ScenePresentation";
 import { ScenarioDocument } from "./ScenarioDocument";
 import { sameSceneReference, type SceneReference } from "./scene";
 import { validateScenarioRecord, type ScenarioRecord } from "./scenarioRecord";
-import { AgentComponentRegistry, type AgentComponent, type CommandContext } from "../runtime/AgentComponents";
-import { InProcessMiddleware, type Advertisement, type SimulationTime } from "../runtime/Middleware";
-import { agentStateChannel, capabilityChannel, commandStatusChannel, keyboardChannel, lifecycleChannel, tickChannel, vehicleControlChannel, type CommandStatusMessage } from "../runtime/messages";
+import { ScenarioSimulation } from "./ScenarioSimulation";
+import { InProcessMiddleware, type Advertisement, type SimulationTime, type Subscription } from "../runtime/Middleware";
+import { agentStateChannel, capabilityChannel, commandStatusChannel, keyboardChannel, lifecycleChannel, tickChannel, vehicleControlChannel, type CommandStatusMessage, type VehicleCommandMessage } from "../runtime/messages";
 import type { ControllerDiagnostic, ControllerRuntime } from "../runtime/ManagedControllerClient";
 
 /** Coordinates transactional scene and agent commits while rejecting obsolete asynchronous work. */
@@ -27,9 +27,9 @@ export class ScenarioSession {
   private playbackState: PlaybackState = "ready";
   private playbackGeneration = 0;
   private readonly middleware = new InProcessMiddleware();
-  private readonly componentRegistry = new AgentComponentRegistry();
-  private components = new Map<string, readonly AgentComponent[]>();
+  private simulation: ScenarioSimulation | null = null;
   private runtimeAdvertisements: Advertisement[] = [];
+  private runtimeSubscriptions: Subscription[] = [];
   private readonly permanentAdvertisements: Advertisement[];
   private readonly sessionId = typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `session-${Date.now()}`;
   private playbackStep = 0;
@@ -216,8 +216,7 @@ export class ScenarioSession {
     if (this.disposed) throw new Error("Scenario session was disposed.");
     if (this.playbackState === "running" || this.playbackState === "preparing") return;
     if (this.playbackState === "paused") {
-      const context = this.commandContext();
-      for (const components of this.components.values()) for (const component of components) component.setContext(context);
+      await this.simulation?.resume();
       this.setPlaybackState("running");
       return;
     }
@@ -231,7 +230,7 @@ export class ScenarioSession {
       if (this.disposed || generation !== this.playbackGeneration) return;
       const physicsAgents = await this.resolvePhysicsInputs(agents);
       if (this.disposed || generation !== this.playbackGeneration) return;
-      await world.preparePlayback(physicsAgents, this.sceneRevision, generation);
+      const resourceIds = await world.preparePlayback(physicsAgents, this.sceneRevision, generation);
       if (this.disposed || generation !== this.playbackGeneration) {
         await world.resetPlayback(agents, generation).catch(() => {});
         return;
@@ -239,14 +238,14 @@ export class ScenarioSession {
       this.middleware.beginRun(this.sessionId, generation);
       this.playbackStep = 0;
       this.playbackTime = 0;
-      this.createRuntimeComponents(agents, generation, world);
+      await this.createSimulation(agents, generation, world, resourceIds);
       const diagnostics = await this.controllers.start(this.sessionId, generation, this.document.controllers, this.document.controllerAssignments, agents.map((agent) => agent.id));
       if (this.disposed || generation !== this.playbackGeneration) return;
       for (const diagnostic of diagnostics) this.onControllerDiagnostic(diagnostic);
       this.setPlaybackState("running");
     } catch (error) {
       if (this.disposed || generation !== this.playbackGeneration) return;
-      this.disposeRuntimeComponents();
+      void this.disposeSimulation();
       await this.controllers.stop();
       const world = await this.physics.catch(() => null);
       await world?.resetPlayback(agents, generation).catch(() => {});
@@ -256,14 +255,14 @@ export class ScenarioSession {
 
   pause(): void {
     if (this.playbackState !== "running") return;
-    this.clearComponentCommands();
+    void this.simulation?.pause();
     this.setPlaybackState("paused");
   }
 
   reset(): void {
     if (this.disposed || this.playbackState === "ready") return;
     const generation = ++this.playbackGeneration;
-    this.disposeRuntimeComponents();
+    void this.disposeSimulation();
     void this.controllers.stop().then((diagnostics) => diagnostics.forEach((diagnostic) => this.onControllerDiagnostic(diagnostic)));
     const agents = this.agents;
     for (const agent of agents) this.agentPresenter.update(agent);
@@ -274,20 +273,16 @@ export class ScenarioSession {
   }
 
   driveWithKeyboard(command: DriveCommand): void {
-    if (this.disposed || this.playbackState !== "running") return;
-    const target = this.agents.find((agent) => agent.inputEligible && this.components.get(agent.id)?.some((component) => component.key === "vehicle"));
+    if (this.disposed || this.playbackState !== "running" || !this.simulation) return;
+    const target = this.agents.find((agent) => agent.inputEligible && isDrivenVehicle(agent) && this.simulation!.registry.has(agent.id));
     if (!target) return;
-    const context = this.commandContext();
-    // Keyboard events can arrive between completed ticks, when components still
-    // hold the previous tick's context. Validate against the current next step.
-    for (const component of this.components.get(target.id) ?? []) component.setContext(context);
-    this.middleware.publish(vehicleControlChannel(target.id), { type: "vehicle-command", correlationId: `keyboard:${context.step}`, source: "keyboard", sessionId: this.sessionId, generation: this.playbackGeneration, targetStep: context.step + 1, ...command }, context.time);
+    const time = this.simulationTime();
+    this.middleware.publish(vehicleControlChannel(target.id), { type: "vehicle-command", correlationId: `keyboard:${this.playbackStep}`, source: "keyboard", sessionId: this.sessionId, generation: this.playbackGeneration, targetStep: this.playbackStep + 1, ...command }, time);
   }
 
   publishKeyboard(code: string, pressed: boolean): void {
     if (this.playbackState !== "running") return;
-    const context = this.commandContext();
-    this.middleware.publish(keyboardChannel, { type: "keyboard", code, pressed }, context.time);
+    this.middleware.publish(keyboardChannel, { type: "keyboard", code, pressed }, this.simulationTime());
   }
 
   updateMaterialFriction(): void {
@@ -295,31 +290,32 @@ export class ScenarioSession {
   }
 
   async stepPlayback(dt: number): Promise<readonly AgentTransform[] | null> {
-    if (this.disposed || this.playbackState !== "running") return null;
+    if (this.disposed || this.playbackState !== "running" || !this.simulation) return null;
+    const simulation = this.simulation;
     const generation = this.playbackGeneration;
     try {
       const world = await this.physics;
-      const context = this.commandContext(dt);
-      for (const components of this.components.values()) for (const component of components) component.setContext(context);
-      this.middleware.publish(tickChannel, { type: "tick", generation, step: this.playbackStep, timeSeconds: this.playbackTime, dt }, context.time);
+      const time = this.simulationTime();
+      this.middleware.publish(tickChannel, { type: "tick", generation, step: this.playbackStep, timeSeconds: this.playbackTime, dt }, time);
       const controllerResult = await this.controllers.tick(this.playbackStep, this.playbackTime, dt);
       if (this.disposed || generation !== this.playbackGeneration || this.playbackState !== "running") return null;
       for (const diagnostic of controllerResult.diagnostics) this.onControllerDiagnostic(diagnostic);
-      for (const command of controllerResult.commands) this.middleware.publish(vehicleControlChannel(command.agentId), command.message, context.time);
-      // flush() sends each component's worker request synchronously and is not awaited here: its postMessage is
+      for (const command of controllerResult.commands) this.middleware.publish(vehicleControlChannel(command.agentId), command.message, time);
+      // Sends every queued command's worker request synchronously and is not awaited here: its postMessage is
       // already in flight (and ordered ahead of stepPlayback's) by the time this call returns, so waiting for the
       // full round trip before stepping would only add latency without changing what gets applied this step.
-      for (const components of this.components.values()) for (const component of components) component.flush();
+      simulation.flushQueued();
       const snapshot = await world.stepPlayback(dt, generation);
       if (this.disposed || generation !== this.playbackGeneration) return null;
       this.playbackStep++;
       this.playbackTime += dt;
+      simulation.ingest(snapshot.transforms);
       const stateTime = { step: this.playbackStep, seconds: this.playbackTime };
       for (const transform of snapshot.transforms) this.middleware.publish(agentStateChannel(transform.id), { type: "agent-state", agentId: transform.id, transform }, stateTime);
       return snapshot.transforms;
     } catch (error) {
       if (this.disposed || generation !== this.playbackGeneration) return null;
-      this.disposeRuntimeComponents();
+      void this.disposeSimulation();
       await this.controllers.stop();
       const world = await this.physics.catch(() => null);
       await world?.resetPlayback(this.agents, generation).catch(() => {});
@@ -327,6 +323,9 @@ export class ScenarioSession {
       return null;
     }
   }
+
+  /** Applies every live SceneObject's interpolated pose; call once per render frame regardless of when physics data last arrived. */
+  presentPlayback(now: number): void { this.simulation?.present(now); }
 
   /** Resolves each physical-model vehicle's chassis hull from its real mesh; other agents pass through unchanged. */
   private async resolvePhysicsInputs(agents: readonly AgentSnapshot[]): Promise<readonly AgentPhysicsInput[]> {
@@ -346,7 +345,7 @@ export class ScenarioSession {
   private resetPlaybackState(): void {
     if (this.playbackState === "ready") return;
     const generation = ++this.playbackGeneration;
-    this.disposeRuntimeComponents();
+    void this.disposeSimulation();
     void this.controllers.stop();
     this.playbackStep = 0;
     this.playbackTime = 0;
@@ -375,31 +374,54 @@ export class ScenarioSession {
     this.onPopulationChanged(this.agents);
   }
 
-  private createRuntimeComponents(agents: readonly AgentSnapshot[], generation: number, world: PhysicsWorld): void {
-    this.disposeRuntimeComponents();
+  /** Builds one SceneObject per agent (Vehicle for drive-eligible vehicles, RigidObject otherwise) and wires keyboard/controller commands into it. */
+  private async createSimulation(agents: readonly AgentSnapshot[], generation: number, world: PhysicsWorld, resourceIds: readonly { readonly id: string; readonly resourceId: number }[]): Promise<void> {
+    await this.disposeSimulation();
+    const simulation = new ScenarioSimulation(generation);
+    const resourceIdByAgent = new Map(resourceIds.map((entry) => [entry.id, entry.resourceId]));
     const time = { seconds: 0, step: 0 };
     for (const agent of agents) {
-      const state = agentStateChannel(agent.id);
+      const resourceId = resourceIdByAgent.get(agent.id);
+      if (resourceId === undefined) continue;
+      await simulation.spawn(agent, world, this.agentPresenter, resourceId);
       const capabilities = capabilityChannel(agent.id);
-      this.runtimeAdvertisements.push(this.middleware.advertise(state), this.middleware.advertise(capabilities));
-      const components = this.componentRegistry.create(agent, this.middleware, world, (status, statusTime) => {
-        this.middleware.publish(commandStatusChannel, status, statusTime);
-        this.onControllerDiagnostic(status);
-      });
-      this.components.set(agent.id, components);
-      this.middleware.publish(capabilities, { type: "capabilities", agentId: agent.id, capabilities: components.flatMap((component) => component.capabilities) }, time);
+      this.runtimeAdvertisements.push(this.middleware.advertise(agentStateChannel(agent.id)), this.middleware.advertise(capabilities));
+      this.middleware.publish(capabilities, { type: "capabilities", agentId: agent.id, capabilities: isDrivenVehicle(agent) ? ["vehicle.control"] : [] }, time);
+      if (isDrivenVehicle(agent)) {
+        this.runtimeSubscriptions.push(this.middleware.subscribe(vehicleControlChannel(agent.id), (event) => this.queueVehicleCommand(simulation, agent.id, event.message)));
+      }
     }
-    const context: CommandContext = { sessionId: this.sessionId, generation, step: 0, time };
-    for (const components of this.components.values()) for (const component of components) component.setContext(context);
+    this.simulation = simulation;
   }
 
-  private clearComponentCommands(): void { for (const components of this.components.values()) for (const component of components) component.clear(); }
-  private disposeRuntimeComponents(): void {
-    for (const components of this.components.values()) for (const component of components) component.dispose();
-    this.components.clear();
-    for (const advertisement of this.runtimeAdvertisements.splice(0)) advertisement.dispose();
+  private queueVehicleCommand(simulation: ScenarioSimulation, agentId: string, message: VehicleCommandMessage): void {
+    simulation.queueDispatch(
+      {
+        objectId: agentId,
+        resourceId: null,
+        generation: message.generation,
+        targetStep: message.targetStep,
+        sequence: message.targetStep,
+        action: { kind: "drive", command: message }
+      },
+      (accepted, statusMessage) => {
+        const status: CommandStatusMessage = { type: "command-status", correlationId: message.correlationId, source: message.source, agentId, accepted, message: statusMessage };
+        this.middleware.publish(commandStatusChannel, status, this.simulationTime());
+        this.onControllerDiagnostic(status);
+      }
+    );
   }
-  private commandContext(_dt = 0): CommandContext { return { sessionId: this.sessionId, generation: this.playbackGeneration, step: this.playbackStep, time: { seconds: this.playbackTime, step: this.playbackStep } }; }
+
+  /** Nulls `this.simulation` synchronously so no new work is scheduled against it, then releases its objects and channels in the background. */
+  private disposeSimulation(): Promise<void> {
+    const simulation = this.simulation;
+    this.simulation = null;
+    for (const subscription of this.runtimeSubscriptions.splice(0)) subscription.dispose();
+    for (const advertisement of this.runtimeAdvertisements.splice(0)) advertisement.dispose();
+    return simulation ? simulation.dispose() : Promise.resolve();
+  }
+
+  private simulationTime(): SimulationTime { return { seconds: this.playbackTime, step: this.playbackStep }; }
   private setPlaybackState(state: PlaybackState, message?: string): void {
     this.playbackState = state;
     this.onPlaybackChanged(state, message);
@@ -412,7 +434,7 @@ export class ScenarioSession {
     this.disposed = true;
     ++this.generation;
     ++this.playbackGeneration;
-    this.disposeRuntimeComponents();
+    await this.disposeSimulation();
     for (const advertisement of this.permanentAdvertisements) advertisement.dispose();
     this.middleware.dispose();
     await this.controllers.stop();
