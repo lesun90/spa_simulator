@@ -14,6 +14,7 @@ export type PhysicsWorkerOperation =
   | { type: "preparePlayback"; agents: readonly AgentPhysicsInput[]; expectedSceneRevision: number; generation: number }
   | { type: "stepPlayback"; dt: number; generation: number }
   | { type: "driveAgent"; agentId: string; command: DriveCommand; generation: number }
+  | { type: "vehiclePortDriveCommand"; resourceId: number; command: DriveCommand; generation: number }
   | { type: "resetPlayback"; agents: readonly AgentSnapshot[]; generation: number }
   | { type: "dispose" };
 
@@ -47,6 +48,7 @@ export class PhysicsWorkerClient {
   }
   stepPlayback(dt: number, generation: number): Promise<PlaybackSnapshot> { return this.request({ type: "stepPlayback", dt, generation }); }
   driveAgent(agentId: string, command: DriveCommand, generation: number): Promise<void> { return this.request({ type: "driveAgent", agentId, command, generation }); }
+  vehiclePortDriveCommand(resourceId: number, command: DriveCommand, generation: number): Promise<void> { return this.request({ type: "vehiclePortDriveCommand", resourceId, command, generation }); }
   resetPlayback(agents: readonly AgentSnapshot[], generation: number): Promise<void> { return this.request({ type: "resetPlayback", agents, generation }); }
 
   async dispose(): Promise<void> {

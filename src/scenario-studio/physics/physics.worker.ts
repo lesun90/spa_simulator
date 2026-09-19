@@ -37,6 +37,7 @@ const PHYSICAL_INTERNAL_SOLVER_ITERATIONS = 8;
 const WHEEL_COLLIDER_ROTATION: RAPIER.Rotation = { x: 0, y: 0, z: Math.SQRT1_2, w: Math.SQRT1_2 };
 
 interface PlaybackBody {
+  readonly resourceId: number;
   readonly body: RAPIER.RigidBody;
   readonly kind: "generic" | "vehicle";
   readonly localCenter: Vector3Value;
@@ -96,6 +97,22 @@ const physicalContactHooks: RAPIER.PhysicsHooks = {
 let preparedAgents: readonly AgentSnapshot[] = [];
 /** Each raycast vehicle's per-wheel connection point in chassis-local space, needed to reconstruct full wheel poses from the controller's scalar outputs. */
 const wheelConnectionPoints = new Map<string, Vector3Value[]>();
+
+let nextResourceId = 1;
+
+/** Encapsulates one vehicle's worker-side resource behind a stable ID; owns no state of its own beyond the ID, delegating to the shared playback maps until those maps are fully retired. */
+class VehiclePhysicsPortServer {
+  constructor(readonly resourceId: number, private readonly agentId: string) {}
+  applyDriveCommand(command: DriveCommand, generation: number): void { driveAgent(this.agentId, command, generation); }
+}
+
+/** Same role as VehiclePhysicsPortServer, for a non-vehicle physical prop. Takes no runtime commands today. */
+class RigidBodyPhysicsPortServer {
+  constructor(readonly resourceId: number, private readonly agentId: string) {}
+}
+
+const vehiclePortServers = new Map<number, VehiclePhysicsPortServer>();
+const rigidBodyPortServers = new Map<number, RigidBodyPhysicsPortServer>();
 /** Current front-wheel steering angle per agent, ramped toward the commanded angle instead of snapping. */
 const wheelSteeringRadians = new Map<string, number>();
 
@@ -121,6 +138,12 @@ async function dispatch(request: PhysicsWorkerRequest): Promise<unknown> {
     case "preparePlayback": return preparePlayback(operation.agents, operation.expectedSceneRevision, operation.generation);
     case "stepPlayback": return stepPlayback(operation.dt, operation.generation);
     case "driveAgent": return driveAgent(operation.agentId, operation.command, operation.generation);
+    case "vehiclePortDriveCommand": {
+      const server = vehiclePortServers.get(operation.resourceId);
+      if (!server) throw new Error(`No vehicle physics port for resource ${operation.resourceId}.`);
+      server.applyDriveCommand(operation.command, operation.generation);
+      return undefined;
+    }
     case "resetPlayback": return resetPlayback(operation.agents, operation.generation);
     case "dispose": dispose(); return undefined;
   }
@@ -309,7 +332,9 @@ function preparePlayback(agents: readonly AgentPhysicsInput[], expectedSceneRevi
       body.setLinearDamping(0.02);
       body.setAngularDamping(0.3);
       const wheels = drive.wheels.map((wheel) => buildPhysicalWheelRig(active, body, agent, localCenter, wheel, scaled));
-      playbackBodies.set(agent.id, { body, kind, localCenter, rig: { wheels }, wheelCount: wheels.length, tuning: scaled });
+      const resourceId = nextResourceId++;
+      playbackBodies.set(agent.id, { resourceId, body, kind, localCenter, rig: { wheels }, wheelCount: wheels.length, tuning: scaled });
+      vehiclePortServers.set(resourceId, new VehiclePhysicsPortServer(resourceId, agent.id));
       continue;
     }
 
@@ -350,10 +375,14 @@ function preparePlayback(agents: readonly AgentPhysicsInput[], expectedSceneRevi
         controller.setWheelFrictionSlip(index, scaled.wheelFrictionSlip);
       });
       wheelConnectionPoints.set(agent.id, connectionPoints);
-      playbackBodies.set(agent.id, { body, kind, localCenter, controller, wheelCount: wheels.length, tuning: scaled });
+      const resourceId = nextResourceId++;
+      playbackBodies.set(agent.id, { resourceId, body, kind, localCenter, controller, wheelCount: wheels.length, tuning: scaled });
+      vehiclePortServers.set(resourceId, new VehiclePhysicsPortServer(resourceId, agent.id));
     } else {
       active.createCollider(RAPIER.ColliderDesc.cuboid(half.x, half.y, half.z).setMass(scaledMass(agent.mass, agent.scale)).setFriction(1), body);
-      playbackBodies.set(agent.id, { body, kind, localCenter, wheelCount: 0 });
+      const resourceId = nextResourceId++;
+      playbackBodies.set(agent.id, { resourceId, body, kind, localCenter, wheelCount: 0 });
+      rigidBodyPortServers.set(resourceId, new RigidBodyPhysicsPortServer(resourceId, agent.id));
     }
   }
   active.integrationParameters.numInternalPgsIterations = physicalBodyOwners.size ? PHYSICAL_INTERNAL_SOLVER_ITERATIONS : 1;
@@ -533,6 +562,8 @@ function teardownPlaybackBodies(active: RAPIER.World): void {
   preparedAgents = [];
   wheelSteeringRadians.clear();
   wheelConnectionPoints.clear();
+  vehiclePortServers.clear();
+  rigidBodyPortServers.clear();
 }
 
 function clearPlaybackState(): void {
@@ -541,6 +572,8 @@ function clearPlaybackState(): void {
   preparedAgents = [];
   wheelSteeringRadians.clear();
   wheelConnectionPoints.clear();
+  vehiclePortServers.clear();
+  rigidBodyPortServers.clear();
   driveCommands.clear();
   stepAccumulator = 0;
   playbackGeneration = 0;
