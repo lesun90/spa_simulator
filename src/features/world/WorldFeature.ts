@@ -70,6 +70,7 @@ export class WorldFeature {
     this.gridHelper = gridHelper;
     this.lastGrid = { ...grid };
     this.scene.add(gridHelper, ground);
+    this.applyMaxZoomDistance(grid);
 
     this.ghost = new PlacementGhost();
     this.scene.add(this.ghost.root);
@@ -231,6 +232,16 @@ export class WorldFeature {
     this.scene.add(gridHelper, ground);
     this.registerGroundInteraction();
     this.applyGround();
+    this.applyMaxZoomDistance(grid);
+  }
+
+  /** Lets the camera zoom out far enough to see the whole ground plane, scaling with the scene's footprint. */
+  private applyMaxZoomDistance(grid: GridDefinition) {
+    const maxZoomDistance = Math.hypot(grid.width, grid.depth) * 10;
+    this.cameraRig.setMaxZoomDistance(maxZoomDistance);
+    // The far clip plane must reach past the new zoom cap, or the ground disappears right as it's zoomed out to fit.
+    this.camera.far = Math.max(worldConfig.cameraFar, maxZoomDistance * 1.5);
+    this.camera.updateProjectionMatrix();
   }
 
   /** Applies the scene's configured background: a flat color, or a loaded image for the "texture" type. */

@@ -17,12 +17,17 @@ export class VehicleComponent implements AgentComponent {
   private queued: VehicleCommandMessage | null = null;
   private disposed = false;
 
-  constructor(readonly agentId: string, middleware: Middleware, private readonly physics: Promise<PhysicsWorld>, private readonly publishStatus: (status: CommandStatusMessage, time: SimulationTime) => void) {
+  constructor(readonly agentId: string, middleware: Middleware, private readonly physics: PhysicsWorld, private readonly publishStatus: (status: CommandStatusMessage, time: SimulationTime) => void) {
     const control = vehicleControlChannel(agentId);
     this.advertisement = middleware.advertise(control);
     this.subscription = middleware.subscribe(control, (event) => this.applyCommand(event.message));
   }
   setContext(context: CommandContext): void { this.context = context; }
+  /**
+   * Sends the queued command's worker request synchronously (before returning) so its postMessage lands ahead of
+   * the stepPlayback request the caller issues right after flush() returns, without making the caller wait for
+   * the driveAgent round trip itself — halving per-step physics latency versus awaiting it first.
+   */
   flush(): Promise<void> {
     const message = this.queued;
     this.queued = null;
@@ -31,14 +36,15 @@ export class VehicleComponent implements AgentComponent {
     try {
       if (!context || message.sessionId !== context.sessionId || message.generation !== context.generation || message.targetStep !== context.step + 1) throw new Error("Command became stale before its target step.");
       const command = validateDriveCommand(message);
-      this.pending = this.pending.then(() => this.physics).then((world) => world.driveAgent(this.agentId, command, context.generation)).then(
+      const sent = this.physics.driveAgent(this.agentId, command, context.generation);
+      this.pending = this.pending.then(() => sent).then(
         () => this.status(message, true, "Command accepted.", context.time),
         (error) => this.status(message, false, error instanceof Error ? error.message : "Drive command failed.", context.time)
       );
     } catch (error) { this.status(message, false, error instanceof Error ? error.message : "Command was rejected.", context?.time ?? { seconds: 0, step: 0 }); }
     return this.pending;
   }
-  clear(): void { const context = this.context; this.context = null; this.queued = null; if (context) this.pending = this.pending.then(() => this.physics).then((world) => world.driveAgent(this.agentId, { throttle: 0, steering: 0, brake: 0 }, context.generation)).catch(() => {}); }
+  clear(): void { const context = this.context; this.context = null; this.queued = null; if (context) this.pending = this.pending.then(() => this.physics.driveAgent(this.agentId, { throttle: 0, steering: 0, brake: 0 }, context.generation)).catch(() => {}); }
   dispose(): void { if (this.disposed) return; this.disposed = true; this.clear(); this.subscription.dispose(); this.advertisement.dispose(); }
 
   private applyCommand(message: VehicleCommandMessage): void {
@@ -56,7 +62,7 @@ export class VehicleComponent implements AgentComponent {
 }
 
 export class AgentComponentRegistry {
-  create(agent: AgentSnapshot, middleware: Middleware, physics: Promise<PhysicsWorld>, publishStatus: (status: CommandStatusMessage, time: SimulationTime) => void): readonly AgentComponent[] {
+  create(agent: AgentSnapshot, middleware: Middleware, physics: PhysicsWorld, publishStatus: (status: CommandStatusMessage, time: SimulationTime) => void): readonly AgentComponent[] {
     return agent.asset.category === "vehicles" && agent.vehicle && agent.asset.wheels?.length ? [new VehicleComponent(agent.id, middleware, physics, publishStatus)] : [];
   }
 }

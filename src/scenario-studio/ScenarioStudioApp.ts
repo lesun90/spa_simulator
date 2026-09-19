@@ -256,6 +256,7 @@ export class ScenarioStudioApp {
       this.world.update();
       this.hud.updatePreviews(dt);
       this.tickPlayback(dt);
+      this.agentVisuals.presentInterpolated(performance.now());
       if (this.hud.consumeRenderNeeded()) this.hudCache.refresh(this.renderer.renderer, this.hud.scene, this.hud.camera, this.viewport.size);
       this.renderer.renderLayers([
         { scene: this.world.scene, camera: this.world.camera },
@@ -298,8 +299,10 @@ export class ScenarioStudioApp {
     const stepDt = this.playbackAccumulator;
     this.playbackAccumulator = 0;
     this.playbackStepBusy = true;
+    const requestedAt = performance.now();
     void this.session.stepPlayback(stepDt).then((transforms) => {
-      if (transforms && !this.disposed) this.agentVisuals.applyLiveTransforms(transforms);
+      this.performanceMonitor.recordPhysicsStep(performance.now() - requestedAt);
+      if (transforms && !this.disposed) this.agentVisuals.ingestLiveTransforms(transforms);
     }).finally(() => { this.playbackStepBusy = false; });
   }
 

@@ -7,6 +7,7 @@ import { Button } from "../kit/Button";
 import { CheckboxControl } from "../kit/Checkbox";
 import { Dropdown } from "../kit/Dropdown";
 import { rasterizeIcon } from "../kit/icons";
+import { InfoHint } from "../kit/InfoHint";
 import type { Rect } from "../kit/layout";
 import { hudBasicMaterial } from "../kit/materials";
 import { pickColor, pickImageFile } from "../kit/nativeInputs";
@@ -30,7 +31,9 @@ const CONTROL_HEIGHT = 32;
 const STACK_GAP = 8;
 const DIVIDER_HEIGHT = 1;
 const SWATCH_SIZE = 32;
-const ROW_LABEL_WIDTH = 76;
+const ROW_LABEL_WIDTH = 92;
+const ROW_HINT_SIZE = 14;
+const ROW_HINT_GAP = 4;
 
 // One "header + dropdown + value row" surface-appearance block (used for Background and Ground).
 const APPEARANCE_BLOCK_HEIGHT = HEADER_HEIGHT + HEADER_GAP + CONTROL_HEIGHT + STACK_GAP + CONTROL_HEIGHT;
@@ -78,6 +81,7 @@ export class SceneTabPanel {
   private sceneSizeLabel: LabelMesh | null = null;
   private readonly sceneSizeField: TextField;
   private placementLabel: LabelMesh | null = null;
+  private readonly rowLabelHints = new Map<string, InfoHint>();
   private readonly placementCellButton: Button;
   private readonly placementFreeButton: Button;
   private wfcHeader: SectionHeader;
@@ -143,7 +147,7 @@ export class SceneTabPanel {
       this.sceneSizeFieldRect(),
       interaction,
       { numeric: true, placeholder: "10", onCommit: (value) => this.commitSceneSize(value) },
-      formatGridSize(state.scene?.grid.width ?? 10)
+      formatCellCount(state.scene?.grid.width ?? 10, state.scene?.grid.cellSize ?? 1)
     );
     this.footerScroll.content.add(this.sceneSizeField.root);
 
@@ -183,6 +187,7 @@ export class SceneTabPanel {
 
     this.cleanups.push(
       state.on("scene", () => this.onSceneChanged()),
+      state.on("sceneGrid", () => this.refreshGridFields()),
       state.on("wfcProgress", () => this.refreshWfcGeneration()),
       state.on("selection", () => this.refreshSelection()),
       state.on("objectVisibility", () => this.refreshVisibility()),
@@ -198,8 +203,13 @@ export class SceneTabPanel {
     this.rebuildRows();
     this.backgroundEditor.refresh();
     this.groundEditor.refresh();
-    this.gridField.setValue(formatGridSize(this.state.scene?.grid.cellSize ?? 1));
-    this.sceneSizeField.setValue(formatGridSize(this.state.scene?.grid.width ?? 10));
+    this.refreshGridFields();
+  }
+
+  private refreshGridFields() {
+    const grid = this.state.scene?.grid;
+    this.gridField.setValue(formatGridSize(grid?.cellSize ?? 1));
+    this.sceneSizeField.setValue(formatCellCount(grid?.width ?? 10, grid?.cellSize ?? 1));
   }
 
   private refreshSelection() {
@@ -351,14 +361,14 @@ export class SceneTabPanel {
     this.gridHeader.setLabel("Grid", "");
     this.wfcHeader.setLabel("Generate layout", wfcGenerationLabel(this.state));
     this.refreshWfcGeneration();
-    this.renderRowLabel("cellSizeLabel", "Cell size", this.cellSizeLabelRect());
-    this.renderRowLabel("sceneSizeLabel", "Scene size", this.sceneSizeLabelRect());
+    this.renderRowLabel("cellSizeLabel", "Cell size", this.cellSizeLabelRect(), "Size of one grid cell, in meters.");
+    this.renderRowLabel("sceneSizeLabel", "Scene size", this.sceneSizeLabelRect(), "Number of cells per row/column of the scene.");
     this.renderRowLabel("placementLabel", "Placement", this.placementLabelRect());
     this.refreshPlacementControls();
     this.footerScroll.applyClipping();
   }
 
-  private renderRowLabel(field: "cellSizeLabel" | "sceneSizeLabel" | "placementLabel", text: string, rect: Rect) {
+  private renderRowLabel(field: "cellSizeLabel" | "sceneSizeLabel" | "placementLabel", text: string, rect: Rect, hint?: string) {
     const existing = this[field];
     if (existing) {
       this.footerScroll.content.remove(existing);
@@ -372,6 +382,20 @@ export class SceneTabPanel {
     mesh.position.x += rasterized.width / 2;
     this.footerScroll.content.add(mesh);
     this[field] = mesh;
+
+    this.rowLabelHints.get(field)?.dispose();
+    this.rowLabelHints.delete(field);
+    if (hint) {
+      const hintRect: Rect = {
+        x: rect.x + rasterized.width + ROW_HINT_GAP,
+        y: rect.y + (rect.height - ROW_HINT_SIZE) / 2,
+        width: ROW_HINT_SIZE,
+        height: ROW_HINT_SIZE
+      };
+      const infoHint = new InfoHint(hintRect, this.interaction, hint);
+      this.footerScroll.content.add(infoHint.root);
+      this.rowLabelHints.set(field, infoHint);
+    }
   }
 
   private refreshPlacementControls() {
@@ -453,12 +477,13 @@ export class SceneTabPanel {
   }
 
   private commitSceneSize(value: string) {
+    const cellSize = this.state.scene?.grid.cellSize ?? 1;
     const parsed = Number.parseFloat(value);
     if (Number.isFinite(parsed) && parsed > 0) {
-      this.state.setSceneSize(parsed);
+      this.state.setSceneSize(Math.round(parsed) * cellSize);
       return;
     }
-    this.sceneSizeField.setValue(formatGridSize(this.state.scene?.grid.width ?? 10));
+    this.sceneSizeField.setValue(formatCellCount(this.state.scene?.grid.width ?? 10, cellSize));
   }
 
   private normalizeWfcSeed() {
@@ -525,6 +550,7 @@ export class SceneTabPanel {
     this.sceneSizeLabel?.material.dispose();
     this.sceneSizeField.dispose();
     this.placementLabel?.material.dispose();
+    for (const hint of this.rowLabelHints.values()) hint.dispose();
     this.placementCellButton.dispose();
     this.placementFreeButton.dispose();
     this.wfcRandomSeedCheckbox.dispose();
@@ -1058,6 +1084,10 @@ function hexToNumber(css: string): number {
 
 function formatGridSize(cellSize: number): string {
   return String(cellSize);
+}
+
+function formatCellCount(width: number, cellSize: number): string {
+  return String(Math.max(1, Math.round(width / cellSize)));
 }
 
 function integer(value: string, fallback: number) {

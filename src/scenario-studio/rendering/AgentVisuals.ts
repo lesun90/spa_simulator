@@ -23,6 +23,25 @@ interface WheelVisualNodes {
   readonly restRotation: THREE.Quaternion;
 }
 
+/** One physics snapshot's pose data, kept only long enough to interpolate towards the next one. */
+interface LiveAgentSample {
+  readonly position: Vector3Value;
+  readonly rotation: { readonly x: number; readonly y: number; readonly z: number; readonly w: number };
+  readonly wheels?: readonly { readonly steeringRadians: number; readonly rotationRadians: number; readonly suspensionLength: number }[];
+}
+
+interface LiveInterpolationState {
+  previous: LiveAgentSample;
+  current: LiveAgentSample;
+  previousAtMs: number;
+  currentAtMs: number;
+}
+
+/** Below this the render delay adapts down; above it, up — keeps interpolation tight when physics keeps pace, forgiving when it doesn't. */
+const INITIAL_RENDER_DELAY_MS = 33;
+const MIN_RENDER_DELAY_MS = 16;
+const MAX_RENDER_DELAY_MS = 250;
+
 interface AgentVisualCallbacks {
   getGroundPoint(x: number, y: number): Vector3Value | null;
   onSelect(id: string): void;
@@ -57,6 +76,12 @@ export class AgentVisuals implements AgentPresenter {
   private readonly instances = new Map<string, THREE.Object3D>();
   private readonly agents = new Map<string, AgentSnapshot>();
   private readonly wheelNodes = new Map<string, ReadonlyArray<WheelVisualNodes | null>>();
+  private readonly restSuspensionLengths = new Map<string, number>();
+  private readonly liveStates = new Map<string, LiveInterpolationState>();
+  private lastIngestAtMs: number | null = null;
+  private renderDelayMs = INITIAL_RENDER_DELAY_MS;
+  private readonly scratchQuaternionA = new THREE.Quaternion();
+  private readonly scratchQuaternionB = new THREE.Quaternion();
   private readonly ghost = new THREE.Mesh(
     new THREE.BoxGeometry(1, 1, 1),
     new THREE.MeshBasicMaterial({ color: 0x27a86b, transparent: true, opacity: 0.28, depthWrite: false })
@@ -101,6 +126,7 @@ export class AgentVisuals implements AgentPresenter {
     const object = this.instances.get(agent.id);
     if (!object) return;
     this.agents.set(agent.id, agent);
+    this.liveStates.delete(agent.id);
     object.name = agent.name;
     applyPose(object, agent);
     for (const node of this.wheelNodes.get(agent.id) ?? []) {
@@ -113,29 +139,80 @@ export class AgentVisuals implements AgentPresenter {
     if (this.selectedId === agent.id) this.refreshSelectionControls();
   }
 
-  /** Applies live playback poses directly to instances, bypassing the authored snapshot and any active selection controls. */
-  applyLiveTransforms(transforms: readonly AgentTransform[]): void {
+  /**
+   * Records a physics snapshot for later interpolated presentation instead of applying it immediately: the fixed
+   * ~60Hz physics step and the display's own refresh rate (which can run well above that) are not the same clock,
+   * so snapping to whatever snapshot last arrived makes some render frames repeat a stale pose and others jump —
+   * visible stutter. presentInterpolated() is what actually moves the instances, once per render frame.
+   */
+  ingestLiveTransforms(transforms: readonly AgentTransform[]): void {
+    const now = performance.now();
+    if (this.lastIngestAtMs !== null) {
+      const interval = now - this.lastIngestAtMs;
+      // Track the physics round trip's own cadence and stay a little ahead of it, so interpolation rarely runs
+      // out of "current" data (which would otherwise freeze the pose until the next snapshot arrives).
+      const target = Math.min(Math.max(interval * 1.25, MIN_RENDER_DELAY_MS), MAX_RENDER_DELAY_MS);
+      this.renderDelayMs += (target - this.renderDelayMs) * 0.2;
+    }
+    this.lastIngestAtMs = now;
     for (const transform of transforms) {
-      const object = this.instances.get(transform.id);
+      if (!this.instances.has(transform.id)) continue;
+      const sample: LiveAgentSample = { position: transform.position, rotation: transform.rotation, wheels: transform.wheels };
+      const state = this.liveStates.get(transform.id);
+      if (state) {
+        state.previous = state.current;
+        state.previousAtMs = state.currentAtMs;
+        state.current = sample;
+        state.currentAtMs = now;
+      } else {
+        this.liveStates.set(transform.id, { previous: sample, current: sample, previousAtMs: now, currentAtMs: now });
+      }
+    }
+  }
+
+  /** Applies every agent's interpolated live pose to its instance; call once per render frame regardless of when physics data last arrived. */
+  presentInterpolated(now: number): void {
+    for (const [id, state] of this.liveStates) {
+      const object = this.instances.get(id);
       if (!object) continue;
-      object.position.set(transform.position.x, transform.position.y, transform.position.z);
-      object.quaternion.set(transform.rotation.x, transform.rotation.y, transform.rotation.z, transform.rotation.w);
-      if (transform.wheels) {
-        const nodes = this.resolveWheelNodes(transform.id);
-        const snapshot = this.agents.get(transform.id);
-        // restPosition already sits at the authored (rest-length) wheel height, so only the deviation from rest should move it.
-        const restSuspensionLength = snapshot?.vehicle ? scaledVehicleTuning(snapshot.vehicle, snapshot.mass, snapshot.scale).suspensionRestLength : 0;
-        transform.wheels.forEach((wheel, index) => {
+      const span = state.currentAtMs - state.previousAtMs;
+      const alpha = span > 0 ? Math.min(Math.max((now - this.renderDelayMs - state.previousAtMs) / span, 0), 1) : 1;
+      const from = state.previous;
+      const to = state.current;
+      object.position.set(
+        from.position.x + (to.position.x - from.position.x) * alpha,
+        from.position.y + (to.position.y - from.position.y) * alpha,
+        from.position.z + (to.position.z - from.position.z) * alpha
+      );
+      this.scratchQuaternionA.set(from.rotation.x, from.rotation.y, from.rotation.z, from.rotation.w);
+      this.scratchQuaternionB.set(to.rotation.x, to.rotation.y, to.rotation.z, to.rotation.w);
+      object.quaternion.copy(this.scratchQuaternionA.slerp(this.scratchQuaternionB, alpha));
+      if (to.wheels) {
+        const nodes = this.resolveWheelNodes(id);
+        const restSuspensionLength = this.restSuspensionLength(id);
+        to.wheels.forEach((toWheel, index) => {
           const node = nodes?.[index];
           if (!node) return;
-          node.steering.rotation.y = wheel.steeringRadians;
-          node.wheel.rotation.x = wheel.rotationRadians;
+          const fromWheel = from.wheels?.[index] ?? toWheel;
+          node.steering.rotation.y = fromWheel.steeringRadians + (toWheel.steeringRadians - fromWheel.steeringRadians) * alpha;
+          node.wheel.rotation.x = fromWheel.rotationRadians + (toWheel.rotationRadians - fromWheel.rotationRadians) * alpha;
+          const suspensionLength = fromWheel.suspensionLength + (toWheel.suspensionLength - fromWheel.suspensionLength) * alpha;
           node.suspension.position.copy(node.restPosition);
-          node.suspension.position.y -= (wheel.suspensionLength - restSuspensionLength) / object.scale.y;
+          node.suspension.position.y -= (suspensionLength - restSuspensionLength) / object.scale.y;
         });
       }
       object.updateMatrixWorld(true);
     }
+  }
+
+  /** restPosition already sits at the authored (rest-length) wheel height, so only the deviation from rest should move it; cached since it is constant for the run. */
+  private restSuspensionLength(id: string): number {
+    const cached = this.restSuspensionLengths.get(id);
+    if (cached !== undefined) return cached;
+    const snapshot = this.agents.get(id);
+    const value = snapshot?.vehicle ? scaledVehicleTuning(snapshot.vehicle, snapshot.mass, snapshot.scale).suspensionRestLength : 0;
+    this.restSuspensionLengths.set(id, value);
+    return value;
   }
 
   private resolveWheelNodes(id: string): ReadonlyArray<WheelVisualNodes | null> | null {
@@ -166,6 +243,8 @@ export class AgentVisuals implements AgentPresenter {
     this.instances.delete(id);
     this.wheelNodes.delete(id);
     this.agents.delete(id);
+    this.restSuspensionLengths.delete(id);
+    this.liveStates.delete(id);
     if (this.selectedId === id) this.select(null);
   }
 

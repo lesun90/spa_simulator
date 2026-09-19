@@ -239,7 +239,7 @@ export class ScenarioSession {
       this.middleware.beginRun(this.sessionId, generation);
       this.playbackStep = 0;
       this.playbackTime = 0;
-      this.createRuntimeComponents(agents, generation);
+      this.createRuntimeComponents(agents, generation, world);
       const diagnostics = await this.controllers.start(this.sessionId, generation, this.document.controllers, this.document.controllerAssignments, agents.map((agent) => agent.id));
       if (this.disposed || generation !== this.playbackGeneration) return;
       for (const diagnostic of diagnostics) this.onControllerDiagnostic(diagnostic);
@@ -278,6 +278,9 @@ export class ScenarioSession {
     const target = this.agents.find((agent) => agent.inputEligible && this.components.get(agent.id)?.some((component) => component.key === "vehicle"));
     if (!target) return;
     const context = this.commandContext();
+    // Keyboard events can arrive between completed ticks, when components still
+    // hold the previous tick's context. Validate against the current next step.
+    for (const component of this.components.get(target.id) ?? []) component.setContext(context);
     this.middleware.publish(vehicleControlChannel(target.id), { type: "vehicle-command", correlationId: `keyboard:${context.step}`, source: "keyboard", sessionId: this.sessionId, generation: this.playbackGeneration, targetStep: context.step + 1, ...command }, context.time);
   }
 
@@ -303,7 +306,10 @@ export class ScenarioSession {
       if (this.disposed || generation !== this.playbackGeneration || this.playbackState !== "running") return null;
       for (const diagnostic of controllerResult.diagnostics) this.onControllerDiagnostic(diagnostic);
       for (const command of controllerResult.commands) this.middleware.publish(vehicleControlChannel(command.agentId), command.message, context.time);
-      await Promise.all([...this.components.values()].flatMap((components) => components.map((component) => component.flush())));
+      // flush() sends each component's worker request synchronously and is not awaited here: its postMessage is
+      // already in flight (and ordered ahead of stepPlayback's) by the time this call returns, so waiting for the
+      // full round trip before stepping would only add latency without changing what gets applied this step.
+      for (const components of this.components.values()) for (const component of components) component.flush();
       const snapshot = await world.stepPlayback(dt, generation);
       if (this.disposed || generation !== this.playbackGeneration) return null;
       this.playbackStep++;
@@ -369,14 +375,14 @@ export class ScenarioSession {
     this.onPopulationChanged(this.agents);
   }
 
-  private createRuntimeComponents(agents: readonly AgentSnapshot[], generation: number): void {
+  private createRuntimeComponents(agents: readonly AgentSnapshot[], generation: number, world: PhysicsWorld): void {
     this.disposeRuntimeComponents();
     const time = { seconds: 0, step: 0 };
     for (const agent of agents) {
       const state = agentStateChannel(agent.id);
       const capabilities = capabilityChannel(agent.id);
       this.runtimeAdvertisements.push(this.middleware.advertise(state), this.middleware.advertise(capabilities));
-      const components = this.componentRegistry.create(agent, this.middleware, this.physics, (status, statusTime) => {
+      const components = this.componentRegistry.create(agent, this.middleware, world, (status, statusTime) => {
         this.middleware.publish(commandStatusChannel, status, statusTime);
         this.onControllerDiagnostic(status);
       });
