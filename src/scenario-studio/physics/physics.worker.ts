@@ -5,6 +5,7 @@ import { NEUTRAL_DRIVE_COMMAND, validateDriveCommand, type DriveCommand } from "
 import { DEFAULT_MATERIAL_FRICTION } from "../domain/materialFriction";
 import type { AgentPhysicsInput, AgentTransform, PlaybackSnapshot, SceneGeometryDescription } from "./PhysicsWorld";
 import type { PhysicsWorkerRequest, PhysicsWorkerResponse } from "./PhysicsWorkerClient";
+import type { AgentWheelPose, BodyPose } from "../domain/SceneObjectPorts";
 
 const FIXED_STEP = 1 / 60;
 // Comfortably above RenderLoop's 0.1s per-frame dt clamp so a normal slow frame never loses simulated time.
@@ -48,6 +49,7 @@ interface PlaybackBody {
 
 /** One wheel's real rigid-body chain: chassis -[steer?]- knuckle? -[suspension]- carriage -[spin]- wheel. */
 interface PhysicalWheelRig {
+  readonly id: string;
   readonly steeringJoint: RAPIER.RevoluteImpulseJoint | null;
   readonly suspensionJoint: RAPIER.PrismaticImpulseJoint;
   readonly spinJoint: RAPIER.RevoluteImpulseJoint;
@@ -92,6 +94,8 @@ const physicalContactHooks: RAPIER.PhysicsHooks = {
 };
 /** The agents the live bodies were built from, so the step loop can read their tuning without re-sending them each step. */
 let preparedAgents: readonly AgentSnapshot[] = [];
+/** Each raycast vehicle's per-wheel connection point in chassis-local space, needed to reconstruct full wheel poses from the controller's scalar outputs. */
+const wheelConnectionPoints = new Map<string, Vector3Value[]>();
 /** Current front-wheel steering angle per agent, ramped toward the commanded angle instead of snapping. */
 const wheelSteeringRadians = new Map<string, number>();
 
@@ -326,6 +330,7 @@ function preparePlayback(agents: readonly AgentPhysicsInput[], expectedSceneRevi
       controller.indexUpAxis = 1;
       // Rapier 0.20 exposes the forward-axis setter under this (upstream misspelled) name; `indexForwardAxis` is read-only.
       controller.setIndexForwardAxis = 2;
+      const connectionPoints: Vector3Value[] = [];
       wheels.forEach((wheel, index) => {
         // Wheel metadata shares the asset's unscaled model frame, so scale it before rebasing onto the chassis collider's center.
         // Rapier raycasts down from the connection point by suspensionRestLength to find the resting wheel position, so the
@@ -335,6 +340,7 @@ function preparePlayback(agents: readonly AgentPhysicsInput[], expectedSceneRevi
           y: wheel.position.y * agent.scale - localCenter.y + scaled.suspensionRestLength,
           z: wheel.position.z * agent.scale - localCenter.z
         };
+        connectionPoints.push(local);
         // The axle points to the vehicle's right (-X here, since assets author +X as left); with up=+Y that makes +Z the drive direction.
         controller.addWheel(local, { x: 0, y: -1, z: 0 }, { x: -1, y: 0, z: 0 }, scaled.suspensionRestLength, wheel.radius * agent.scale);
         controller.setWheelSuspensionStiffness(index, scaled.suspensionStiffness);
@@ -343,6 +349,7 @@ function preparePlayback(agents: readonly AgentPhysicsInput[], expectedSceneRevi
         controller.setWheelMaxSuspensionTravel(index, scaled.suspensionMaxTravel);
         controller.setWheelFrictionSlip(index, scaled.wheelFrictionSlip);
       });
+      wheelConnectionPoints.set(agent.id, connectionPoints);
       playbackBodies.set(agent.id, { body, kind, localCenter, controller, wheelCount: wheels.length, tuning: scaled });
     } else {
       active.createCollider(RAPIER.ColliderDesc.cuboid(half.x, half.y, half.z).setMass(scaledMass(agent.mass, agent.scale)).setFriction(1), body);
@@ -457,7 +464,7 @@ function buildPhysicalWheelRig(active: RAPIER.World, chassis: RAPIER.RigidBody, 
   spinJoint.setContactsEnabled(false);
   spinJoint.configureMotorModel(RAPIER.MotorModel.ForceBased);
 
-  return { steeringJoint, suspensionJoint, spinJoint, knuckleBody, carriageBody, wheelBody, localAnchor, radiusScaled, suspensionRestLength: scaled.suspensionRestLength, spinRadians: 0 };
+  return { id: wheel.id, steeringJoint, suspensionJoint, spinJoint, knuckleBody, carriageBody, wheelBody, localAnchor, radiusScaled, suspensionRestLength: scaled.suspensionRestLength, spinRadians: 0 };
 }
 
 function stepPlayback(dt: number, generation: number): PlaybackSnapshot {
@@ -525,6 +532,7 @@ function teardownPlaybackBodies(active: RAPIER.World): void {
   playbackBodies.clear();
   preparedAgents = [];
   wheelSteeringRadians.clear();
+  wheelConnectionPoints.clear();
 }
 
 function clearPlaybackState(): void {
@@ -532,6 +540,7 @@ function clearPlaybackState(): void {
   playbackBodies.clear();
   preparedAgents = [];
   wheelSteeringRadians.clear();
+  wheelConnectionPoints.clear();
   driveCommands.clear();
   stepAccumulator = 0;
   playbackGeneration = 0;
@@ -618,14 +627,12 @@ function collectTransforms(): AgentTransform[] {
     const heading = yawOf(rot);
     const offset = rotateVector(entry.localCenter, rot);
     const controller = entry.controller;
-    const wheels = controller
-      ? Array.from({ length: entry.wheelCount }, (_, index) => ({
-          steeringRadians: controller.wheelSteering(index) ?? 0,
-          rotationRadians: controller.wheelRotation(index) ?? 0,
-          suspensionLength: controller.wheelSuspensionLength(index) ?? 0
-        }))
+    const wheelIds = preparedAgents.find((a) => a.id === id)?.asset.wheels?.map((w) => w.id) ?? [];
+    const wheels: readonly AgentWheelPose[] | undefined = controller
+      ? Array.from({ length: entry.wheelCount }, (_, index) =>
+          collectRaycastWheelTransform(wheelIds[index] ?? `wheel-${index}`, controller, index, entry.body, wheelConnectionPoints.get(id)![index]))
       : entry.rig
-        ? entry.rig.wheels.map((wheel) => collectRigWheelTransform(wheel, entry.body))
+        ? entry.rig.wheels.map((wheel) => collectRigWheelTransform(wheel))
         : undefined;
     transforms.push({
       id,
@@ -638,25 +645,51 @@ function collectTransforms(): AgentTransform[] {
   return transforms;
 }
 
-function collectRigWheelTransform(wheel: PhysicalWheelRig, chassis: RAPIER.RigidBody): { steeringRadians: number; rotationRadians: number; suspensionLength: number } {
-  const chassisRotation = chassis.rotation();
-  const steeringForward = wheel.knuckleBody
-    ? rotateVector(rotateVector({ x: 0, y: 0, z: 1 }, wheel.knuckleBody.rotation()), {
-        x: -chassisRotation.x, y: -chassisRotation.y, z: -chassisRotation.z, w: chassisRotation.w
-      })
-    : null;
-  const steeringRadians = steeringForward ? Math.atan2(steeringForward.x, steeringForward.z) : 0;
-  const chassisUp = rotateVector({ x: 0, y: 1, z: 0 }, chassisRotation);
-  const anchorWorld = addVectors(chassis.translation(), rotateVector(wheel.localAnchor, chassisRotation));
-  const wheelTranslation = wheel.wheelBody.translation();
-  const delta: Vector3Value = {
-    x: wheelTranslation.x - anchorWorld.x,
-    y: wheelTranslation.y - anchorWorld.y,
-    z: wheelTranslation.z - anchorWorld.z
+function bodyPose(body: RAPIER.RigidBody): BodyPose {
+  const t = body.translation();
+  const r = body.rotation();
+  return { worldPositionMeters: { x: t.x, y: t.y, z: t.z }, worldOrientation: { x: r.x, y: r.y, z: r.z, w: r.w } };
+}
+
+type Quaternion = { readonly x: number; readonly y: number; readonly z: number; readonly w: number };
+
+function quaternionMultiply(a: Quaternion, b: Quaternion): Quaternion {
+  return {
+    x: a.w * b.x + a.x * b.w + a.y * b.z - a.z * b.y,
+    y: a.w * b.y - a.x * b.z + a.y * b.w + a.z * b.x,
+    z: a.w * b.z + a.x * b.y - a.y * b.x + a.z * b.w,
+    w: a.w * b.w - a.x * b.x - a.y * b.y - a.z * b.z
   };
-  // The presenter expects downward length from the rest-length attachment point,
-  // not the upward compression coordinate used by the physical prismatic joint.
-  return { steeringRadians, rotationRadians: wheel.spinRadians, suspensionLength: wheel.suspensionRestLength - dot3(delta, chassisUp) };
+}
+
+/** These ARE real Rapier bodies, so their world poses are read directly — no scalar reconstruction needed. */
+function collectRigWheelTransform(wheel: PhysicalWheelRig): AgentWheelPose {
+  const steeringBody = wheel.knuckleBody ? bodyPose(wheel.knuckleBody) : bodyPose(wheel.carriageBody);
+  return { wheelId: wheel.id, suspensionBody: bodyPose(wheel.carriageBody), steeringBody, tireBody: bodyPose(wheel.wheelBody) };
+}
+
+/**
+ * The raycast controller only exposes wheelSteering/wheelRotation/wheelSuspensionLength scalars, so this is the
+ * one place — inside the worker, not duplicated in the renderer — that turns them into full world poses, using
+ * the same connection-point and axle convention used when the wheel was added (see the `controller.addWheel` call).
+ */
+function collectRaycastWheelTransform(wheelId: string, controller: RAPIER.DynamicRayCastVehicleController, index: number, chassis: RAPIER.RigidBody, connectionPointLocal: Vector3Value): AgentWheelPose {
+  const chassisRotation = chassis.rotation();
+  const chassisTranslation = chassis.translation();
+  const steeringRadians = controller.wheelSteering(index) ?? 0;
+  const rotationRadians = controller.wheelRotation(index) ?? 0;
+  const suspensionLength = controller.wheelSuspensionLength(index) ?? 0;
+  // Local wheel frame: start at the connection point, drop by suspensionLength along -Y,
+  // rotate by steering about Y, then spin about the -X axle (matching the axle convention above).
+  const localWheelPosition: Vector3Value = { x: connectionPointLocal.x, y: connectionPointLocal.y - suspensionLength, z: connectionPointLocal.z };
+  const localSteeringRotation: Quaternion = { x: 0, y: Math.sin(steeringRadians / 2), z: 0, w: Math.cos(steeringRadians / 2) };
+  const localSpinRotation: Quaternion = { x: -Math.sin(rotationRadians / 2), y: 0, z: 0, w: Math.cos(rotationRadians / 2) };
+  const worldTirePosition = addVectors(chassisTranslation, rotateVector(localWheelPosition, chassisRotation));
+  const worldTireRotation = quaternionMultiply(chassisRotation, quaternionMultiply(localSteeringRotation, localSpinRotation));
+  const worldSteeringRotation = quaternionMultiply(chassisRotation, localSteeringRotation);
+  const tireBody: BodyPose = { worldPositionMeters: worldTirePosition, worldOrientation: worldTireRotation };
+  const steeringBody: BodyPose = { worldPositionMeters: worldTirePosition, worldOrientation: worldSteeringRotation };
+  return { wheelId, suspensionBody: steeringBody, steeringBody, tireBody };
 }
 
 function assertPlaybackGeneration(expected: number): void {

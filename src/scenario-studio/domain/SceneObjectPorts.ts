@@ -1,9 +1,8 @@
+import type { Vector3Value } from "./agent";
 import type { DriveCommand } from "./playback";
 
 export type SceneObjectId = string;
 export type WheelId = string;
-
-export interface Vector3Value { readonly x: number; readonly y: number; readonly z: number; }
 
 export interface BodyPose {
   readonly worldPositionMeters: Vector3Value;

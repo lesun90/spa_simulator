@@ -1,5 +1,8 @@
 import type { AgentDraft, AgentSnapshot, PlacementHit, PlacementPreview, Ray3, Vector3Value } from "../domain/agent";
 import type { DriveCommand } from "../domain/playback";
+import type { AgentWheelPose } from "../domain/SceneObjectPorts";
+
+export type { BodyPose, AgentWheelPose } from "../domain/SceneObjectPorts";
 
 export interface TriangleMeshDescription {
   readonly label: string;
@@ -27,8 +30,8 @@ export interface AgentTransform {
   readonly headingRadians: number;
   /** Full body orientation, including pitch and roll on uneven terrain. */
   readonly rotation: { readonly x: number; readonly y: number; readonly z: number; readonly w: number };
-  /** Wheel poses, index-paired with `agent.asset.wheels`; suspension length is in meters. */
-  readonly wheels?: readonly { readonly steeringRadians: number; readonly rotationRadians: number; readonly suspensionLength: number }[];
+  /** Complete per-part poses, index-paired with `agent.asset.wheels`. Absent for non-vehicle agents. */
+  readonly wheels?: readonly AgentWheelPose[];
 }
 
 export interface PlaybackSnapshot {
